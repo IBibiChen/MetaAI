@@ -2,7 +2,7 @@ package com.metax.controller;
 
 import jakarta.annotation.Resource;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
+import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -33,7 +33,11 @@ public class ChatController {
      */
     @GetMapping(value = "/v1/client/chat")
     public String client(@RequestParam(name = "msg", defaultValue = "你是谁") String msg) {
-        return chatClient.prompt().advisors(new SimpleLoggerAdvisor()).user(msg).call().content();
+        return chatClient.prompt()
+                .advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, "tenantId:userId:sessionId"))
+                .user(msg)
+                .call()
+                .content();
     }
 
 
