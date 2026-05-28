@@ -1,0 +1,54 @@
+package com.metax.controller;
+
+import jakarta.annotation.Resource;
+import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
+import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+/**
+ * ChatController .
+ *
+ * @author IBibiChen
+ * @version v1.0
+ * @since 2026/5/28
+ */
+@RestController
+public class ChatController {
+
+    @Resource
+    private ChatModel chatModel;
+
+    @Resource
+    private ChatClient chatClient;
+
+
+    /**
+     * http://localhost:8008/v1/client/chat
+     *
+     * @param msg 消息
+     * @return
+     */
+    @GetMapping(value = "/v1/client/chat")
+    public String client(@RequestParam(name = "msg", defaultValue = "你是谁") String msg) {
+        return chatClient.prompt().advisors(new SimpleLoggerAdvisor()).user(msg).call().content();
+    }
+
+
+    /**
+     * http://localhost:8008/v1/model/chat
+     *
+     * @param msg 消息
+     * @return
+     */
+    @GetMapping(value = "/v1/model/chat")
+    public String model(@RequestParam(name = "msg", defaultValue = "你是谁") String msg) {
+        String result = chatModel.call(msg);
+        System.out.println("result = " + result);
+        return result;
+    }
+
+
+}
