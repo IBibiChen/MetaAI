@@ -11,7 +11,7 @@ import org.springframework.context.annotation.Configuration;
  *
  * <p>
  * 为何不手动 @Bean：保留官方自动装配的连接、重试、观测和 provider options 处理
- * 向量库与 embedding 的绑定在 VectorStoreConfig 中完成，每套 embedding 使用独立 Redis index / prefix
+ * 向量库与 embedding 的绑定在各 VectorStore 配置类中完成，每套 embedding 使用独立存储单元
  *
  * <p>
  * 存在多个 EmbeddingModel bean 后禁止裸类型注入，必须使用 @Qualifier 或具体类型 / bean 名区分

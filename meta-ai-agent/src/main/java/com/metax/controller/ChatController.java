@@ -1,11 +1,11 @@
 package com.metax.controller;
 
 import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatModel;
+import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.ollama.OllamaChatModel;
 import org.springframework.ai.openai.OpenAiChatModel;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -18,47 +18,40 @@ import org.springframework.web.bind.annotation.RestController;
  * @since 2026/5/28
  */
 @RestController
+@RequiredArgsConstructor
 public class ChatController {
 
     private static final String DEFAULT_CONVERSATION_ID = "tenantId:userId:sessionId";
 
     private final ChatClient dashScopeChatClient;
 
-    private final ChatClient dashScopeRagChatClient;
+    private final ChatClient dashScopeRedisRagChatClient;
+
+    private final ChatClient dashScopeQdrantRagChatClient;
+
+    private final ChatClient dashScopeMilvusRagChatClient;
 
     private final ChatClient openAiChatClient;
 
-    private final ChatClient openAiRagChatClient;
+    private final ChatClient openAiRedisRagChatClient;
+
+    private final ChatClient openAiQdrantRagChatClient;
+
+    private final ChatClient openAiMilvusRagChatClient;
 
     private final ChatClient ollamaChatClient;
 
-    private final ChatClient ollamaRagChatClient;
+    private final ChatClient ollamaRedisRagChatClient;
+
+    private final ChatClient ollamaQdrantRagChatClient;
+
+    private final ChatClient ollamaMilvusRagChatClient;
 
     private final DashScopeChatModel dashScopeChatModel;
 
     private final OpenAiChatModel openAiChatModel;
 
     private final OllamaChatModel ollamaChatModel;
-
-    public ChatController(@Qualifier("dashScopeChatClient") ChatClient dashScopeChatClient,
-                          @Qualifier("dashScopeRagChatClient") ChatClient dashScopeRagChatClient,
-                          @Qualifier("openAiChatClient") ChatClient openAiChatClient,
-                          @Qualifier("openAiRagChatClient") ChatClient openAiRagChatClient,
-                          @Qualifier("ollamaChatClient") ChatClient ollamaChatClient,
-                          @Qualifier("ollamaRagChatClient") ChatClient ollamaRagChatClient,
-                          DashScopeChatModel dashScopeChatModel,
-                          OpenAiChatModel openAiChatModel,
-                          OllamaChatModel ollamaChatModel) {
-        this.dashScopeChatClient = dashScopeChatClient;
-        this.dashScopeRagChatClient = dashScopeRagChatClient;
-        this.openAiChatClient = openAiChatClient;
-        this.openAiRagChatClient = openAiRagChatClient;
-        this.ollamaChatClient = ollamaChatClient;
-        this.ollamaRagChatClient = ollamaRagChatClient;
-        this.dashScopeChatModel = dashScopeChatModel;
-        this.openAiChatModel = openAiChatModel;
-        this.ollamaChatModel = ollamaChatModel;
-    }
 
     /**
      * DashScope 默认对话
@@ -74,16 +67,42 @@ public class ChatController {
     }
 
     /**
-     * DashScope RAG 对话
+     * DashScope Redis RAG 对话
      *
      * @param conversationId 会话 ID
      * @param msg            消息
      * @return 模型响应内容
      */
-    @GetMapping(value = "/v1/dashscope/rag")
+    @GetMapping(value = "/v1/dashscope/rag/redis")
     public String dashScopeRag(@RequestParam(name = "conversationId", required = false) String conversationId,
                                @RequestParam(name = "msg", defaultValue = "你是谁") String msg) {
-        return chat(dashScopeRagChatClient, conversationId, msg);
+        return chat(dashScopeRedisRagChatClient, conversationId, msg);
+    }
+
+    /**
+     * DashScope Qdrant RAG 对话
+     *
+     * @param conversationId 会话 ID
+     * @param msg            消息
+     * @return 模型响应内容
+     */
+    @GetMapping(value = "/v1/dashscope/rag/qdrant")
+    public String dashScopeQdrantRag(@RequestParam(name = "conversationId", required = false) String conversationId,
+                                     @RequestParam(name = "msg", defaultValue = "你是谁") String msg) {
+        return chat(dashScopeQdrantRagChatClient, conversationId, msg);
+    }
+
+    /**
+     * DashScope Milvus RAG 对话
+     *
+     * @param conversationId 会话 ID
+     * @param msg            消息
+     * @return 模型响应内容
+     */
+    @GetMapping(value = "/v1/dashscope/rag/milvus")
+    public String dashScopeMilvusRag(@RequestParam(name = "conversationId", required = false) String conversationId,
+                                     @RequestParam(name = "msg", defaultValue = "你是谁") String msg) {
+        return chat(dashScopeMilvusRagChatClient, conversationId, msg);
     }
 
     /**
@@ -111,16 +130,42 @@ public class ChatController {
     }
 
     /**
-     * OpenAI RAG 对话
+     * OpenAI Redis RAG 对话
      *
      * @param conversationId 会话 ID
      * @param msg            消息
      * @return 模型响应内容
      */
-    @GetMapping(value = "/v1/openai/rag")
+    @GetMapping(value = "/v1/openai/rag/redis")
     public String openAiRag(@RequestParam(name = "conversationId", required = false) String conversationId,
                             @RequestParam(name = "msg", defaultValue = "你是谁") String msg) {
-        return chat(openAiRagChatClient, conversationId, msg);
+        return chat(openAiRedisRagChatClient, conversationId, msg);
+    }
+
+    /**
+     * OpenAI Qdrant RAG 对话
+     *
+     * @param conversationId 会话 ID
+     * @param msg            消息
+     * @return 模型响应内容
+     */
+    @GetMapping(value = "/v1/openai/rag/qdrant")
+    public String openAiQdrantRag(@RequestParam(name = "conversationId", required = false) String conversationId,
+                                  @RequestParam(name = "msg", defaultValue = "你是谁") String msg) {
+        return chat(openAiQdrantRagChatClient, conversationId, msg);
+    }
+
+    /**
+     * OpenAI Milvus RAG 对话
+     *
+     * @param conversationId 会话 ID
+     * @param msg            消息
+     * @return 模型响应内容
+     */
+    @GetMapping(value = "/v1/openai/rag/milvus")
+    public String openAiMilvusRag(@RequestParam(name = "conversationId", required = false) String conversationId,
+                                  @RequestParam(name = "msg", defaultValue = "你是谁") String msg) {
+        return chat(openAiMilvusRagChatClient, conversationId, msg);
     }
 
     /**
@@ -148,16 +193,42 @@ public class ChatController {
     }
 
     /**
-     * Ollama RAG 对话
+     * Ollama Redis RAG 对话
      *
      * @param conversationId 会话 ID
      * @param msg            消息
      * @return 模型响应内容
      */
-    @GetMapping(value = "/v1/ollama/rag")
+    @GetMapping(value = "/v1/ollama/rag/redis")
     public String ollamaRag(@RequestParam(name = "conversationId", required = false) String conversationId,
                             @RequestParam(name = "msg", defaultValue = "你是谁") String msg) {
-        return chat(ollamaRagChatClient, conversationId, msg);
+        return chat(ollamaRedisRagChatClient, conversationId, msg);
+    }
+
+    /**
+     * Ollama Qdrant RAG 对话
+     *
+     * @param conversationId 会话 ID
+     * @param msg            消息
+     * @return 模型响应内容
+     */
+    @GetMapping(value = "/v1/ollama/rag/qdrant")
+    public String ollamaQdrantRag(@RequestParam(name = "conversationId", required = false) String conversationId,
+                                  @RequestParam(name = "msg", defaultValue = "你是谁") String msg) {
+        return chat(ollamaQdrantRagChatClient, conversationId, msg);
+    }
+
+    /**
+     * Ollama Milvus RAG 对话
+     *
+     * @param conversationId 会话 ID
+     * @param msg            消息
+     * @return 模型响应内容
+     */
+    @GetMapping(value = "/v1/ollama/rag/milvus")
+    public String ollamaMilvusRag(@RequestParam(name = "conversationId", required = false) String conversationId,
+                                  @RequestParam(name = "msg", defaultValue = "你是谁") String msg) {
+        return chat(ollamaMilvusRagChatClient, conversationId, msg);
     }
 
     /**

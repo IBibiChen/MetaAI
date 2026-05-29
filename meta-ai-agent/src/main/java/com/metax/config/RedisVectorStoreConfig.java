@@ -5,8 +5,8 @@ import org.springframework.ai.vectorstore.redis.RedisVectorStore;
 import org.springframework.ai.vectorstore.redis.RedisVectorStore.MetadataField;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.connection.jedis.JedisConnectionFactory;
 
 import redis.clients.jedis.DefaultJedisClientConfig;
@@ -15,24 +15,24 @@ import redis.clients.jedis.JedisClientConfig;
 import redis.clients.jedis.JedisPooled;
 
 /**
- * VectorStoreConfig .
+ * RedisVectorStoreConfig .
  *
  * <p>
- * 三套 RAG 向量库分别绑定各自协议的 EmbeddingModel，并使用独立 Redis index / prefix
+ * Redis 向量库配置，三套 RAG 向量库分别绑定各自协议的 EmbeddingModel，并使用独立 Redis index / prefix
  * 不同 embedding 模型的向量维度和语义空间可能不同，禁止混用同一个向量索引
  *
  * <p>
- * 三套向量库共享 metadata 字段规范，写入 Document.metadata 时必须使用相同 key 才能进行过滤查询
+ * 三套 RedisVectorStore 共享 metadata 字段规范，写入 Document.metadata 时必须使用相同 key 才能进行过滤查询
  *
  * @author IBibiChen
  * @version v1.0
  * @since 2026/5/28
  */
 @Configuration
-public class VectorStoreConfig {
+public class RedisVectorStoreConfig {
 
     /**
-     * DashScope RAG 向量库
+     * DashScope Redis RAG 向量库
      *
      * <p>
      * RAG 场景基础设施，绑定 dashscopeEmbeddingModel，并使用 DashScope 独立 Redis indexName 和 prefix 隔离向量数据
@@ -45,18 +45,18 @@ public class VectorStoreConfig {
      * @return RedisVectorStore
      */
     @Bean
-    public RedisVectorStore dashScopeVectorStore(
+    public RedisVectorStore dashScopeRedisVectorStore(
             @Qualifier("dashscopeEmbeddingModel") EmbeddingModel embeddingModel,
             JedisConnectionFactory jedisConnectionFactory,
-            @Value("${metax.ai.vectorstore.dashscope.index-name}") String indexName,
-            @Value("${metax.ai.vectorstore.dashscope.prefix}") String prefix,
+            @Value("${metax.ai.vectorstore.redis.dashscope.index-name}") String indexName,
+            @Value("${metax.ai.vectorstore.redis.dashscope.prefix}") String prefix,
             @Value("${spring.ai.vectorstore.redis.initialize-schema:true}") boolean initializeSchema) {
 
         return buildVectorStore(embeddingModel, jedisConnectionFactory, indexName, prefix, initializeSchema);
     }
 
     /**
-     * OpenAI RAG 向量库
+     * OpenAI Redis RAG 向量库
      *
      * <p>
      * RAG 场景基础设施，绑定 openAiEmbeddingModel，并使用 OpenAI 独立 Redis indexName 和 prefix 隔离向量数据
@@ -69,18 +69,18 @@ public class VectorStoreConfig {
      * @return RedisVectorStore
      */
     @Bean
-    public RedisVectorStore openAiVectorStore(
+    public RedisVectorStore openAiRedisVectorStore(
             @Qualifier("openAiEmbeddingModel") EmbeddingModel embeddingModel,
             JedisConnectionFactory jedisConnectionFactory,
-            @Value("${metax.ai.vectorstore.openai.index-name}") String indexName,
-            @Value("${metax.ai.vectorstore.openai.prefix}") String prefix,
+            @Value("${metax.ai.vectorstore.redis.openai.index-name}") String indexName,
+            @Value("${metax.ai.vectorstore.redis.openai.prefix}") String prefix,
             @Value("${spring.ai.vectorstore.redis.initialize-schema:true}") boolean initializeSchema) {
 
         return buildVectorStore(embeddingModel, jedisConnectionFactory, indexName, prefix, initializeSchema);
     }
 
     /**
-     * Ollama RAG 向量库
+     * Ollama Redis RAG 向量库
      *
      * <p>
      * RAG 场景基础设施，绑定 ollamaEmbeddingModel，并使用 Ollama 独立 Redis indexName 和 prefix 隔离向量数据
@@ -93,11 +93,11 @@ public class VectorStoreConfig {
      * @return RedisVectorStore
      */
     @Bean
-    public RedisVectorStore ollamaVectorStore(
+    public RedisVectorStore ollamaRedisVectorStore(
             @Qualifier("ollamaEmbeddingModel") EmbeddingModel embeddingModel,
             JedisConnectionFactory jedisConnectionFactory,
-            @Value("${metax.ai.vectorstore.ollama.index-name}") String indexName,
-            @Value("${metax.ai.vectorstore.ollama.prefix}") String prefix,
+            @Value("${metax.ai.vectorstore.redis.ollama.index-name}") String indexName,
+            @Value("${metax.ai.vectorstore.redis.ollama.prefix}") String prefix,
             @Value("${spring.ai.vectorstore.redis.initialize-schema:true}") boolean initializeSchema) {
 
         return buildVectorStore(embeddingModel, jedisConnectionFactory, indexName, prefix, initializeSchema);

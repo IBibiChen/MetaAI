@@ -46,6 +46,16 @@
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-starter-vector-store-redis</artifactId>
         </dependency>
+        <!-- 添加 Qdrant 向量数据库依赖 -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-vector-store-qdrant</artifactId>
+        </dependency>
+        <!-- 添加 Milvus 向量数据库依赖 -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-vector-store-milvus</artifactId>
+        </dependency>
 
         <!--<dependency>-->
         <!--    <groupId>com.alibaba.cloud.ai</groupId>-->
