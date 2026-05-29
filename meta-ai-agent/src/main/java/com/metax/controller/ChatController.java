@@ -1,9 +1,10 @@
 package com.metax.controller;
 
+import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatModel;
 import jakarta.annotation.Resource;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -19,10 +20,16 @@ import org.springframework.web.bind.annotation.RestController;
 public class ChatController {
 
     @Resource
-    private ChatModel chatModel;
+    private DashScopeChatModel chatModel;
+
+    @Resource(name = "cloudMemoryClient")
+    private ChatClient chatClient;
 
     @Resource
-    private ChatClient chatClient;
+    private EmbeddingModel dashScopeEmbeddingModel;
+
+    @Resource
+    private EmbeddingModel ollamaLocalEmbeddingModel;
 
 
     /**
