@@ -128,7 +128,7 @@ public class ChatClientConfig {
      * <p>
      * 默认记忆对话场景，使用 OpenAiChatModel 生成回答，绑定 ChatMemory 保存会话上下文，并挂载 SimpleLoggerAdvisor 输出调试日志
      *
-     * @param model      OpenAI 兼容模型 (vLLM / TEI 等, starter 自动装配)
+     * @param model      OpenAI 兼容模型 (vLLM / TEI 等，starter 自动装配)
      * @param chatMemory 对话记忆
      * @return ChatClient
      */
@@ -143,7 +143,7 @@ public class ChatClientConfig {
      * <p>
      * RAG 检索增强场景，使用 OpenAI 协议兼容模型生成回答，绑定 openAiVectorStore 检索同协议 embedding 写入的知识库内容
      *
-     * @param model       OpenAI 兼容模型 (vLLM / TEI 等, starter 自动装配)
+     * @param model       OpenAI 兼容模型 (vLLM / TEI 等，starter 自动装配)
      * @param chatMemory  对话记忆
      * @param vectorStore OpenAI 向量库
      * @return ChatClient

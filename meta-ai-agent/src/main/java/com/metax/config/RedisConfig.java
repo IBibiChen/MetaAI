@@ -18,6 +18,13 @@ import org.springframework.data.redis.serializer.StringRedisSerializer;
 public class RedisConfig {
 
     /**
+     * RedisTemplate 基础设施 Bean
+     *
+     * <p>
+     * 默认 Redis 操作场景，绑定 RedisConnectionFactory 作为连接工厂
+     * key 使用 StringRedisSerializer，value 使用 GenericJackson2JsonRedisSerializer
+     *
+     * <p>
      * redis-cli --raw
      * -
      * RedisTemplate 配置
