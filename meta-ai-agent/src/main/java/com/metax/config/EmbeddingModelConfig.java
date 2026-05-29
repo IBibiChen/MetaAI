@@ -6,15 +6,15 @@ import org.springframework.context.annotation.Configuration;
  * EmbeddingModelConfig .
  *
  * <p>
- * 三套向量模型 (DashScope / Ollama / OpenAI 兼容 vLLM、TEI 等) 均由各自 starter 自动装配,
- * 通过 spring.ai.model.embedding 单选开关 (dashscope | ollama | openai) 激活其中一套, 配置见 application.properties
+ * 三套向量模型 (DashScope / Ollama / OpenAI 兼容 vLLM、TEI 等) 均由各自 starter 自动装配
+ * 不设置 spring.ai.model.embedding 单选开关, 让三套 EmbeddingModel 同时存在, 使用时通过具体 bean 名显式指定
  *
  * <p>
- * 为何不手动 @Bean: embedding 与向量库强绑定, 一个索引只能用一种 embedding, 切换需重建索引, 本质是单选语义;
- * 单选开关恰好匹配该约束, 切换 provider 只改配置值、无需改代码, 且自动装配会处理 OpenAI embedding 独立 base-url 等细节
+ * 为何不手动 @Bean: 保留官方自动装配的连接、重试、观测和 provider options 处理
+ * 向量库与 embedding 的绑定在 VectorStoreConfig 中完成, 每套 embedding 使用独立 Redis index / prefix
  *
  * <p>
- * 单选生效时同一时间只装配一个 EmbeddingModel bean, 故 VectorStore 自动注入无歧义, 无需 @Primary
+ * 存在多个 EmbeddingModel bean 后禁止裸类型注入, 必须使用 @Qualifier 或具体类型 / bean 名区分
  *
  * @author IBibiChen
  * @version v1.0
