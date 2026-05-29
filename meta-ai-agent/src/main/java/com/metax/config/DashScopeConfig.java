@@ -18,6 +18,14 @@ public class DashScopeConfig {
     @Value("${spring.ai.dashscope.api-key}")
     private String apiKey;
 
+    /**
+     * DashScope 底层 API client
+     *
+     * <p>
+     * DashScope 基础设施场景，使用 spring.ai.dashscope.api-key 绑定 API key，供 DashScope 相关模型组件复用
+     *
+     * @return DashScopeApi
+     */
     @Bean
     public DashScopeApi dashScopeApi() {
         return DashScopeApi.builder()

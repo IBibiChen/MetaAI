@@ -55,6 +55,14 @@ public class ChatMemoryConfig {
     @Value("${spring.data.redis.timeout}")
     private int redisTimeout;
 
+    /**
+     * Redis 对话记忆 Repository
+     *
+     * <p>
+     * 默认记忆基础设施，使用 spring.data.redis 配置连接 Redis，为 ChatMemory 提供持久化消息存储
+     *
+     * @return RedissonRedisChatMemoryRepository
+     */
     @Bean
     public RedissonRedisChatMemoryRepository redisChatMemoryRepository() {
         return RedissonRedisChatMemoryRepository.builder()

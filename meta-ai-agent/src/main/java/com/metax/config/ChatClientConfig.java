@@ -18,20 +18,20 @@ import org.springframework.context.annotation.Configuration;
  * ChatClientConfig .
  *
  * <p>
- * 多套 ChatModel 共存后, 框架的 ChatClient.Builder 自动装配已通过 spring.ai.chat.client.enabled=false 关闭,
+ * 多套 ChatModel 共存后，框架的 ChatClient.Builder 自动装配已通过 spring.ai.chat.client.enabled=false 关闭
  * 故此处对每个具体 ChatModel 子类型用 ChatClient.builder(model) 显式构造预配置 ChatClient
  *
  * <p>
- * 三套接入按 "协议 (provider)" 划分, 而非部署位置 —— 同一协议可云可本地 (如 OpenAI 协议既可接官方 API 也可接本地 vLLM)
- * 按 "模型 × 场景" 组合: DashScope / Ollama / OpenAI (兼容 vLLM / TEI 等) 各自派生 默认记忆对话 和 RAG 检索增强 client
+ * 三套接入按 "协议 (provider)" 划分，而非部署位置 —— 同一协议可云可本地 (如 OpenAI 协议既可接官方 API 也可接本地 vLLM)
+ * 按 "模型 × 场景" 组合：DashScope / Ollama / OpenAI (兼容 vLLM / TEI 等) 各自派生 默认记忆对话 和 RAG 检索增强 client
  * 运行时的工具调用、特殊提示词或特殊模型参数由调用方注入具体 ChatModel 后用 ChatClient.builder(model) 临时构造
  *
  * <p>
- * 不预置 tool client: 当前没有全局默认工具集, 提前定义工具调用 client 会制造误导
- * 有工具调用需求时, 应在具体业务场景中按需挂载 tools / toolCallbacks
+ * 不预置 tool client：当前没有全局默认工具集，提前定义工具调用 client 会制造误导
+ * 有工具调用需求时，应在具体业务场景中按需挂载 tools / toolCallbacks
  *
  * <p>
- * Advisor 顺序敏感: 请求方向 Memory -> RAG -> Logger -> Model, SimpleLoggerAdvisor 置于链末端
+ * Advisor 顺序敏感：请求方向 Memory -> RAG -> Logger -> Model，SimpleLoggerAdvisor 置于链末端
  *
  * @author IBibiChen
  * @version v1.0
@@ -49,13 +49,13 @@ public class ChatClientConfig {
             如果不确定，请明确说明不确定，不要编造。
             """;
 
-    // ==================== DashScope (qwen) ====================
+    // ==================== DashScope ====================
 
     /**
      * DashScope 默认记忆对话 client
      *
      * <p>
-     * 适用于常规多轮对话: 启用 ChatMemory 保存会话上下文, 并挂载 SimpleLoggerAdvisor 输出调试日志
+     * 默认记忆对话场景，使用 DashScopeChatModel 生成回答，绑定 ChatMemory 保存会话上下文，并挂载 SimpleLoggerAdvisor 输出调试日志
      *
      * @param model      DashScope 模型 (starter 自动装配)
      * @param chatMemory 对话记忆
@@ -70,7 +70,7 @@ public class ChatClientConfig {
      * DashScope RAG 检索增强 client
      *
      * <p>
-     * 使用 DashScopeChatModel 生成回答, 使用 dashScopeVectorStore 检索同协议 embedding 写入的知识库内容
+     * RAG 检索增强场景，使用 DashScopeChatModel 生成回答，绑定 dashScopeVectorStore 检索同协议 embedding 写入的知识库内容
      *
      * @param model       DashScope 模型 (starter 自动装配)
      * @param chatMemory  对话记忆
@@ -91,7 +91,7 @@ public class ChatClientConfig {
      * Ollama 默认记忆对话 client
      *
      * <p>
-     * 适用于常规多轮对话: 启用 ChatMemory 保存会话上下文, 并挂载 SimpleLoggerAdvisor 输出调试日志
+     * 默认记忆对话场景，使用 OllamaChatModel 生成回答，绑定 ChatMemory 保存会话上下文，并挂载 SimpleLoggerAdvisor 输出调试日志
      *
      * @param model      Ollama 模型 (starter 自动装配)
      * @param chatMemory 对话记忆
@@ -106,7 +106,7 @@ public class ChatClientConfig {
      * Ollama RAG 检索增强 client
      *
      * <p>
-     * 使用 OllamaChatModel 生成回答, 使用 ollamaVectorStore 检索同协议 embedding 写入的知识库内容
+     * RAG 检索增强场景，使用 OllamaChatModel 生成回答，绑定 ollamaVectorStore 检索同协议 embedding 写入的知识库内容
      *
      * @param model       Ollama 模型 (starter 自动装配)
      * @param chatMemory  对话记忆
@@ -126,7 +126,7 @@ public class ChatClientConfig {
      * OpenAI 默认记忆对话 client
      *
      * <p>
-     * 适用于 OpenAI 协议兼容模型的常规多轮对话: 启用 ChatMemory 保存会话上下文, 并挂载 SimpleLoggerAdvisor 输出调试日志
+     * 默认记忆对话场景，使用 OpenAiChatModel 生成回答，绑定 ChatMemory 保存会话上下文，并挂载 SimpleLoggerAdvisor 输出调试日志
      *
      * @param model      OpenAI 兼容模型 (vLLM / TEI 等, starter 自动装配)
      * @param chatMemory 对话记忆
@@ -141,7 +141,7 @@ public class ChatClientConfig {
      * OpenAI RAG 检索增强 client
      *
      * <p>
-     * 使用 OpenAI 协议兼容模型生成回答, 使用 openAiVectorStore 检索同协议 embedding 写入的知识库内容
+     * RAG 检索增强场景，使用 OpenAI 协议兼容模型生成回答，绑定 openAiVectorStore 检索同协议 embedding 写入的知识库内容
      *
      * @param model       OpenAI 兼容模型 (vLLM / TEI 等, starter 自动装配)
      * @param chatMemory  对话记忆
@@ -159,7 +159,7 @@ public class ChatClientConfig {
      * 构造默认记忆对话 client
      *
      * <p>
-     * 默认链路只包含 Memory 和 Logger, 不包含 RAG / Tools, 避免普通对话被检索或工具调用副作用污染
+     * 默认链路只包含 Memory 和 Logger，不包含 RAG / Tools，避免普通对话被检索或工具调用副作用污染
      *
      * @param model      对话模型
      * @param chatMemory 对话记忆
@@ -180,7 +180,7 @@ public class ChatClientConfig {
      *
      * <p>
      * Advisor 顺序固定为 Memory -> RAG -> Logger
-     * RAG 检索应看到会话历史, Logger 应放在链路末端记录最终请求和响应
+     * RAG 检索应看到会话历史，Logger 应放在链路末端记录最终请求和响应
      *
      * @param model       对话模型
      * @param chatMemory  对话记忆

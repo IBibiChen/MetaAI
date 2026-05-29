@@ -13,12 +13,12 @@ import org.springframework.stereotype.Component;
  * AiBeanInspector .
  *
  * <p>
- * AI 相关 bean 的诊断打印工具, 仅当 metax.debug.print-ai-beans=true 时启用 (默认关闭, 不影响正常启动)
- * 用于核实多 ChatModel / EmbeddingModel / VectorStore 的实际装配情况 (bean 名与具体类型),
+ * AI 相关 bean 的诊断打印工具，仅当 metax.debug.print-ai-beans=true 时启用 (默认关闭，不影响正常启动)
+ * 用于核实多 ChatModel / EmbeddingModel / VectorStore 的实际装配情况 (bean 名与具体类型)
  * 验证 "未设 spring.ai.model.chat 时三模型共存" 与 "按具体类型注入" 的前提是否成立
  *
  * <p>
- * 启用方式: 启动参数追加 --metax.debug.print-ai-beans=true
+ * 启用方式：启动参数追加 --metax.debug.print-ai-beans=true
  *
  * @author IBibiChen
  * @version v1.0

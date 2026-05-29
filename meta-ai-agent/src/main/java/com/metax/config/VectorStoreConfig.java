@@ -17,8 +17,8 @@ import redis.clients.jedis.JedisPooled;
  * VectorStoreConfig .
  *
  * <p>
- * 三套 RAG 向量库分别绑定各自协议的 EmbeddingModel, 并使用独立 Redis index / prefix
- * 不同 embedding 模型的向量维度和语义空间可能不同, 禁止混用同一个向量索引
+ * 三套 RAG 向量库分别绑定各自协议的 EmbeddingModel，并使用独立 Redis index / prefix
+ * 不同 embedding 模型的向量维度和语义空间可能不同，禁止混用同一个向量索引
  *
  * @author IBibiChen
  * @version v1.0
@@ -29,6 +29,9 @@ public class VectorStoreConfig {
 
     /**
      * DashScope RAG 向量库
+     *
+     * <p>
+     * RAG 场景基础设施，绑定 dashscopeEmbeddingModel，并使用 DashScope 独立 Redis indexName 和 prefix 隔离向量数据
      *
      * @param embeddingModel         DashScope 向量模型
      * @param jedisConnectionFactory Jedis 连接工厂
@@ -51,6 +54,9 @@ public class VectorStoreConfig {
     /**
      * OpenAI RAG 向量库
      *
+     * <p>
+     * RAG 场景基础设施，绑定 openAiEmbeddingModel，并使用 OpenAI 独立 Redis indexName 和 prefix 隔离向量数据
+     *
      * @param embeddingModel         OpenAI 兼容向量模型 (vLLM / TEI 等)
      * @param jedisConnectionFactory Jedis 连接工厂
      * @param indexName              Redis 向量索引名
@@ -71,6 +77,9 @@ public class VectorStoreConfig {
 
     /**
      * Ollama RAG 向量库
+     *
+     * <p>
+     * RAG 场景基础设施，绑定 ollamaEmbeddingModel，并使用 Ollama 独立 Redis indexName 和 prefix 隔离向量数据
      *
      * @param embeddingModel         Ollama 向量模型
      * @param jedisConnectionFactory Jedis 连接工厂
@@ -95,7 +104,7 @@ public class VectorStoreConfig {
      *
      * <p>
      * 每套 provider 必须传入各自的 EmbeddingModel、indexName 和 prefix
-     * indexName 隔离 RediSearch 索引, prefix 隔离 Redis JSON 文档 key
+     * indexName 隔离 RediSearch 索引，prefix 隔离 Redis JSON 文档 key
      *
      * @param embeddingModel         向量模型
      * @param jedisConnectionFactory Jedis 连接工厂
@@ -121,7 +130,7 @@ public class VectorStoreConfig {
      * 基于 Spring Boot Redis 配置创建 JedisPooled
      *
      * <p>
-     * RedisVectorStore 需要 JedisPooled 原生客户端, 这里复用 JedisConnectionFactory 中的连接参数
+     * RedisVectorStore 需要 JedisPooled 原生客户端，这里复用 JedisConnectionFactory 中的连接参数
      * 避免重复维护 Redis host / port / password / timeout 配置
      *
      * @param jedisConnectionFactory Jedis 连接工厂
