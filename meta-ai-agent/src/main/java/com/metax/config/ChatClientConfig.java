@@ -21,7 +21,8 @@ import org.springframework.context.annotation.Configuration;
  * 故此处对每个具体 ChatModel 子类型用 ChatClient.builder(model) 显式构造预配置 ChatClient
  *
  * <p>
- * 按 "模型 × 场景" 组合: 云端 DashScope / 本地 Ollama / 本地 vLLM 各自派生 记忆对话、无状态工具调用 等 client,
+ * 三套接入按 "协议 (provider)" 划分, 而非部署位置 —— 同一协议可云可本地 (如 OpenAI 协议既可接官方 API 也可接本地 vLLM)。
+ * 按 "模型 × 场景" 组合: DashScope / Ollama / OpenAI (兼容 vLLM / TEI 等) 各自派生 记忆对话、无状态工具调用 等 client,
  * 另预留 RAG 检索增强 client。运行时的特殊需求由调用方注入具体 ChatModel 后用 ChatClient.builder(model) 临时构造
  *
  * <p>
@@ -43,10 +44,10 @@ public class ChatClientConfig {
             如果不确定，请明确说明不确定，不要编造。
             """;
 
-    // ==================== 云端 DashScope (qwen) ====================
+    // ==================== DashScope (qwen) ====================
 
     /**
-     * 云端记忆多轮对话 client
+     * DashScope 记忆多轮对话 client
      *
      * <p>
      * 按具体类型 DashScopeChatModel 注入, 三 provider 类型互异, 无歧义
@@ -56,7 +57,7 @@ public class ChatClientConfig {
      * @return ChatClient
      */
     @Bean
-    public ChatClient cloudMemoryClient(DashScopeChatModel model, ChatMemory chatMemory) {
+    public ChatClient dashScopeMemoryClient(DashScopeChatModel model, ChatMemory chatMemory) {
         return ChatClient.builder(model)
                 .defaultSystem(DEFAULT_SYSTEM)
                 .defaultAdvisors(
@@ -67,13 +68,13 @@ public class ChatClientConfig {
     }
 
     /**
-     * 云端无状态 / 工具调用 client。无记忆, 仅日志, 工具按需挂载。
+     * DashScope 无状态 / 工具调用 client。无记忆, 仅日志, 工具按需挂载。
      *
      * @param model DashScope 模型
      * @return ChatClient
      */
     @Bean
-    public ChatClient cloudToolClient(DashScopeChatModel model) {
+    public ChatClient dashScopeToolClient(DashScopeChatModel model) {
         return ChatClient.builder(model)
                 .defaultSystem(DEFAULT_SYSTEM)
                 .defaultAdvisors(SimpleLoggerAdvisor.builder().build())
@@ -82,7 +83,7 @@ public class ChatClientConfig {
     }
 
     /**
-     * 云端 RAG 检索增强 client
+     * DashScope RAG 检索增强 client
      *
      * <p>
      * 仅当容器内存在 VectorStore bean 时才装配, 避免当前无 VectorStore 时启动失败
@@ -94,7 +95,7 @@ public class ChatClientConfig {
      */
     @Bean
     @ConditionalOnBean(VectorStore.class)
-    public ChatClient cloudRagClient(DashScopeChatModel model, VectorStore vectorStore, ChatMemory chatMemory) {
+    public ChatClient dashScopeRagClient(DashScopeChatModel model, VectorStore vectorStore, ChatMemory chatMemory) {
         return ChatClient.builder(model)
                 .defaultSystem(DEFAULT_SYSTEM)
                 .defaultAdvisors(
@@ -105,10 +106,10 @@ public class ChatClientConfig {
                 .build();
     }
 
-    // ==================== 本地 Ollama ====================
+    // ==================== Ollama ====================
 
     /**
-     * 本地 Ollama 记忆对话 client
+     * Ollama 记忆对话 client
      *
      * @param model      Ollama 模型
      * @param chatMemory 对话记忆
@@ -126,7 +127,7 @@ public class ChatClientConfig {
     }
 
     /**
-     * 本地 Ollama 无状态 / 工具调用 client
+     * Ollama 无状态 / 工具调用 client
      *
      * @param model Ollama 模型
      * @return ChatClient
@@ -139,17 +140,17 @@ public class ChatClientConfig {
                 .build();
     }
 
-    // ==================== 本地 vLLM (OpenAI 兼容) ====================
+    // ==================== OpenAI (兼容 vLLM / TEI 等) ====================
 
     /**
-     * 本地 vLLM 记忆对话 client
+     * OpenAI 记忆对话 client
      *
-     * @param model      vLLM 模型 (OpenAI 兼容)
+     * @param model      OpenAI 兼容模型 (vLLM / TEI 等)
      * @param chatMemory 对话记忆
      * @return ChatClient
      */
     @Bean
-    public ChatClient vllmMemoryClient(OpenAiChatModel model, ChatMemory chatMemory) {
+    public ChatClient openAiMemoryClient(OpenAiChatModel model, ChatMemory chatMemory) {
         return ChatClient.builder(model)
                 .defaultSystem(DEFAULT_SYSTEM)
                 .defaultAdvisors(
@@ -160,13 +161,13 @@ public class ChatClientConfig {
     }
 
     /**
-     * 本地 vLLM 无状态 / 工具调用 client
+     * OpenAI 无状态 / 工具调用 client
      *
-     * @param model vLLM 模型 (OpenAI 兼容)
+     * @param model OpenAI 兼容模型 (vLLM / TEI 等)
      * @return ChatClient
      */
     @Bean
-    public ChatClient vllmToolClient(OpenAiChatModel model) {
+    public ChatClient openAiToolClient(OpenAiChatModel model) {
         return ChatClient.builder(model)
                 .defaultSystem(DEFAULT_SYSTEM)
                 .defaultAdvisors(SimpleLoggerAdvisor.builder().build())

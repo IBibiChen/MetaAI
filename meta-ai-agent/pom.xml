@@ -28,14 +28,14 @@
             <artifactId>spring-ai-alibaba-starter-dashscope</artifactId>
         </dependency>
 
-        <!-- 引入 SpringAI OpenAI 模型适配的 Starter (本地 vLLM 走 OpenAI 兼容接口) -->
+        <!-- 引入 SpringAI OpenAI 模型适配的 Starter (vLLM 走 OpenAI 兼容接口) -->
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-starter-model-openai</artifactId>
         </dependency>
 
 
-        <!-- 添加本地 Ollama 模型提供商-->
+        <!-- 添加 Ollama 模型提供商-->
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-starter-model-ollama</artifactId>

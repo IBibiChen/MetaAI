@@ -4,7 +4,6 @@ import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatModel;
 import jakarta.annotation.Resource;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -22,14 +21,8 @@ public class ChatController {
     @Resource
     private DashScopeChatModel chatModel;
 
-    @Resource(name = "cloudMemoryClient")
+    @Resource(name = "dashScopeMemoryClient")
     private ChatClient chatClient;
-
-    @Resource
-    private EmbeddingModel dashScopeEmbeddingModel;
-
-    @Resource
-    private EmbeddingModel ollamaLocalEmbeddingModel;
 
 
     /**
