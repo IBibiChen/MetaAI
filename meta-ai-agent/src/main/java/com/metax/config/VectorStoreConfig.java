@@ -2,6 +2,7 @@ package com.metax.config;
 
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.vectorstore.redis.RedisVectorStore;
+import org.springframework.ai.vectorstore.redis.RedisVectorStore.MetadataField;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
@@ -19,6 +20,9 @@ import redis.clients.jedis.JedisPooled;
  * <p>
  * 三套 RAG 向量库分别绑定各自协议的 EmbeddingModel，并使用独立 Redis index / prefix
  * 不同 embedding 模型的向量维度和语义空间可能不同，禁止混用同一个向量索引
+ *
+ * <p>
+ * 三套向量库共享 metadata 字段规范，写入 Document.metadata 时必须使用相同 key 才能进行过滤查询
  *
  * @author IBibiChen
  * @version v1.0
@@ -105,6 +109,7 @@ public class VectorStoreConfig {
      * <p>
      * 每套 provider 必须传入各自的 EmbeddingModel、indexName 和 prefix
      * indexName 隔离 RediSearch 索引，prefix 隔离 Redis JSON 文档 key
+     * metadataFields 固定声明可过滤字段，未声明字段即使写入 metadata 也不能用于 Redis filter expression
      *
      * @param embeddingModel         向量模型
      * @param jedisConnectionFactory Jedis 连接工厂
@@ -123,7 +128,28 @@ public class VectorStoreConfig {
                 .initializeSchema(initializeSchema)
                 .indexName(indexName)
                 .prefix(prefix)
+                .metadataFields(metadataFields())
                 .build();
+    }
+
+    /**
+     * Redis metadata 过滤字段
+     *
+     * <p>
+     * TAG 适合精确匹配，TEXT 适合文本检索，NUMERIC 适合范围过滤
+     * createdAt 建议写入 epoch millis，方便按时间范围过滤
+     *
+     * @return metadata fields
+     */
+    private MetadataField[] metadataFields() {
+        return new MetadataField[]{
+                MetadataField.tag("tenantId"),
+                MetadataField.tag("knowledgeBaseId"),
+                MetadataField.tag("documentId"),
+                MetadataField.tag("documentType"),
+                MetadataField.text("source"),
+                MetadataField.numeric("createdAt")
+        };
     }
 
     /**
