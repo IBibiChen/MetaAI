@@ -24,6 +24,11 @@ public class RedisConfig {
      * 默认 Redis 操作场景，绑定 RedisConnectionFactory 作为连接工厂
      * key 使用 StringRedisSerializer，value 使用 GenericJackson2JsonRedisSerializer
      * 普通 Redis 数据访问使用 RedisTemplate，Redis 向量库使用 JedisPooled
+     * -
+     * GenericJackson2JsonRedisSerializer 适合 Java 服务内部通用对象缓存，会携带类型信息
+     * 它就是为 RedisTemplate<String, Object> 这种 value 类型不固定的场景设计的
+     * 当前不使用固定类型 Jackson2JsonRedisSerializer，避免 Object value 反序列化时类型信息不足
+     * 跨语言数据或固定结构数据建议单独定义 typed RedisTemplate 或使用 StringRedisTemplate
      *
      * <p>
      * redis-cli --raw
@@ -46,15 +51,20 @@ public class RedisConfig {
     @Bean
     public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory redisConnectionFactory) {
         RedisTemplate<String, Object> redisTemplate = new RedisTemplate<>();
+        StringRedisSerializer stringSerializer = new StringRedisSerializer();
+        GenericJackson2JsonRedisSerializer jsonSerializer = new GenericJackson2JsonRedisSerializer();
 
         redisTemplate.setConnectionFactory(redisConnectionFactory);
-        // 设置 key 序列化方式 string
-        redisTemplate.setKeySerializer(new StringRedisSerializer());
-        redisTemplate.setHashKeySerializer(new StringRedisSerializer());
+        // key / hashKey 使用 string 序列化，保证 Redis key 可读
+        redisTemplate.setKeySerializer(stringSerializer);
+        redisTemplate.setHashKeySerializer(stringSerializer);
 
-        // 设置 value 的序列化方式 json，使用 GenericJackson2JsonRedisSerializer 替换默认序列化
-        redisTemplate.setValueSerializer(new GenericJackson2JsonRedisSerializer());
-        redisTemplate.setHashValueSerializer(new GenericJackson2JsonRedisSerializer());
+        // value / hashValue 使用通用 JSON 序列化，适配 Object value 类型不固定的场景
+        redisTemplate.setValueSerializer(jsonSerializer);
+        redisTemplate.setHashValueSerializer(jsonSerializer);
+
+        // defaultSerializer 兜底未显式指定 serializer 的操作路径
+        redisTemplate.setDefaultSerializer(jsonSerializer);
 
         redisTemplate.afterPropertiesSet();
 
