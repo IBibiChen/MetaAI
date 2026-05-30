@@ -23,6 +23,7 @@ public class RedisConfig {
      * <p>
      * 默认 Redis 操作场景，绑定 RedisConnectionFactory 作为连接工厂
      * key 使用 StringRedisSerializer，value 使用 GenericJackson2JsonRedisSerializer
+     * 普通 Redis 数据访问使用 RedisTemplate，高阶 Redis 能力使用 RedissonClient，Redis 向量库使用 JedisPooled
      *
      * <p>
      * redis-cli --raw

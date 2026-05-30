@@ -22,6 +22,7 @@ public class ChatMemoryConfig {
      *
      * <p>
      * 默认记忆对话和 RAG 场景共用，绑定 RedissonRedisChatMemoryRepository 作为消息存储后端
+     * 全局 RedissonClient 用于业务高阶 Redis 能力，当前 ChatMemory Repository 仍按 Spring AI Alibaba builder 独立创建
      *
      * <p>
      * -
