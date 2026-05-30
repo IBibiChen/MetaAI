@@ -20,7 +20,6 @@ import redis.clients.jedis.JedisPooled;
  * <p>
  * Redis 向量库配置，三套 RAG 向量库分别绑定各自协议的 EmbeddingModel，并使用独立 Redis index / prefix
  * 不同 embedding 模型的向量维度和语义空间可能不同，禁止混用同一个向量索引
- * Spring AI RedisVectorStore 官方 builder 需要 JedisPooled，因此这里保留 Jedis 作为向量库专用客户端
  *
  * <p>
  * 三套 RedisVectorStore 共享 metadata 字段规范，写入 Document.metadata 时必须使用相同 key 才能进行过滤查询
@@ -159,7 +158,6 @@ public class RedisVectorStoreConfig {
      * <p>
      * RedisVectorStore 需要 JedisPooled 原生客户端，这里复用 JedisConnectionFactory 中的连接参数
      * 避免重复维护 Redis host / port / password / timeout 配置
-     * RedissonClient 用于分布式锁、限流器、队列等高阶能力，不替代这里的 JedisPooled
      *
      * @param jedisConnectionFactory Jedis 连接工厂
      * @return JedisPooled
