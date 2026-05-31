@@ -61,20 +61,22 @@ public class EmbeddingModelConfig {
      *
      * RAG ChatClient 不直接绑定 EmbeddingModel，而是绑定已经构造好的 provider + backend 专属 VectorStore
      * 这样可以把模型 provider 和向量数据库 backend 的组合关系固定在配置层，避免业务代码临时拼装错误链路
+     * 当前项目还引入 Redis ChatMemory 和 JDBC ChatMemory 两套记忆后端，因此 RAG ChatClient 名称同时包含 memory backend 和 vector backend
+     * memory backend 只影响对话历史存储位置，vector backend 只影响知识库检索位置，两者不能混为一谈
      *
-     * provider + backend + rag client 装配图
+     * provider + vector backend + rag client 装配图
      *
-     * dashscopeEmbeddingModel -> dashScopeRedisVectorStore -> dashScopeRedisRagChatClient
-     * dashscopeEmbeddingModel -> dashScopeQdrantVectorStore -> dashScopeQdrantRagChatClient
-     * dashscopeEmbeddingModel -> dashScopeMilvusVectorStore -> dashScopeMilvusRagChatClient
+     * dashscopeEmbeddingModel -> dashScopeRedisVectorStore -> dashScopeRedisMemoryRedisRagChatClient / dashScopeJdbcMemoryRedisRagChatClient
+     * dashscopeEmbeddingModel -> dashScopeQdrantVectorStore -> dashScopeRedisMemoryQdrantRagChatClient / dashScopeJdbcMemoryQdrantRagChatClient
+     * dashscopeEmbeddingModel -> dashScopeMilvusVectorStore -> dashScopeRedisMemoryMilvusRagChatClient / dashScopeJdbcMemoryMilvusRagChatClient
      *
-     * openAiEmbeddingModel -> openAiRedisVectorStore -> openAiRedisRagChatClient
-     * openAiEmbeddingModel -> openAiQdrantVectorStore -> openAiQdrantRagChatClient
-     * openAiEmbeddingModel -> openAiMilvusVectorStore -> openAiMilvusRagChatClient
+     * openAiEmbeddingModel -> openAiRedisVectorStore -> openAiRedisMemoryRedisRagChatClient / openAiJdbcMemoryRedisRagChatClient
+     * openAiEmbeddingModel -> openAiQdrantVectorStore -> openAiRedisMemoryQdrantRagChatClient / openAiJdbcMemoryQdrantRagChatClient
+     * openAiEmbeddingModel -> openAiMilvusVectorStore -> openAiRedisMemoryMilvusRagChatClient / openAiJdbcMemoryMilvusRagChatClient
      *
-     * ollamaEmbeddingModel -> ollamaRedisVectorStore -> ollamaRedisRagChatClient
-     * ollamaEmbeddingModel -> ollamaQdrantVectorStore -> ollamaQdrantRagChatClient
-     * ollamaEmbeddingModel -> ollamaMilvusVectorStore -> ollamaMilvusRagChatClient
+     * ollamaEmbeddingModel -> ollamaRedisVectorStore -> ollamaRedisMemoryRedisRagChatClient / ollamaJdbcMemoryRedisRagChatClient
+     * ollamaEmbeddingModel -> ollamaQdrantVectorStore -> ollamaRedisMemoryQdrantRagChatClient / ollamaJdbcMemoryQdrantRagChatClient
+     * ollamaEmbeddingModel -> ollamaMilvusVectorStore -> ollamaRedisMemoryMilvusRagChatClient / ollamaJdbcMemoryMilvusRagChatClient
      *
      * 禁止事项和排查方式
      *
