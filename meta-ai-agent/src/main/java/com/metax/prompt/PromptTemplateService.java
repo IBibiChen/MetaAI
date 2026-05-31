@@ -2,19 +2,7 @@ package com.metax.prompt;
 
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.chat.prompt.PromptTemplate;
-import org.springframework.ai.chat.prompt.SystemPromptTemplate;
-import org.springframework.ai.template.TemplateRenderer;
-import org.springframework.ai.template.ValidationMode;
-import org.springframework.ai.template.st.StTemplateRenderer;
-import org.springframework.core.io.ClassPathResource;
-import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
-
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.util.Map;
-import java.util.Set;
 
 /**
  * PromptTemplateService .
@@ -28,6 +16,8 @@ import java.util.Set;
  * 模型 provider、ChatMemory、VectorStore、Advisor 顺序仍由 ChatClient 配置层负责
  * 业务代码只引用 PromptTemplateId，不直接引用 prompt 文件路径
  * prompt 文件路径只在 PromptTemplateId 中维护，新增模板必须先确定 scene、purpose、role
+ * 当前服务委托 PromptTemplates 静态工具执行 classpath 模板解析，避免静态入口和 Bean 入口出现两套实现
+ * 保留 Spring Bean 是为了后续动态 prompt、租户 prompt、灰度 prompt、热更新 prompt 演进
  *
  * <p>
  * Spring AI Prompt 学习笔记
@@ -57,12 +47,6 @@ import java.util.Set;
 @Service
 public class PromptTemplateService {
 
-    private static final TemplateRenderer ANGLE_BRACKET_RENDERER = StTemplateRenderer.builder()
-            .startDelimiterToken('<')
-            .endDelimiterToken('>')
-            .validationMode(ValidationMode.THROW)
-            .build();
-
     /**
      * 渲染 prompt 纯文本
      *
@@ -73,7 +57,7 @@ public class PromptTemplateService {
      * @return 渲染后的 prompt 文本
      */
     public String render(PromptTemplateId templateId) {
-        return render(PromptTemplateRequest.of(templateId));
+        return PromptTemplates.render(templateId);
     }
 
     /**
@@ -86,8 +70,7 @@ public class PromptTemplateService {
      * @return 渲染后的 prompt 文本
      */
     public String render(PromptTemplateRequest request) {
-        validateVariables(request.templateId(), request.variables());
-        return createPromptTemplate(request.templateId()).render(request.variables());
+        return PromptTemplates.render(request);
     }
 
     /**
@@ -100,8 +83,7 @@ public class PromptTemplateService {
      * @return system message
      */
     public Message createSystemMessage(PromptTemplateRequest request) {
-        validateVariables(request.templateId(), request.variables());
-        return createSystemPromptTemplate(request.templateId()).createMessage(request.variables());
+        return PromptTemplates.createSystemMessage(request);
     }
 
     /**
@@ -114,12 +96,7 @@ public class PromptTemplateService {
      * @return Spring AI Prompt
      */
     public Prompt create(PromptTemplateRequest request) {
-        validateVariables(request.templateId(), request.variables());
-        PromptTemplate template = createPromptTemplate(request.templateId());
-        if (request.chatOptions() == null) {
-            return template.create(request.variables());
-        }
-        return template.create(request.variables(), request.chatOptions());
+        return PromptTemplates.create(request);
     }
 
     /**
@@ -132,77 +109,7 @@ public class PromptTemplateService {
      * @return 渲染后的 prompt 文本
      */
     public String renderWithAngleBrackets(PromptTemplateRequest request) {
-        validateVariables(request.templateId(), request.variables());
-        return PromptTemplate.builder()
-                .template(templateContent(request.templateId()))
-                .variables(request.variables())
-                .renderer(ANGLE_BRACKET_RENDERER)
-                .build()
-                .render();
-    }
-
-    /**
-     * 创建普通 PromptTemplate
-     *
-     * @param templateId prompt 模板 ID
-     * @return PromptTemplate
-     */
-    private PromptTemplate createPromptTemplate(PromptTemplateId templateId) {
-        return new PromptTemplate(templateContent(templateId));
-    }
-
-    /**
-     * 创建 SystemPromptTemplate
-     *
-     * @param templateId prompt 模板 ID
-     * @return SystemPromptTemplate
-     */
-    private SystemPromptTemplate createSystemPromptTemplate(PromptTemplateId templateId) {
-        return new SystemPromptTemplate(templateContent(templateId));
-    }
-
-    /**
-     * 加载 classpath prompt 资源
-     *
-     * @param templateId prompt 模板 ID
-     * @return classpath 资源
-     */
-    private Resource resource(PromptTemplateId templateId) {
-        return new ClassPathResource(templateId.path());
-    }
-
-    /**
-     * 读取 UTF-8 prompt 模板内容
-     *
-     * <p>
-     * Spring AI 1.1.7 的 PromptTemplate(Resource) 使用 Charset.defaultCharset 读取资源
-     * Windows 环境可能不是 UTF-8，这里显式读取 UTF-8 后再交给 PromptTemplate(String) 渲染
-     *
-     * @param templateId prompt 模板 ID
-     * @return prompt 模板内容
-     */
-    private String templateContent(PromptTemplateId templateId) {
-        try {
-            return resource(templateId).getContentAsString(StandardCharsets.UTF_8);
-        } catch (IOException ex) {
-            throw new IllegalStateException("Failed to read prompt template: " + templateId.path(), ex);
-        }
-    }
-
-    /**
-     * 校验模板必填变量
-     *
-     * @param templateId prompt 模板 ID
-     * @param variables 模板变量
-     */
-    private void validateVariables(PromptTemplateId templateId, Map<String, Object> variables) {
-        Set<String> missingVariables = templateId.requiredVariables()
-                .stream()
-                .filter(variable -> !variables.containsKey(variable))
-                .collect(java.util.stream.Collectors.toSet());
-        if (!missingVariables.isEmpty()) {
-            throw new IllegalArgumentException("Missing prompt variables: " + missingVariables);
-        }
+        return PromptTemplates.renderWithAngleBrackets(request);
     }
 
 }

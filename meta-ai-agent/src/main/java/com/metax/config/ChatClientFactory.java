@@ -1,7 +1,7 @@
 package com.metax.config;
 
 import com.metax.prompt.PromptTemplateId;
-import com.metax.prompt.PromptTemplateService;
+import com.metax.prompt.PromptTemplates;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
@@ -26,15 +26,6 @@ import org.springframework.stereotype.Component;
 public class ChatClientFactory {
 
     /**
-     * prompt 模板渲染服务
-     */
-    private final PromptTemplateService promptTemplateService;
-
-    public ChatClientFactory(PromptTemplateService promptTemplateService) {
-        this.promptTemplateService = promptTemplateService;
-    }
-
-    /**
      * 构造默认记忆对话 client
      *
      * <p>
@@ -46,7 +37,7 @@ public class ChatClientFactory {
      */
     public ChatClient buildDefaultClient(ChatModel model, ChatMemory chatMemory) {
         return ChatClient.builder(model)
-                .defaultSystem(promptTemplateService.render(PromptTemplateId.CHAT_GENERAL_SYSTEM))
+                .defaultSystem(PromptTemplates.render(PromptTemplateId.CHAT_GENERAL_SYSTEM))
                 .defaultAdvisors(
                         MessageChatMemoryAdvisor.builder(chatMemory).build(),
                         SimpleLoggerAdvisor.builder().build()
@@ -68,7 +59,7 @@ public class ChatClientFactory {
      */
     public ChatClient buildRagClient(ChatModel model, ChatMemory chatMemory, VectorStore vectorStore) {
         return ChatClient.builder(model)
-                .defaultSystem(promptTemplateService.render(PromptTemplateId.RAG_RETRIEVAL_SYSTEM))
+                .defaultSystem(PromptTemplates.render(PromptTemplateId.RAG_RETRIEVAL_SYSTEM))
                 .defaultAdvisors(
                         MessageChatMemoryAdvisor.builder(chatMemory).build(),
                         QuestionAnswerAdvisor.builder(vectorStore).build(),
