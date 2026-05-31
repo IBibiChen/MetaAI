@@ -1,5 +1,7 @@
 package com.metax.config;
 
+import com.metax.prompt.PromptTemplateId;
+import com.metax.prompt.PromptTemplateService;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
@@ -24,13 +26,13 @@ import org.springframework.stereotype.Component;
 public class ChatClientFactory {
 
     /**
-     * 全局默认系统提示词
+     * prompt 模板渲染服务
      */
-    private static final String DEFAULT_SYSTEM = """
-            你是一个专业、严谨、友好、幽默的智能助手。
-            回答问题时请优先使用中文，请用海盗的口吻回答问题。
-            如果不确定，请明确说明不确定，不要编造。
-            """;
+    private final PromptTemplateService promptTemplateService;
+
+    public ChatClientFactory(PromptTemplateService promptTemplateService) {
+        this.promptTemplateService = promptTemplateService;
+    }
 
     /**
      * 构造默认记忆对话 client
@@ -44,7 +46,7 @@ public class ChatClientFactory {
      */
     public ChatClient buildDefaultClient(ChatModel model, ChatMemory chatMemory) {
         return ChatClient.builder(model)
-                .defaultSystem(DEFAULT_SYSTEM)
+                .defaultSystem(promptTemplateService.render(PromptTemplateId.CHAT_GENERAL_SYSTEM))
                 .defaultAdvisors(
                         MessageChatMemoryAdvisor.builder(chatMemory).build(),
                         SimpleLoggerAdvisor.builder().build()
@@ -66,7 +68,7 @@ public class ChatClientFactory {
      */
     public ChatClient buildRagClient(ChatModel model, ChatMemory chatMemory, VectorStore vectorStore) {
         return ChatClient.builder(model)
-                .defaultSystem(DEFAULT_SYSTEM)
+                .defaultSystem(promptTemplateService.render(PromptTemplateId.RAG_RETRIEVAL_SYSTEM))
                 .defaultAdvisors(
                         MessageChatMemoryAdvisor.builder(chatMemory).build(),
                         QuestionAnswerAdvisor.builder(vectorStore).build(),
