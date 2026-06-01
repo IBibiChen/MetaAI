@@ -1,15 +1,31 @@
 package com.metax.controller;
 
 import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatModel;
+import com.metax.rag.indexing.DocumentIndexingJob;
+import com.metax.rag.indexing.DocumentIndexingRequest;
+import com.metax.rag.indexing.DocumentIndexingService;
+import com.metax.rag.etl.model.DocumentSourceType;
+import com.metax.rag.core.VectorStoreRouter;
+import com.metax.rag.model.EmbeddingProvider;
+import com.metax.rag.model.VectorStoreBackend;
+import com.metax.rag.retrieval.RetrievalAdvisorFactory;
+import com.metax.rag.retrieval.RetrievalChatResponse;
+import com.metax.rag.retrieval.RetrievalFilterExpressionFactory;
+import com.metax.rag.retrieval.RetrievalResponseMapper;
+import com.metax.rag.retrieval.RetrievalOptions;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.ollama.OllamaChatModel;
 import org.springframework.ai.openai.OpenAiChatModel;
+import org.springframework.ai.rag.retrieval.search.VectorStoreDocumentRetriever;
+import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.Map;
 
@@ -33,6 +49,16 @@ public class ChatController {
     private final OpenAiChatModel openAiChatModel;
 
     private final OllamaChatModel ollamaChatModel;
+
+    private final DocumentIndexingService documentIndexingService;
+
+    private final VectorStoreRouter vectorStoreRouter;
+
+    private final RetrievalAdvisorFactory retrievalAdvisorFactory;
+
+    private final RetrievalFilterExpressionFactory retrievalFilterExpressionFactory;
+
+    private final RetrievalResponseMapper retrievalResponseMapper;
 
     /**
      * 默认记忆对话
@@ -67,6 +93,10 @@ public class ChatController {
      * @param memory         记忆后端
      * @param conversationId 会话 ID
      * @param msg            消息
+     * @param tenantId       租户 ID
+     * @param knowledgeBaseId 知识库 ID
+     * @param documentId     文档 ID
+     * @param documentType   文档类型
      * @return 模型响应内容
      */
     @GetMapping(value = "/v1/{provider}/rag/{vectorStore}/{memory}")
@@ -74,8 +104,156 @@ public class ChatController {
                       @PathVariable String vectorStore,
                       @PathVariable String memory,
                       @RequestParam(name = "conversationId", required = false) String conversationId,
-                      @RequestParam(name = "msg", defaultValue = "你是谁") String msg) {
-        return chat(resolveRagChatClient(provider, vectorStore, memory), conversationId, msg);
+                      @RequestParam(name = "msg", defaultValue = "你是谁") String msg,
+                      @RequestParam(name = "tenantId", required = false) String tenantId,
+                      @RequestParam(name = "knowledgeBaseId", required = false) String knowledgeBaseId,
+                      @RequestParam(name = "documentId", required = false) String documentId,
+                      @RequestParam(name = "documentType", required = false) String documentType) {
+        RetrievalOptions options = tenantId == null || tenantId.isBlank() || knowledgeBaseId == null || knowledgeBaseId.isBlank()
+                ? null : new RetrievalOptions(tenantId, knowledgeBaseId, documentId, documentType, null, null, null);
+        return ragChat(resolveRagChatClient(provider, vectorStore, memory), provider, vectorStore,
+                conversationId, msg, options);
+    }
+
+    /**
+     * RAG 检索增强详情对话
+     *
+     * <p>
+     * 返回模型回答和本次检索命中的引用来源，便于排查 topK、metadata filter 和 chunk 命中质量
+     *
+     * @param provider        模型 provider
+     * @param vectorStore     向量库后端
+     * @param memory          记忆后端
+     * @param conversationId  会话 ID
+     * @param msg             消息
+     * @param tenantId        租户 ID
+     * @param knowledgeBaseId 知识库 ID
+     * @param documentId      文档 ID
+     * @param documentType    文档类型
+     * @param topK            检索数量
+     * @param threshold       相似度阈值
+     * @param filterExpression 高级过滤表达式
+     * @return RAG 详情响应
+     */
+    @PostMapping(value = "/v1/{provider}/rag/{vectorStore}/{memory}/details")
+    public RetrievalChatResponse ragDetails(@PathVariable String provider,
+                                      @PathVariable String vectorStore,
+                                      @PathVariable String memory,
+                                      @RequestParam(name = "conversationId", required = false) String conversationId,
+                                      @RequestParam(name = "msg") String msg,
+                                      @RequestParam(name = "tenantId") String tenantId,
+                                      @RequestParam(name = "knowledgeBaseId") String knowledgeBaseId,
+                                      @RequestParam(name = "documentId", required = false) String documentId,
+                                      @RequestParam(name = "documentType", required = false) String documentType,
+                                      @RequestParam(name = "topK", required = false) Integer topK,
+                                      @RequestParam(name = "threshold", required = false) Double threshold,
+                                      @RequestParam(name = "filterExpression", required = false) String filterExpression) {
+        String resolvedConversationId = resolveConversationId(conversationId);
+        RetrievalOptions options = new RetrievalOptions(tenantId, knowledgeBaseId, documentId, documentType,
+                topK, threshold, filterExpression);
+
+        ChatClient.ChatClientRequestSpec requestSpec = resolveRagChatClient(provider, vectorStore, memory).prompt()
+                .advisors(spec -> {
+                    spec.param(ChatMemory.CONVERSATION_ID, resolvedConversationId);
+                    spec.advisors(retrievalAdvisorFactory.create(resolveVectorStore(provider, vectorStore),
+                            topK, threshold, retrievalFilterExpressionFactory.create(options)));
+                    if (filterExpression != null && !filterExpression.isBlank()) {
+                        spec.param(VectorStoreDocumentRetriever.FILTER_EXPRESSION, filterExpression);
+                    }
+                })
+                .user(msg);
+
+        return retrievalResponseMapper.toResponse(requestSpec.call().chatClientResponse(), resolvedConversationId);
+    }
+
+    /**
+     * 上传文件并创建 RAG 异步文档索引任务
+     *
+     * @param provider        embedding provider
+     * @param vectorStore     向量库后端
+     * @param tenantId        租户 ID
+     * @param knowledgeBaseId 知识库 ID
+     * @param documentId      文档 ID
+     * @param documentType    文档类型
+     * @param file            上传文件
+     * @return 文档索引任务
+     */
+    @PostMapping(value = "/v1/rag/documents/upload")
+    public DocumentIndexingJob uploadRagDocument(@RequestParam(name = "provider") String provider,
+                                             @RequestParam(name = "vectorStore") String vectorStore,
+                                             @RequestParam(name = "tenantId") String tenantId,
+                                             @RequestParam(name = "knowledgeBaseId") String knowledgeBaseId,
+                                             @RequestParam(name = "documentId") String documentId,
+                                             @RequestParam(name = "documentType", required = false) String documentType,
+                                             @RequestParam(name = "file") MultipartFile file) {
+        return documentIndexingService.uploadAndIndex(provider, vectorStore, tenantId, knowledgeBaseId,
+                documentId, documentType, file);
+    }
+
+    /**
+     * 从 RustFS 既有对象创建 RAG 异步文档索引任务
+     *
+     * @param provider        embedding provider
+     * @param vectorStore     向量库后端
+     * @param tenantId        租户 ID
+     * @param knowledgeBaseId 知识库 ID
+     * @param documentId      文档 ID
+     * @param documentType    文档类型
+     * @param source          来源标识
+     * @param bucket          RustFS bucket
+     * @param objectKey       RustFS object key
+     * @return 文档索引任务
+     */
+    @PostMapping(value = "/v1/rag/documents/import")
+    public DocumentIndexingJob importRagDocument(@RequestParam(name = "provider") String provider,
+                                             @RequestParam(name = "vectorStore") String vectorStore,
+                                             @RequestParam(name = "tenantId") String tenantId,
+                                             @RequestParam(name = "knowledgeBaseId") String knowledgeBaseId,
+                                             @RequestParam(name = "documentId") String documentId,
+                                             @RequestParam(name = "documentType", required = false) String documentType,
+                                             @RequestParam(name = "source", required = false) String source,
+                                             @RequestParam(name = "bucket") String bucket,
+                                             @RequestParam(name = "objectKey") String objectKey) {
+        return documentIndexingService.submit(new DocumentIndexingRequest(EmbeddingProvider.from(provider),
+                VectorStoreBackend.from(vectorStore), tenantId, knowledgeBaseId, documentId, documentType,
+                DocumentSourceType.OBJECT_STORAGE, source, bucket, objectKey, null));
+    }
+
+    /**
+     * 从受控本地目录创建 RAG 异步文档索引任务
+     *
+     * @param provider        embedding provider
+     * @param vectorStore     向量库后端
+     * @param tenantId        租户 ID
+     * @param knowledgeBaseId 知识库 ID
+     * @param documentId      文档 ID
+     * @param documentType    文档类型
+     * @param source          来源标识
+     * @param path            本地文件相对路径
+     * @return 文档索引任务
+     */
+    @PostMapping(value = "/v1/rag/documents/import/local")
+    public DocumentIndexingJob importLocalRagDocument(@RequestParam(name = "provider") String provider,
+                                                  @RequestParam(name = "vectorStore") String vectorStore,
+                                                  @RequestParam(name = "tenantId") String tenantId,
+                                                  @RequestParam(name = "knowledgeBaseId") String knowledgeBaseId,
+                                                  @RequestParam(name = "documentId") String documentId,
+                                                  @RequestParam(name = "documentType", required = false) String documentType,
+                                                  @RequestParam(name = "source", required = false) String source,
+                                                  @RequestParam(name = "path") String path) {
+        return documentIndexingService.importLocalFile(provider, vectorStore, tenantId, knowledgeBaseId,
+                documentId, documentType, path, source);
+    }
+
+    /**
+     * 查询 RAG 异步文档索引任务
+     *
+     * @param jobId 任务 ID
+     * @return 文档索引任务
+     */
+    @GetMapping(value = "/v1/rag/documents/jobs/{jobId}")
+    public DocumentIndexingJob getDocumentIndexingJob(@PathVariable String jobId) {
+        return documentIndexingService.getJob(jobId);
     }
 
     /**
@@ -120,14 +298,45 @@ public class ChatController {
      * @return 模型响应内容
      */
     private String chat(ChatClient chatClient, String conversationId, String msg) {
-        String resolvedConversationId = conversationId == null || conversationId.isBlank()
-                ? DEFAULT_CONVERSATION_ID : conversationId;
+        String resolvedConversationId = resolveConversationId(conversationId);
 
         return chatClient.prompt()
                 .advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, resolvedConversationId))
                 .user(msg)
                 .call()
                 .content();
+    }
+
+    private String ragChat(ChatClient chatClient,
+                           String provider,
+                           String vectorStore,
+                           String conversationId,
+                           String msg,
+                           RetrievalOptions options) {
+        String resolvedConversationId = resolveConversationId(conversationId);
+        VectorStore resolvedVectorStore = resolveVectorStore(provider, vectorStore);
+
+        return chatClient.prompt()
+                .advisors(spec -> {
+                    spec.param(ChatMemory.CONVERSATION_ID, resolvedConversationId);
+                    if (options == null) {
+                        spec.advisors(retrievalAdvisorFactory.create(resolvedVectorStore));
+                    } else {
+                        spec.advisors(retrievalAdvisorFactory.create(resolvedVectorStore, options.topK(),
+                                options.similarityThreshold(), retrievalFilterExpressionFactory.create(options)));
+                    }
+                })
+                .user(msg)
+                .call()
+                .content();
+    }
+
+    private VectorStore resolveVectorStore(String provider, String vectorStore) {
+        return vectorStoreRouter.getVectorStore(EmbeddingProvider.from(provider), VectorStoreBackend.from(vectorStore));
+    }
+
+    private String resolveConversationId(String conversationId) {
+        return conversationId == null || conversationId.isBlank() ? DEFAULT_CONVERSATION_ID : conversationId;
     }
 
     /**

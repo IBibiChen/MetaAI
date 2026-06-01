@@ -147,8 +147,11 @@ public class RedisVectorStoreConfig {
                 MetadataField.tag("knowledgeBaseId"),
                 MetadataField.tag("documentId"),
                 MetadataField.tag("documentType"),
+                MetadataField.tag("chunkId"),
+                MetadataField.tag("contentHash"),
                 MetadataField.text("source"),
-                MetadataField.numeric("createdAt")
+                MetadataField.numeric("createdAt"),
+                MetadataField.numeric("chunkIndex")
         };
     }
 

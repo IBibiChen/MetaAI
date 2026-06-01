@@ -1,0 +1,83 @@
+package com.metax.rag.retrieval;
+
+import org.springframework.ai.chat.client.ChatClientResponse;
+import org.springframework.ai.document.Document;
+import org.springframework.ai.rag.advisor.RetrievalAugmentationAdvisor;
+import org.springframework.stereotype.Component;
+
+import java.util.List;
+
+/**
+ * RetrievalResponseMapper .
+ *
+ * <p>
+ * RAG 响应映射器，从 ChatClientResponse 中提取最终回答和 RetrievalAugmentationAdvisor 保存的命中文档上下文
+ *
+ * <p>
+ * 设计说明：为什么 details 接口需要 ChatClientResponse
+ * 普通 content() 只能拿到模型回答文本，拿不到检索命中的 Document
+ * RetrievalAugmentationAdvisor 会把命中文档放入 ChatResponse metadata，key 是 rag_document_context
+ * 所以 details 接口必须使用 chatClientResponse() 才能同时返回 answer 和 references
+ *
+ * <p>
+ * 返回结构示例
+ * <pre>{@code
+ * {
+ *   "answer": "Spring AI ETL 由 Reader、Transformer、Writer 组成",
+ *   "conversationId": "tenantId:userId:sessionId",
+ *   "references": [
+ *     {
+ *       "score": 0.82,
+ *       "metadata": {
+ *         "documentId": "doc-001",
+ *         "chunkId": "doc-001:0",
+ *         "source": "knowledge/t1/kb1/demo.md"
+ *       }
+ *     }
+ *   ]
+ * }
+ * }</pre>
+ *
+ * @author IBibiChen
+ * @version v1.0
+ * @since 2026/5/31
+ */
+@Component
+public class RetrievalResponseMapper {
+
+    /**
+     * 映射 RAG 详情响应
+     *
+     * <p>
+     * answer 来自模型最终输出
+     * references 来自 RetrievalAugmentationAdvisor.DOCUMENT_CONTEXT
+     *
+     * @param response       ChatClientResponse
+     * @param conversationId 会话 ID
+     * @return RAG 详情响应
+     */
+    public RetrievalChatResponse toResponse(ChatClientResponse response, String conversationId) {
+        String answer = response.chatResponse() == null || response.chatResponse().getResult() == null
+                ? null : response.chatResponse().getResult().getOutput().getText();
+        return new RetrievalChatResponse(answer, conversationId, references(response));
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<RetrievalReference> references(ChatClientResponse response) {
+        // 没有 ChatResponse 时直接返回空引用，避免 details 接口因为模型异常产生空指针
+        if (response.chatResponse() == null) {
+            return List.of();
+        }
+        // RetrievalAugmentationAdvisor.after 会把检索到的 Document 写入 ChatResponse metadata
+        Object documents = response.chatResponse().getMetadata().get(RetrievalAugmentationAdvisor.DOCUMENT_CONTEXT);
+        if (!(documents instanceof List<?> list)) {
+            return List.of();
+        }
+        // 只保留真正的 Document，避免 metadata 中出现非预期对象时影响接口稳定性
+        return list.stream()
+                .filter(Document.class::isInstance)
+                .map(Document.class::cast)
+                .map(document -> new RetrievalReference(document.getText(), document.getScore(), document.getMetadata()))
+                .toList();
+    }
+}

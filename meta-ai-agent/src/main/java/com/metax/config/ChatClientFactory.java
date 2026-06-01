@@ -5,7 +5,6 @@ import com.metax.prompt.PromptTemplates;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
-import org.springframework.ai.chat.client.advisor.vectorstore.QuestionAnswerAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.vectorstore.VectorStore;
@@ -16,7 +15,8 @@ import org.springframework.stereotype.Component;
  *
  * <p>
  * 统一构造预配置 ChatClient，集中维护默认系统提示词和 Advisor 顺序
- * 默认对话只挂载 Memory / Logger，RAG 对话固定使用 Memory -> RAG -> Logger
+ * 默认对话只挂载 Memory / Logger，RAG 基础 client 也只固定 Memory / Logger
+ * RAG 检索 Advisor 由调用侧按请求参数动态追加，便于覆盖 topK、similarityThreshold 和 filterExpression
  *
  * @author IBibiChen
  * @version v1.0
@@ -49,12 +49,12 @@ public class ChatClientFactory {
      * 构造 RAG 检索增强 client
      *
      * <p>
-     * Advisor 顺序固定为 Memory -> RAG -> Logger
-     * RAG 检索应看到会话历史，Logger 应放在链路末端记录最终请求和响应
+     * 这里只构造 RAG 基础 client，固定 Memory -> Logger
+     * 真正的 RAG Advisor 在 Controller 中按请求级 topK、similarityThreshold、filterExpression 动态追加
      *
      * @param model       对话模型
      * @param chatMemory  对话记忆
-     * @param vectorStore 向量库
+     * @param vectorStore 向量库绑定占位，用于保持配置类 Bean 关系清晰
      * @return ChatClient
      */
     public ChatClient buildRagClient(ChatModel model, ChatMemory chatMemory, VectorStore vectorStore) {
@@ -62,7 +62,6 @@ public class ChatClientFactory {
                 .defaultSystem(PromptTemplates.render(PromptTemplateId.RAG_RETRIEVAL_SYSTEM))
                 .defaultAdvisors(
                         MessageChatMemoryAdvisor.builder(chatMemory).build(),
-                        QuestionAnswerAdvisor.builder(vectorStore).build(),
                         SimpleLoggerAdvisor.builder().build()
                 )
                 .build();
