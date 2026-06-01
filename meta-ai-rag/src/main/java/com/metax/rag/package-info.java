@@ -78,19 +78,74 @@
  * VectorStore 实现 Spring AI DocumentWriter 接口，写入时统一使用 write
  *
  * <p>
- * 10、RAG 检索阶段
- * RetrievalAdvisorFactory 构造 RetrievalAugmentationAdvisor
- * RetrievalAugmentationAdvisor 使用 VectorStoreDocumentRetriever 从 VectorStore 召回相似 chunk
+ * 10、RAG 查询入口阶段
+ * ChatController 接收 provider、vectorStore、memory、tenantId、knowledgeBaseId 和用户问题
+ * 普通 RAG 查询必须传 tenantId 和 knowledgeBaseId，避免无过滤全库检索
+ * provider 用于选择 ChatModel 和 EmbeddingModel 语义空间
+ * vectorStore 用于选择 Redis、Qdrant 或 Milvus 向量库后端
+ * memory 用于选择 Redis ChatMemory 或 JDBC ChatMemory
+ *
+ * <p>
+ * 11、检索参数组装阶段
+ * RetrievalOptions 保存本次请求的过滤参数、召回参数和原始 query
+ * RetrievalFilterExpressionFactory 优先使用结构化字段生成 Filter.Expression
+ * tenantId 和 knowledgeBaseId 是强制过滤边界
+ * documentId 和 documentType 是可选收窄条件
+ * 原始 filterExpression 只建议用于 details 调试场景
+ *
+ * <p>
+ * 12、RAG Advisor 组装阶段
+ * RetrievalAdvisorFactory 构造 Spring AI RetrievalAugmentationAdvisor
+ * 当前项目使用官方 Modular RAG 扩展点，不手写检索增强主流程
+ * QueryTransformer、VectorStoreDocumentRetriever、DocumentPostProcessor 和 ContextualQueryAugmenter 都在这里按配置组装
+ * ChatModel 必须由调用侧按 provider 显式传入，避免多 ChatModel 共存时注入错误模型
+ *
+ * <p>
+ * 13、检索前 query 转换阶段
+ * QueryTransformer 是 Spring AI pre-retrieval 阶段组件
+ * compression 模式使用 CompressionQueryTransformer，适合多轮追问场景
+ * rewrite 模式使用 RewriteQueryTransformer，适合单轮检索优化场景
+ * query 转换会额外调用一次 ChatModel，因此生产环境应按场景开启
+ * query 转换使用低 temperature，避免改写结果不稳定
+ *
+ * <p>
+ * 14、向量召回阶段
+ * VectorStoreDocumentRetriever 使用 query embedding 到 VectorStore 做 similaritySearch
  * topK 控制最多返回多少个 chunk
  * similarityThreshold 控制最低相似度
  * filterExpression 控制 metadata 过滤，例如 tenantId、knowledgeBaseId、documentType
+ * 写入和查询必须选择同一组 provider + vectorStore，避免 embedding 语义空间错配
  *
  * <p>
- * 11、回答与引用返回阶段
- * ChatClient 查询时会通过 RetrievalAugmentationAdvisor 把召回 chunk 注入用户问题
+ * 15、检索后文档处理阶段
+ * DocumentPostProcessor 是 Spring AI post-retrieval 阶段组件
+ * DefaultDocumentPostProcessor 当前负责 rerank 扩展预留、chunk 去重、限制上下文文档数量和限制上下文总字符数
+ * DocumentReranker 是项目内部 rerank 抽象，用于后续接入真实 rerank 模型
+ * NoOpDocumentReranker 是当前空实现，不改变排序、不计算 rerankScore
+ * 去重优先使用 chunkId，缺失时使用 contentHash 兜底
+ * maxContextDocuments 控制最终进入 prompt 的 chunk 数量
+ * maxContextChars 控制最终进入 prompt 的文本总长度
+ * rerank-enabled 当前只会调用 NoOpDocumentReranker，后续可接 cross-encoder 或第三方 rerank 模型
+ *
+ * <p>
+ * 16、提示词增强阶段
+ * ContextualQueryAugmenter 把后处理后的 Document 上下文注入用户问题
+ * allowEmptyContext=false 表示没有召回上下文时不让模型自由发挥
+ * 这样可以降低 RAG 场景中脱离知识库编造答案的风险
+ *
+ * <p>
+ * 17、回答与引用返回阶段
+ * ChatClient 把增强后的 prompt 发送给 ChatModel
  * 普通 RAG 接口只返回模型回答文本，适合业务对话
- * details RAG 接口返回 answer、conversationId 和 references，适合调试召回质量和展示引用来源
- * RetrievalResponseMapper 从 ChatClientResponse 中提取 answer 和 RetrievalAugmentationAdvisor 保存的命中文档上下文
+ * details RAG 接口返回 answer、conversationId、references 和 trace，适合调试召回质量和展示引用来源
+ * RetrievalResponseMapper 从 ChatClientResponse 中提取 answer、命中文档上下文和 RetrievalTrace
+ *
+ * <p>
+ * 18、检索链路 trace 阶段
+ * RetrievalTrace 不参与 prompt 构造，只用于 details 响应
+ * TracingQueryTransformer 记录 transformedQuery 和 queryTransform 耗时
+ * TracingDocumentPostProcessor 记录 retrievedCount、usedCount、topK、similarityThreshold、filter 和 postProcess 耗时
+ * trace 可以帮助判断问题出在 query 转换、metadata filter、向量召回还是上下文后处理
  *
  * <p>
  * Spring AI ETL 实现关系
@@ -101,6 +156,17 @@
  * DocumentTransformer -> MetaChunkMetadataTransformer
  * DocumentTransformer -> ContentFormatTransformer
  * DocumentWriter      -> VectorStore
+ * }</pre>
+ *
+ * <p>
+ * Spring AI RAG 实现关系
+ * <pre>{@code
+ * QueryTransformer       -> CompressionQueryTransformer / RewriteQueryTransformer
+ * DocumentRetriever      -> VectorStoreDocumentRetriever
+ * DocumentPostProcessor  -> DefaultDocumentPostProcessor
+ * DocumentReranker       -> NoOpDocumentReranker
+ * QueryAugmenter         -> ContextualQueryAugmenter
+ * Advisor                -> RetrievalAugmentationAdvisor
  * }</pre>
  *
  * <p>
@@ -150,6 +216,39 @@
  *   -d msg=Spring AI 的 ETL 是什么
  *   -d topK=5
  *   -d threshold=0.5
+ * }</pre>
+ *
+ * <p>
+ * query transformer 配置示例
+ * <pre>{@code
+ * metax.ai.rag.retrieval.query-transformer.enabled=true
+ * metax.ai.rag.retrieval.query-transformer.mode=compression
+ * metax.ai.rag.retrieval.query-transformer.temperature=0.0
+ * metax.ai.rag.retrieval.query-transformer.max-tokens=512
+ * }</pre>
+ *
+ * <p>
+ * document post processor 配置示例
+ * <pre>{@code
+ * metax.ai.rag.retrieval.post-processor.enabled=true
+ * metax.ai.rag.retrieval.post-processor.deduplicate-enabled=true
+ * metax.ai.rag.retrieval.post-processor.max-context-documents=5
+ * metax.ai.rag.retrieval.post-processor.max-context-chars=12000
+ * }</pre>
+ *
+ * <p>
+ * details trace 示例
+ * <pre>{@code
+ * {
+ *   "query": "上面第二点是什么意思",
+ *   "transformedQuery": "Spring AI RAG 文档中第二点的含义",
+ *   "queryTransformerMode": "compression",
+ *   "filter": "tenantId == 't1' && knowledgeBaseId == 'kb1'",
+ *   "topK": 5,
+ *   "similarityThreshold": 0.5,
+ *   "retrievedCount": 5,
+ *   "usedCount": 3
+ * }
  * }</pre>
  *
  * <p>

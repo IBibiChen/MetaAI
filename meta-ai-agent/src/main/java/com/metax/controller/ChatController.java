@@ -13,13 +13,16 @@ import com.metax.rag.retrieval.RetrievalChatResponse;
 import com.metax.rag.retrieval.RetrievalFilterExpressionFactory;
 import com.metax.rag.retrieval.RetrievalResponseMapper;
 import com.metax.rag.retrieval.RetrievalOptions;
+import com.metax.rag.retrieval.RetrievalTrace;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.ollama.OllamaChatModel;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.rag.retrieval.search.VectorStoreDocumentRetriever;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.ai.vectorstore.filter.Filter;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -28,6 +31,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * ChatController .
@@ -109,8 +113,9 @@ public class ChatController {
                       @RequestParam(name = "knowledgeBaseId", required = false) String knowledgeBaseId,
                       @RequestParam(name = "documentId", required = false) String documentId,
                       @RequestParam(name = "documentType", required = false) String documentType) {
-        RetrievalOptions options = tenantId == null || tenantId.isBlank() || knowledgeBaseId == null || knowledgeBaseId.isBlank()
-                ? null : new RetrievalOptions(tenantId, knowledgeBaseId, documentId, documentType, null, null, null);
+        validateRetrievalScope(tenantId, knowledgeBaseId);
+        RetrievalOptions options = new RetrievalOptions(tenantId, knowledgeBaseId, documentId, documentType,
+                null, null, null, msg);
         return ragChat(resolveRagChatClient(provider, vectorStore, memory), provider, vectorStore,
                 conversationId, msg, options);
     }
@@ -149,14 +154,21 @@ public class ChatController {
                                       @RequestParam(name = "threshold", required = false) Double threshold,
                                       @RequestParam(name = "filterExpression", required = false) String filterExpression) {
         String resolvedConversationId = resolveConversationId(conversationId);
+        validateRetrievalScope(tenantId, knowledgeBaseId);
         RetrievalOptions options = new RetrievalOptions(tenantId, knowledgeBaseId, documentId, documentType,
-                topK, threshold, filterExpression);
+                topK, threshold, filterExpression, msg);
+        Filter.Expression filter = retrievalFilterExpressionFactory.create(options);
+        RetrievalTrace.Builder traceBuilder = RetrievalTrace.builder(msg)
+                .filter(filterExpression != null && !filterExpression.isBlank() ? filterExpression : String.valueOf(filter))
+                .topK(topK)
+                .similarityThreshold(threshold);
 
         ChatClient.ChatClientRequestSpec requestSpec = resolveRagChatClient(provider, vectorStore, memory).prompt()
                 .advisors(spec -> {
                     spec.param(ChatMemory.CONVERSATION_ID, resolvedConversationId);
+                    spec.param(RetrievalTrace.CONTEXT_KEY, traceBuilder);
                     spec.advisors(retrievalAdvisorFactory.create(resolveVectorStore(provider, vectorStore),
-                            topK, threshold, retrievalFilterExpressionFactory.create(options)));
+                            resolveChatModel(provider), options, filter));
                     if (filterExpression != null && !filterExpression.isBlank()) {
                         spec.param(VectorStoreDocumentRetriever.FILTER_EXPRESSION, filterExpression);
                     }
@@ -315,16 +327,13 @@ public class ChatController {
                            RetrievalOptions options) {
         String resolvedConversationId = resolveConversationId(conversationId);
         VectorStore resolvedVectorStore = resolveVectorStore(provider, vectorStore);
+        RetrievalOptions resolvedOptions = Objects.requireNonNull(options, "RetrievalOptions must not be null");
 
         return chatClient.prompt()
                 .advisors(spec -> {
                     spec.param(ChatMemory.CONVERSATION_ID, resolvedConversationId);
-                    if (options == null) {
-                        spec.advisors(retrievalAdvisorFactory.create(resolvedVectorStore));
-                    } else {
-                        spec.advisors(retrievalAdvisorFactory.create(resolvedVectorStore, options.topK(),
-                                options.similarityThreshold(), retrievalFilterExpressionFactory.create(options)));
-                    }
+                    spec.advisors(retrievalAdvisorFactory.create(resolvedVectorStore, resolveChatModel(provider),
+                            resolvedOptions, retrievalFilterExpressionFactory.create(resolvedOptions)));
                 })
                 .user(msg)
                 .call()
@@ -333,6 +342,24 @@ public class ChatController {
 
     private VectorStore resolveVectorStore(String provider, String vectorStore) {
         return vectorStoreRouter.getVectorStore(EmbeddingProvider.from(provider), VectorStoreBackend.from(vectorStore));
+    }
+
+    private ChatModel resolveChatModel(String provider) {
+        return switch (provider.toLowerCase()) {
+            case "dashscope" -> dashScopeChatModel;
+            case "openai" -> openAiChatModel;
+            case "ollama" -> ollamaChatModel;
+            default -> throw new IllegalArgumentException("Unsupported provider: " + provider);
+        };
+    }
+
+    private void validateRetrievalScope(String tenantId, String knowledgeBaseId) {
+        if (tenantId == null || tenantId.isBlank()) {
+            throw new IllegalArgumentException("tenantId must not be blank");
+        }
+        if (knowledgeBaseId == null || knowledgeBaseId.isBlank()) {
+            throw new IllegalArgumentException("knowledgeBaseId must not be blank");
+        }
     }
 
     private String resolveConversationId(String conversationId) {

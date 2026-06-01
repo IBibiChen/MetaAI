@@ -160,6 +160,12 @@ public class RagProperties {
          */
         private double similarityThreshold = 0.5;
 
+        private final QueryTransformer queryTransformer = new QueryTransformer();
+
+        private final PostProcessor postProcessor = new PostProcessor();
+
+        private final Observability observability = new Observability();
+
         public int getTopK() {
             return topK;
         }
@@ -174,6 +180,185 @@ public class RagProperties {
 
         public void setSimilarityThreshold(double similarityThreshold) {
             this.similarityThreshold = similarityThreshold;
+        }
+
+        public QueryTransformer getQueryTransformer() {
+            return queryTransformer;
+        }
+
+        public PostProcessor getPostProcessor() {
+            return postProcessor;
+        }
+
+        public Observability getObservability() {
+            return observability;
+        }
+    }
+
+    public static class QueryTransformer {
+
+        /**
+         * 是否启用检索前 query 转换
+         *
+         * <p>
+         * 生产默认关闭，避免每次检索都额外调用一次模型
+         */
+        private boolean enabled = false;
+
+        /**
+         * query 转换模式
+         *
+         * <p>
+         * none 表示不转换，compression 适合多轮追问，rewrite 适合单轮检索优化
+         */
+        private String mode = "none";
+
+        /**
+         * 转换 query 使用的低温度
+         *
+         * <p>
+         * query 转换追求稳定和可重复，通常使用 0.0
+         */
+        private double temperature = 0.0;
+
+        /**
+         * query 转换输出的最大 token 数
+         */
+        private int maxTokens = 512;
+
+        /**
+         * rewrite 模式面向的目标检索系统
+         */
+        private String targetSearchSystem = "vector store";
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public String getMode() {
+            return mode;
+        }
+
+        public void setMode(String mode) {
+            this.mode = mode;
+        }
+
+        public double getTemperature() {
+            return temperature;
+        }
+
+        public void setTemperature(double temperature) {
+            this.temperature = temperature;
+        }
+
+        public int getMaxTokens() {
+            return maxTokens;
+        }
+
+        public void setMaxTokens(int maxTokens) {
+            this.maxTokens = maxTokens;
+        }
+
+        public String getTargetSearchSystem() {
+            return targetSearchSystem;
+        }
+
+        public void setTargetSearchSystem(String targetSearchSystem) {
+            this.targetSearchSystem = targetSearchSystem;
+        }
+    }
+
+    public static class PostProcessor {
+
+        /**
+         * 是否启用检索后文档处理
+         */
+        private boolean enabled = true;
+
+        /**
+         * 是否按 chunkId 或 contentHash 去重
+         */
+        private boolean deduplicateEnabled = true;
+
+        /**
+         * 是否启用 rerank 扩展
+         *
+         * <p>
+         * 第一版保留开关，不强依赖外部 rerank 服务
+         */
+        private boolean rerankEnabled = false;
+
+        /**
+         * 最终进入上下文的最大文档数
+         */
+        private int maxContextDocuments = 5;
+
+        /**
+         * 最终进入上下文的最大字符数
+         */
+        private int maxContextChars = 12000;
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public boolean isDeduplicateEnabled() {
+            return deduplicateEnabled;
+        }
+
+        public void setDeduplicateEnabled(boolean deduplicateEnabled) {
+            this.deduplicateEnabled = deduplicateEnabled;
+        }
+
+        public boolean isRerankEnabled() {
+            return rerankEnabled;
+        }
+
+        public void setRerankEnabled(boolean rerankEnabled) {
+            this.rerankEnabled = rerankEnabled;
+        }
+
+        public int getMaxContextDocuments() {
+            return maxContextDocuments;
+        }
+
+        public void setMaxContextDocuments(int maxContextDocuments) {
+            this.maxContextDocuments = maxContextDocuments;
+        }
+
+        public int getMaxContextChars() {
+            return maxContextChars;
+        }
+
+        public void setMaxContextChars(int maxContextChars) {
+            this.maxContextChars = maxContextChars;
+        }
+    }
+
+    public static class Observability {
+
+        /**
+         * 是否启用 RAG 检索链路 trace
+         *
+         * <p>
+         * trace 只在 details 响应中返回，不写完整 prompt 到日志
+         */
+        private boolean enabled = true;
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
         }
     }
 

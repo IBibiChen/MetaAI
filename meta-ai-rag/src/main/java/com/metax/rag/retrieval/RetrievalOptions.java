@@ -11,11 +11,18 @@ package com.metax.rag.retrieval;
  * tenantId / knowledgeBaseId / documentId / documentType 用于 metadata filter
  * topK / similarityThreshold 用于控制召回数量和相似度下限
  * filterExpression 是高级调试入口，普通业务接口应优先使用结构化字段
+ * query 是原始用户问题，只用于 details trace，不参与过滤表达式生成
  *
  * <p>
- * 示例
+ * 普通结构化检索示例
  * <pre>{@code
  * new RetrievalOptions("t1", "kb1", null, "markdown", 5, 0.5, null)
+ * }</pre>
+ *
+ * <p>
+ * details trace 示例
+ * <pre>{@code
+ * new RetrievalOptions("t1", "kb1", null, null, 5, 0.5, null, "Spring AI 的 RAG 是什么")
  * }</pre>
  *
  * @author IBibiChen
@@ -50,6 +57,20 @@ public record RetrievalOptions(
         /**
          * 高级原始过滤表达式，普通业务接口优先使用结构化字段
          */
-        String filterExpression
+        String filterExpression,
+        /**
+         * 原始用户 query，只用于 details trace
+         */
+        String query
 ) {
+
+    public RetrievalOptions(String tenantId,
+                            String knowledgeBaseId,
+                            String documentId,
+                            String documentType,
+                            Integer topK,
+                            Double similarityThreshold,
+                            String filterExpression) {
+        this(tenantId, knowledgeBaseId, documentId, documentType, topK, similarityThreshold, filterExpression, null);
+    }
 }

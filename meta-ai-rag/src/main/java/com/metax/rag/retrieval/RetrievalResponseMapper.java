@@ -59,7 +59,15 @@ public class RetrievalResponseMapper {
     public RetrievalChatResponse toResponse(ChatClientResponse response, String conversationId) {
         String answer = response.chatResponse() == null || response.chatResponse().getResult() == null
                 ? null : response.chatResponse().getResult().getOutput().getText();
-        return new RetrievalChatResponse(answer, conversationId, references(response));
+        return new RetrievalChatResponse(answer, conversationId, references(response), trace(response));
+    }
+
+    private RetrievalTrace trace(ChatClientResponse response) {
+        Object value = response.context().get(RetrievalTrace.CONTEXT_KEY);
+        if (value instanceof RetrievalTrace.Builder builder) {
+            return builder.build();
+        }
+        return null;
     }
 
     @SuppressWarnings("unchecked")

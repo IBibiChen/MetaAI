@@ -3,6 +3,7 @@ package com.metax.rag.retrieval;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * RetrievalFilterExpressionFactoryTest .
@@ -28,5 +29,18 @@ class RetrievalFilterExpressionFactoryTest {
                 .contains("knowledgeBaseId")
                 .contains("documentId")
                 .contains("documentType");
+    }
+
+    /**
+     * 结构化过滤必须包含租户和知识库边界
+     */
+    @Test
+    void shouldRejectMissingRetrievalScope() {
+        RetrievalOptions options = new RetrievalOptions("", "kb-1",
+                null, null, 5, 0.5, null);
+
+        assertThatThrownBy(() -> filterExpressionFactory.create(options))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("tenantId");
     }
 }
