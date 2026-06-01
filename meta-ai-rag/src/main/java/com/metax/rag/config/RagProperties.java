@@ -1,6 +1,7 @@
 package com.metax.rag.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.ai.document.MetadataMode;
 
 /**
  * RagProperties .
@@ -24,6 +25,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * metax.ai.rag.retrieval.top-k=5
  * metax.ai.rag.retrieval.similarity-threshold=0.50
  * metax.ai.rag.ingestion.redis-key-prefix=rag:ingestion:job:
+ * metax.ai.rag.snapshot.enabled=false
+ * metax.ai.rag.snapshot.output-dir=D:/meta-ai/rag-snapshots
  * metax.ai.rag.storage.endpoint=http://localhost:9000
  * metax.ai.rag.storage.local-root=D:/meta-ai/knowledge
  * }</pre>
@@ -41,6 +44,8 @@ public class RagProperties {
 
     private final Ingestion ingestion = new Ingestion();
 
+    private final Snapshot snapshot = new Snapshot();
+
     private final Storage storage = new Storage();
 
     public Chunk getChunk() {
@@ -53,6 +58,10 @@ public class RagProperties {
 
     public Ingestion getIngestion() {
         return ingestion;
+    }
+
+    public Snapshot getSnapshot() {
+        return snapshot;
     }
 
     public Storage getStorage() {
@@ -394,6 +403,89 @@ public class RagProperties {
 
         public void setJobTtlSeconds(long jobTtlSeconds) {
             this.jobTtlSeconds = jobTtlSeconds;
+        }
+    }
+
+    public static class Snapshot {
+
+        /**
+         * 是否启用 ETL 文档快照导出
+         *
+         * <p>
+         * 快照用于排查 Reader 和 Transformer 处理后的 chunk 内容，不作为向量库写入成功凭证
+         */
+        private boolean enabled = false;
+
+        /**
+         * ETL 快照文件输出目录
+         *
+         * <p>
+         * 生产环境默认关闭该能力，避免知识库内容被无意落盘
+         */
+        private String outputDir = "D:/meta-ai/rag-snapshots";
+
+        /**
+         * 是否写入 Spring AI FileDocumentWriter 的文档分隔标记
+         *
+         * <p>
+         * 开启后便于观察 chunk 边界，但标记中的页码依赖 Reader 是否提供 page_number metadata
+         */
+        private boolean withDocumentMarkers = true;
+
+        /**
+         * 快照内容使用的 metadata 模式
+         *
+         * <p>
+         * ALL 适合排查 metadata 和 ContentFormatter，EMBED 更接近 embedding 输入，NONE 只查看纯文本
+         */
+        private MetadataMode metadataMode = MetadataMode.ALL;
+
+        /**
+         * 是否追加写入同一个快照文件
+         *
+         * <p>
+         * 默认覆盖同一文档的旧快照，方便查看最近一次索引结果
+         */
+        private boolean append = false;
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public String getOutputDir() {
+            return outputDir;
+        }
+
+        public void setOutputDir(String outputDir) {
+            this.outputDir = outputDir;
+        }
+
+        public boolean isWithDocumentMarkers() {
+            return withDocumentMarkers;
+        }
+
+        public void setWithDocumentMarkers(boolean withDocumentMarkers) {
+            this.withDocumentMarkers = withDocumentMarkers;
+        }
+
+        public MetadataMode getMetadataMode() {
+            return metadataMode;
+        }
+
+        public void setMetadataMode(MetadataMode metadataMode) {
+            this.metadataMode = metadataMode;
+        }
+
+        public boolean isAppend() {
+            return append;
+        }
+
+        public void setAppend(boolean append) {
+            this.append = append;
         }
     }
 

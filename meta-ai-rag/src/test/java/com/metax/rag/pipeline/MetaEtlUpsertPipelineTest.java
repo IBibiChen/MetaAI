@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.document.DocumentReader;
 import org.springframework.ai.document.DocumentTransformer;
+import org.springframework.ai.document.DocumentWriter;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.vectorstore.filter.Filter;
 
@@ -47,13 +48,39 @@ class MetaEtlUpsertPipelineTest {
         TestVectorStore vectorStore = new TestVectorStore(steps);
         MetaVectorStoreSink sink = new MetaVectorStoreSink(vectorStore, mock(Filter.Expression.class));
         MetaEtlUpsertPipeline pipeline = new MetaEtlUpsertPipeline(request(), reader,
-                List.of(firstTransformer, secondTransformer), sink);
+                List.of(firstTransformer, secondTransformer), List.of(), sink);
 
         MetaEtlPipelineResult result = pipeline.upsert();
 
         assertThat(steps).containsExactly("read", "transform-1", "transform-2", "delete", "write");
         assertThat(result.chunkCount()).isEqualTo(1);
         assertThat(vectorStore.writtenDocuments()).hasSize(1);
+    }
+
+    /**
+     * snapshot writer 应在 transform 之后、向量库 upsert 之前执行
+     */
+    @Test
+    void shouldExecuteSnapshotWriterBeforeVectorStoreUpsert() {
+        List<String> steps = new ArrayList<>();
+        DocumentReader reader = () -> {
+            steps.add("read");
+            return List.of(new Document("raw"));
+        };
+        DocumentTransformer transformer = documents -> {
+            steps.add("transform");
+            return List.of(new Document("chunk"));
+        };
+        DocumentWriter snapshotWriter = documents -> steps.add("snapshot");
+        TestVectorStore vectorStore = new TestVectorStore(steps);
+        MetaVectorStoreSink sink = new MetaVectorStoreSink(vectorStore, mock(Filter.Expression.class));
+        MetaEtlUpsertPipeline pipeline = new MetaEtlUpsertPipeline(request(), reader,
+                List.of(transformer), List.of(snapshotWriter), sink);
+
+        MetaEtlPipelineResult result = pipeline.upsert();
+
+        assertThat(steps).containsExactly("read", "transform", "snapshot", "delete", "write");
+        assertThat(result.chunkCount()).isEqualTo(1);
     }
 
     private static class TestVectorStore implements VectorStore {

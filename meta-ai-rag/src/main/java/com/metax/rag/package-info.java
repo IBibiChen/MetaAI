@@ -66,12 +66,18 @@
  *
  * <p>
  * 8、幂等覆盖阶段
- * 写入新 chunk 前，MetaEtlUpsertPipeline 会按 tenantId + knowledgeBaseId + documentId 删除旧 chunk
+ * 写入新 chunk 前，MetaEtlUpsertPipeline 可以先通过 FileDocumentWriter 导出 ETL 快照
+ * 快照用于观察最终进入 VectorStore 前的 chunk 内容、metadata 和格式化结果
+ * 快照不是索引成功凭证，生产写入仍以 VectorStore 为准
+ *
+ * <p>
+ * 9、幂等覆盖阶段
+ * 写入新 chunk 前，MetaVectorStoreSink 会按 tenantId + knowledgeBaseId + documentId 删除旧 chunk
  * 这样同一个 documentId 重复上传时不会产生重复召回数据
  * 这一步依赖写入 metadata 与 Redis / Qdrant / Milvus 过滤字段保持同名
  *
  * <p>
- * 9、VectorStore 写入阶段
+ * 10、VectorStore 写入阶段
  * VectorStoreRouter 按 provider + vectorStore 选择目标 VectorStore Bean
  * provider 决定 EmbeddingModel，例如 dashscope、ollama、openai
  * vectorStore 决定向量数据库后端，例如 redis、qdrant、milvus
@@ -79,7 +85,7 @@
  * VectorStore 实现 Spring AI DocumentWriter 接口，写入时统一使用 write
  *
  * <p>
- * 10、RAG 查询入口阶段
+ * 11、RAG 查询入口阶段
  * ChatController 接收 provider、vectorStore、memory、tenantId、knowledgeBaseId 和用户问题
  * 普通 RAG 查询必须传 tenantId 和 knowledgeBaseId，避免无过滤全库检索
  * provider 用于选择 ChatModel 和 EmbeddingModel 语义空间
@@ -87,7 +93,7 @@
  * memory 用于选择 Redis ChatMemory 或 JDBC ChatMemory
  *
  * <p>
- * 11、检索参数组装阶段
+ * 12、检索参数组装阶段
  * RetrievalOptions 保存本次请求的过滤参数、召回参数和原始 query
  * RetrievalFilterExpressionFactory 优先使用结构化字段生成 Filter.Expression
  * tenantId 和 knowledgeBaseId 是强制过滤边界
@@ -95,14 +101,14 @@
  * 原始 filterExpression 只建议用于 details 调试场景
  *
  * <p>
- * 12、RAG Advisor 组装阶段
+ * 13、RAG Advisor 组装阶段
  * RetrievalAdvisorFactory 构造 Spring AI RetrievalAugmentationAdvisor
  * 当前项目使用官方 Modular RAG 扩展点，不手写检索增强主流程
  * QueryTransformer、VectorStoreDocumentRetriever、DocumentPostProcessor 和 ContextualQueryAugmenter 都在这里按配置组装
  * ChatModel 必须由调用侧按 provider 显式传入，避免多 ChatModel 共存时注入错误模型
  *
  * <p>
- * 13、检索前 query 转换阶段
+ * 14、检索前 query 转换阶段
  * QueryTransformer 是 Spring AI pre-retrieval 阶段组件
  * compression 模式使用 CompressionQueryTransformer，适合多轮追问场景
  * rewrite 模式使用 RewriteQueryTransformer，适合单轮检索优化场景
@@ -110,7 +116,7 @@
  * query 转换使用低 temperature，避免改写结果不稳定
  *
  * <p>
- * 14、向量召回阶段
+ * 15、向量召回阶段
  * VectorStoreDocumentRetriever 使用 query embedding 到 VectorStore 做 similaritySearch
  * topK 控制最多返回多少个 chunk
  * similarityThreshold 控制最低相似度
@@ -118,7 +124,7 @@
  * 写入和查询必须选择同一组 provider + vectorStore，避免 embedding 语义空间错配
  *
  * <p>
- * 15、检索后文档处理阶段
+ * 16、检索后文档处理阶段
  * DocumentPostProcessor 是 Spring AI post-retrieval 阶段组件
  * DefaultDocumentPostProcessor 当前负责 rerank 扩展预留、chunk 去重、限制上下文文档数量和限制上下文总字符数
  * DocumentReranker 是项目内部 rerank 抽象，用于后续接入真实 rerank 模型
@@ -129,20 +135,20 @@
  * rerank-enabled 当前只会调用 NoOpDocumentReranker，后续可接 cross-encoder 或第三方 rerank 模型
  *
  * <p>
- * 16、提示词增强阶段
+ * 17、提示词增强阶段
  * ContextualQueryAugmenter 把后处理后的 Document 上下文注入用户问题
  * allowEmptyContext=false 表示没有召回上下文时不让模型自由发挥
  * 这样可以降低 RAG 场景中脱离知识库编造答案的风险
  *
  * <p>
- * 17、回答与引用返回阶段
+ * 18、回答与引用返回阶段
  * ChatClient 把增强后的 prompt 发送给 ChatModel
  * 普通 RAG 接口只返回模型回答文本，适合业务对话
  * details RAG 接口返回 answer、conversationId、references 和 trace，适合调试召回质量和展示引用来源
  * RetrievalResponseAssembler 从 ChatClientResponse 中提取 answer、命中文档上下文和 RetrievalTrace
  *
  * <p>
- * 18、检索链路 trace 阶段
+ * 19、检索链路 trace 阶段
  * RetrievalTrace 不参与 prompt 构造，只用于 details 响应
  * TracingQueryTransformer 记录 transformedQuery 和 queryTransform 耗时
  * TracingDocumentPostProcessor 记录 retrievedCount、usedCount、topK、similarityThreshold、filter 和 postProcess 耗时
@@ -156,6 +162,7 @@
  * DocumentTransformer -> TokenTextSplitter
  * DocumentTransformer -> MetaChunkMetadataTransformer
  * DocumentTransformer -> ContentFormatTransformer
+ * DocumentWriter      -> FileDocumentWriter
  * DocumentWriter      -> VectorStore
  * }</pre>
  *
@@ -226,6 +233,16 @@
  * }</pre>
  *
  * <p>
+ * ETL 快照配置示例
+ * <pre>{@code
+ * metax.ai.rag.snapshot.enabled=true
+ * metax.ai.rag.snapshot.output-dir=D:/meta-ai/rag-snapshots
+ * metax.ai.rag.snapshot.with-document-markers=true
+ * metax.ai.rag.snapshot.metadata-mode=ALL
+ * metax.ai.rag.snapshot.append=false
+ * }</pre>
+ *
+ * <p>
  * details trace 示例
  * <pre>{@code
  * {
@@ -250,6 +267,7 @@
  *   -> TokenTextSplitter
  *   -> MetaChunkMetadataTransformer
  *   -> ContentFormatTransformer
+ *   -> MetaDocumentSnapshotWriter
  *   -> VectorStore.write
  * }</pre>
  *

@@ -47,6 +47,7 @@ class MetaEtlPipelineFactoryTest {
         properties.getStorage().setLocalRoot(localRoot.toString());
         VectorStore vectorStore = mock(VectorStore.class);
         MetaEtlPipelineFactory factory = new MetaEtlPipelineFactory(
+                properties,
                 new VectorStoreRouter(Map.of("dashScopeRedisVectorStore", vectorStore)),
                 readerFactory(),
                 new MetaDocumentTransformerFactory(properties)
@@ -60,11 +61,40 @@ class MetaEtlPipelineFactoryTest {
         assertThat(pipeline.request()).isEqualTo(request());
         assertThat(pipeline.reader()).isNotNull();
         assertThat(pipeline.transformers()).hasSize(4);
+        assertThat(pipeline.snapshotWriters()).isEmpty();
         assertThat(pipeline.sink().vectorStore()).isSameAs(vectorStore);
         assertThat(pipeline.sink().deleteFilter().toString())
                 .contains("tenantId")
                 .contains("knowledgeBaseId")
                 .contains("documentId");
+    }
+
+    /**
+     * snapshot 开启时 factory 应组装快照 DocumentWriter
+     */
+    @Test
+    void shouldCreateSnapshotWriterWhenEnabled() throws Exception {
+        Path localRoot = Files.createTempDirectory("meta-rag-pipeline-root");
+        Files.createDirectories(localRoot.resolve("docs"));
+        Files.writeString(localRoot.resolve("docs/demo.txt"), "Spring AI RAG");
+        RagProperties properties = new RagProperties();
+        properties.getStorage().setLocalRoot(localRoot.toString());
+        properties.getSnapshot().setEnabled(true);
+        properties.getSnapshot().setOutputDir(Files.createTempDirectory("meta-rag-snapshot").toString());
+        VectorStore vectorStore = mock(VectorStore.class);
+        MetaEtlPipelineFactory factory = new MetaEtlPipelineFactory(
+                properties,
+                new VectorStoreRouter(Map.of("dashScopeRedisVectorStore", vectorStore)),
+                readerFactory(),
+                new MetaDocumentTransformerFactory(properties)
+        );
+        DocumentIndexingContext context = new DocumentIndexingContext(request(),
+                new MetaDocumentResource(new FileSystemResource(localRoot.resolve("docs/demo.txt")),
+                        "txt", "docs/demo.txt"));
+
+        MetaEtlUpsertPipeline pipeline = factory.createUpsertPipeline(context);
+
+        assertThat(pipeline.snapshotWriters()).hasSize(1);
     }
 
     private MetaDocumentReaderFactory readerFactory() {
