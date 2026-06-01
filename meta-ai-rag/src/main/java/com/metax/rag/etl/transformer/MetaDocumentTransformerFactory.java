@@ -42,12 +42,12 @@ public class MetaDocumentTransformerFactory {
     }
 
     /**
-     * 创建文档级 metadata Transformer
+     * 创建文档级 metadata 增强 Transformer
      *
      * @param request RAG 文档索引请求
      * @return DocumentTransformer
      */
-    public DocumentTransformer documentMetadata(DocumentIndexingRequest request) {
+    public DocumentTransformer documentMetadataEnricher(DocumentIndexingRequest request) {
         return new MetaDocumentMetadataTransformer(request);
     }
 
@@ -56,11 +56,14 @@ public class MetaDocumentTransformerFactory {
      *
      * <p>
      * TokenTextSplitter 是 Spring AI 官方 DocumentTransformer
+     * 把带文档级 metadata 的原始 Document 切成多个 chunk Document
+     * Spring AI 的 splitter 会把原 Document 的 metadata 带到切分后的 chunk 上
+     * -
      * 当前参数来自 metax.ai.rag.chunk，避免切分参数硬编码在 Pipeline 中
      *
      * @return DocumentTransformer
      */
-    public DocumentTransformer splitter() {
+    public DocumentTransformer tokenTextSplitter() {
         return TokenTextSplitter.builder()
                 .withChunkSize(properties.getChunk().getSize())
                 .withMinChunkSizeChars(properties.getChunk().getMinChars())
@@ -71,12 +74,12 @@ public class MetaDocumentTransformerFactory {
     }
 
     /**
-     * 创建 chunk 级 metadata Transformer
+     * 创建 chunk 级 metadata 增强 Transformer
      *
      * @param request RAG 文档索引请求
      * @return DocumentTransformer
      */
-    public DocumentTransformer chunkMetadata(DocumentIndexingRequest request) {
+    public DocumentTransformer chunkMetadataEnricher(DocumentIndexingRequest request) {
         return new MetaChunkMetadataTransformer(request);
     }
 
@@ -89,7 +92,7 @@ public class MetaDocumentTransformerFactory {
      *
      * @return DocumentTransformer
      */
-    public DocumentTransformer contentFormat() {
+    public DocumentTransformer contentFormatTransformer() {
         DefaultContentFormatter formatter = DefaultContentFormatter.builder()
                 .withExcludedEmbedMetadataKeys(EXCLUDED_FORMAT_METADATA_KEYS)
                 .withExcludedInferenceMetadataKeys(EXCLUDED_FORMAT_METADATA_KEYS)

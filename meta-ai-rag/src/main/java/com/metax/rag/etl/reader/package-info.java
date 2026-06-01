@@ -7,7 +7,7 @@
  * MetaDocumentReaderStrategy 是无状态 Spring Bean，负责按文档类型创建请求级官方 Reader
  *
  * <p>
- * 1、documentType 由调用方显式传入或由文件名后缀自动推断
+ * 1、documentType 已在 resource 阶段解析完成
  * 2、txt 使用 TextReader，并固定 UTF-8
  * 3、md / markdown 使用 MarkdownDocumentReader
  * 4、json 使用 JsonReader

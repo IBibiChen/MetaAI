@@ -22,7 +22,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class MetaDocumentTransformerFactoryTest {
 
     /**
-     * splitter 应使用 RAG chunk 配置创建 TokenTextSplitter
+     * tokenTextSplitter 应使用 RAG chunk 配置创建 TokenTextSplitter
      */
     @Test
     void shouldCreateSplitterByRagProperties() {
@@ -32,7 +32,7 @@ class MetaDocumentTransformerFactoryTest {
         properties.getChunk().setMinLengthToEmbed(1);
         properties.getChunk().setMaxNumChunks(10);
         MetaDocumentTransformerFactory factory = new MetaDocumentTransformerFactory(properties);
-        DocumentTransformer splitter = factory.splitter();
+        DocumentTransformer splitter = factory.tokenTextSplitter();
         Document document = Document.builder()
                 .text("Spring AI helps build RAG applications. TokenTextSplitter splits long text into chunks.")
                 .build();
@@ -49,7 +49,7 @@ class MetaDocumentTransformerFactoryTest {
     @Test
     void shouldExcludeTechnicalMetadataFromFormattedContent() {
         MetaDocumentTransformerFactory factory = new MetaDocumentTransformerFactory(new RagProperties());
-        DocumentTransformer transformer = factory.contentFormat();
+        DocumentTransformer transformer = factory.contentFormatTransformer();
         Document document = Document.builder()
                 .text("chunk text")
                 .metadata(Map.of(

@@ -1,4 +1,4 @@
-package com.metax.rag.etl.reader;
+package com.metax.rag.etl.resource;
 
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -65,4 +65,3 @@ public class MetaDocumentTypeResolver {
         return index < 0 || index == normalized.length() - 1 ? "" : normalized.substring(index + 1);
     }
 }
-

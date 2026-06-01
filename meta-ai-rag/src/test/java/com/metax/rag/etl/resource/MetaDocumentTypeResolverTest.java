@@ -1,4 +1,4 @@
-package com.metax.rag.etl.reader;
+package com.metax.rag.etl.resource;
 
 import org.junit.jupiter.api.Test;
 
@@ -35,4 +35,3 @@ class MetaDocumentTypeResolverTest {
         assertThat(resolver.resolve(".md", "demo.json")).isEqualTo("markdown");
     }
 }
-

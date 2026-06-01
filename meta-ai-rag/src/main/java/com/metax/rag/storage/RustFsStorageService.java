@@ -3,29 +3,23 @@ package com.metax.rag.storage;
 import com.metax.rag.config.RagProperties;
 import jakarta.annotation.PreDestroy;
 import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.core.ResponseInputStream;
-import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
-import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
-import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
-import java.time.LocalDate;
-import java.util.UUID;
 
 /**
  * RustFsStorageService .
  *
  * <p>
- * RustFS 对象存储访问服务，按 S3 兼容协议保存知识库原始文件
- * RAG 入库只读取 RustFS 中的对象，不直接依赖本地临时路径
+ * RustFS 对象存储访问服务，按 S3 兼容协议读取知识库原始文件
+ * RAG 入库只消费已经归档到 RustFS 的对象，不在索引链路中保存原始文件
  *
  * <p>
  * 设计说明：为什么原始文件要放对象存储
@@ -70,34 +64,6 @@ public class RustFsStorageService {
     }
 
     /**
-     * 上传知识库文件到 RustFS
-     *
-     * <p>
-     * objectKey 使用 tenantId / knowledgeBaseId / 日期 / UUID / 原文件名 分层
-     * 这样可以按租户和知识库快速定位对象，也能避免同名文件互相覆盖
-     *
-     * @param file            上传文件
-     * @param tenantId        租户 ID
-     * @param knowledgeBaseId 知识库 ID
-     * @return RustFS object key
-     */
-    public String upload(MultipartFile file, String tenantId, String knowledgeBaseId) {
-        String objectKey = createObjectKey(file.getOriginalFilename(), tenantId, knowledgeBaseId);
-        try {
-            PutObjectRequest request = PutObjectRequest.builder()
-                    .bucket(properties.getStorage().getBucket())
-                    .key(objectKey)
-                    .contentType(file.getContentType())
-                    .contentLength(file.getSize())
-                    .build();
-            s3Client.putObject(request, RequestBody.fromInputStream(file.getInputStream(), file.getSize()));
-            return objectKey;
-        } catch (IOException ex) {
-            throw new IllegalStateException("Failed to upload knowledge file to RustFS: " + objectKey, ex);
-        }
-    }
-
-    /**
      * 读取 RustFS 对象流
      *
      * <p>
@@ -127,13 +93,5 @@ public class RustFsStorageService {
     @PreDestroy
     public void close() {
         s3Client.close();
-    }
-
-    private String createObjectKey(String originalFilename, String tenantId, String knowledgeBaseId) {
-        // UUID 只用于对象存储路径去重，不参与 RAG documentId，业务幂等仍由 documentId 控制
-        String filename = originalFilename == null || originalFilename.isBlank() ? "document" : originalFilename;
-        LocalDate now = LocalDate.now();
-        return "knowledge/%s/%s/%s/%s/%s".formatted(tenantId, knowledgeBaseId, now.getYear(),
-                "%02d".formatted(now.getMonthValue()), UUID.randomUUID() + "-" + filename);
     }
 }

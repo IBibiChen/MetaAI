@@ -4,6 +4,7 @@ import com.metax.rag.indexing.DocumentIndexingRequest;
 import com.metax.rag.model.MetadataKeys;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.document.DocumentTransformer;
+import org.springframework.lang.NonNull;
 import org.springframework.util.StringUtils;
 
 import java.time.Instant;
@@ -46,27 +47,56 @@ public class MetaDocumentMetadataTransformer implements DocumentTransformer {
      * @return 补齐文档级 metadata 的 Document 列表
      */
     @Override
-    public List<Document> apply(List<Document> documents) {
+    @NonNull
+    public List<Document> apply(@NonNull List<Document> documents) {
         long createdAt = Instant.now().toEpochMilli();
         return documents.stream()
                 .map(document -> withDocumentMetadata(document, createdAt))
                 .toList();
     }
 
+    /**
+     * 为原始 Document 补齐文档级 metadata
+     *
+     * <p>
+     * 该方法位于 chunk 切分前，负责把租户、知识库、文档、类型、来源和创建时间写入原始 Document
+     *
+     * @param document  原始 Document
+     * @param createdAt 创建时间
+     * @return 补齐文档级 metadata 的 Document
+     */
     private Document withDocumentMetadata(Document document, long createdAt) {
+        // 复制 Reader 已经写入的 metadata，避免覆盖官方 Reader 自带字段
         Map<String, Object> metadata = new HashMap<>(document.getMetadata());
+        // tenantId 和 knowledgeBaseId 是检索强过滤边界，缺失会导致跨租户或跨知识库召回
         metadata.put(MetadataKeys.TENANT_ID, request.tenantId());
         metadata.put(MetadataKeys.KNOWLEDGE_BASE_ID, request.knowledgeBaseId());
+        // documentId 是幂等覆盖边界，后续 upsert 会按它删除旧 chunk
         metadata.put(MetadataKeys.DOCUMENT_ID, request.documentId());
+        // documentType 和 source 用于检索收窄、引用展示和问题排查
         metadata.put(MetadataKeys.DOCUMENT_TYPE, request.documentType());
         metadata.put(MetadataKeys.SOURCE, request.source());
+        // createdAt 使用统一时间戳，保证同一次索引生成的所有原始 Document 时间一致
         metadata.put(MetadataKeys.CREATED_AT, createdAt);
-        Document enriched = copyDocument(document, metadata, document.getId());
+        Document enriched = rebuildDocument(document, metadata, document.getId());
+        // Document builder 不会自动继承 contentFormatter，需要显式恢复
         enriched.setContentFormatter(document.getContentFormatter());
         return enriched;
     }
 
-    private Document copyDocument(Document document, Map<String, Object> metadata, String documentId) {
+    /**
+     * 基于原 Document 重建带新 metadata 的 Document
+     *
+     * <p>
+     * Document 是不可变对象，更新 metadata 时需要重新构造
+     * 这里保留原 text / media 和 score，contentFormatter 在外层恢复
+     *
+     * @param document   原始 Document
+     * @param metadata   新 metadata
+     * @param documentId 文档 ID
+     * @return 重建后的 Document
+     */
+    private Document rebuildDocument(Document document, Map<String, Object> metadata, String documentId) {
         Document.Builder builder = Document.builder()
                 .id(documentId)
                 .metadata(metadata)

@@ -2,7 +2,6 @@ package com.metax.rag.etl.resource;
 
 import com.metax.rag.config.RagProperties;
 import com.metax.rag.etl.model.DocumentSourceType;
-import com.metax.rag.etl.reader.MetaDocumentTypeResolver;
 import com.metax.rag.indexing.DocumentIndexingRequest;
 import com.metax.rag.storage.RustFsStorageService;
 import org.springframework.core.io.FileSystemResource;
@@ -54,6 +53,7 @@ public class MetaDocumentResourceFactory {
     }
 
     private MetaDocumentResource objectStorage(DocumentIndexingRequest request) {
+        // bucket 和 objectKey 是对象存储索引的真实数据来源，source 只用于展示和引用
         if (!StringUtils.hasText(request.bucket())) {
             throw new IllegalArgumentException("bucket must not be blank for object storage document");
         }
@@ -62,11 +62,13 @@ public class MetaDocumentResourceFactory {
         }
         String sourceName = request.objectKey();
         String documentType = documentTypeResolver.resolve(request.documentType(), sourceName);
+        // MetaObjectStorageResource 会在 Reader 读取时按需打开对象流，避免提前把大文件读入内存
         Resource resource = new MetaObjectStorageResource(storageService, request.bucket(), request.objectKey());
         return new MetaDocumentResource(resource, documentType, resolveSource(request.source(), sourceName));
     }
 
     private MetaDocumentResource localFile(DocumentIndexingRequest request) {
+        // 本地文件只作为受控调试入口，必须限制在 metax.ai.rag.storage.local-root 内
         if (!StringUtils.hasText(request.localPath())) {
             throw new IllegalArgumentException("localPath must not be blank for local file document");
         }
@@ -89,6 +91,7 @@ public class MetaDocumentResourceFactory {
     }
 
     private String resolveSource(String source, String fallback) {
+        // source 面向引用展示，未显式传入时使用 objectKey 或 localPath 兜底
         return StringUtils.hasText(source) ? source : fallback;
     }
 }

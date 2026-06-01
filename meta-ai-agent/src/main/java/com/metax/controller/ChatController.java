@@ -28,7 +28,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.util.Map;
 import java.util.Objects;
@@ -176,30 +175,6 @@ public class ChatController {
                 .user(msg);
 
         return retrievalResponseAssembler.details(requestSpec.call().chatClientResponse(), resolvedConversationId);
-    }
-
-    /**
-     * 上传文件并创建 RAG 异步文档索引任务
-     *
-     * @param provider        embedding provider
-     * @param vectorStore     向量库后端
-     * @param tenantId        租户 ID
-     * @param knowledgeBaseId 知识库 ID
-     * @param documentId      文档 ID
-     * @param documentType    文档类型
-     * @param file            上传文件
-     * @return 文档索引任务
-     */
-    @PostMapping(value = "/v1/rag/documents/upload")
-    public DocumentIndexingJob uploadRagDocument(@RequestParam(name = "provider") String provider,
-                                             @RequestParam(name = "vectorStore") String vectorStore,
-                                             @RequestParam(name = "tenantId") String tenantId,
-                                             @RequestParam(name = "knowledgeBaseId") String knowledgeBaseId,
-                                             @RequestParam(name = "documentId") String documentId,
-                                             @RequestParam(name = "documentType", required = false) String documentType,
-                                             @RequestParam(name = "file") MultipartFile file) {
-        return documentIndexingService.uploadAndIndex(provider, vectorStore, tenantId, knowledgeBaseId,
-                documentId, documentType, file);
     }
 
     /**

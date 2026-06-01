@@ -13,8 +13,15 @@
  * 5、写入 VectorStore 前必须保证 tenantId、knowledgeBaseId、documentId 等过滤字段完整
  *
  * <p>
- * ContentFormatTransformer 不修改 Document text，而是设置 Document 的 ContentFormatter
- * 技术 metadata 仍保存在 Document.metadata 中，但不参与 embedding 或推理文本格式化，避免污染语义
+ * 创建内容格式化 Transformer
+ *
+ * <p>
+ * ContentFormatTransformer 不会修改 Document 的原始 text
+ * 它只为 Document 设置 ContentFormatter，用来控制哪些 metadata 会拼接进模型可见的文本
+ *
+ * <p>
+ * tenantId、knowledgeBaseId、documentId、chunkId 等技术 metadata 仍然保留在 Document.metadata 中
+ * 但不会参与 embedding 文本和 prompt 上下文文本的格式化，避免干扰语义向量和模型回答
  *
  * @author IBibiChen
  * @version v1.0

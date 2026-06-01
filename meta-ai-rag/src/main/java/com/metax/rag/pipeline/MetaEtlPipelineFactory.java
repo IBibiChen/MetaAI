@@ -54,14 +54,19 @@ public class MetaEtlPipelineFactory {
      */
     public MetaEtlUpsertPipeline createUpsertPipeline(DocumentIndexingContext context) {
         DocumentIndexingRequest request = context.request();
+        // provider + vectorStore 决定写入哪个向量空间，查询时必须使用同一组选择
         VectorStore vectorStore = vectorStoreRouter.getVectorStore(request.provider(), request.vectorStore());
+        // Reader 阶段把对象存储或本地文件解析为 Spring AI Document
         DocumentReader reader = documentReaderFactory.create(context.documentResource());
+        // Transformer 顺序是 ETL 语义约束：先补文档级 metadata，再切分 chunk，再补 chunk 级 metadata，最后设置内容格式化规则
+        // Transformer 顺序固定为文档 metadata -> chunk 切分 -> chunk metadata -> 内容格式化
         List<DocumentTransformer> transformers = List.of(
-                documentTransformerFactory.documentMetadata(request),
-                documentTransformerFactory.splitter(),
-                documentTransformerFactory.chunkMetadata(request),
-                documentTransformerFactory.contentFormat()
+                documentTransformerFactory.documentMetadataEnricher(request),
+                documentTransformerFactory.tokenTextSplitter(),
+                documentTransformerFactory.chunkMetadataEnricher(request),
+                documentTransformerFactory.contentFormatTransformer()
         );
+        // Sink 收敛 delete + write 策略，最终写入仍委托 Spring AI VectorStore
         MetaVectorStoreSink sink = new MetaVectorStoreSink(vectorStore, documentFilter(request));
         return new MetaEtlUpsertPipeline(request, reader, transformers, sink);
     }

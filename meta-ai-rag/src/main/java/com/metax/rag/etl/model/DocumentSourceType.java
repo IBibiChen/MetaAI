@@ -5,7 +5,7 @@ package com.metax.rag.etl.model;
  *
  * <p>
  * RAG 文档来源类型，只区分文件来自对象存储还是受控本地目录
- * 上传文件会先保存到对象存储，因此也归入 OBJECT_STORAGE
+ * RAG 索引链路只消费已经归档好的文件资源
  *
  * @author IBibiChen
  * @version v1.0
@@ -14,7 +14,7 @@ package com.metax.rag.etl.model;
 public enum DocumentSourceType {
 
     /**
-     * 对象存储文件流，覆盖 RustFS、OSS、S3 和上传后落对象存储的文件
+     * 对象存储文件流，覆盖 RustFS、OSS 和 S3
      */
     OBJECT_STORAGE,
 

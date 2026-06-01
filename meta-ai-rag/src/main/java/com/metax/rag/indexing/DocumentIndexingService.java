@@ -8,7 +8,6 @@ import com.metax.rag.model.VectorStoreBackend;
 import com.metax.rag.pipeline.MetaEtlPipeline;
 import com.metax.rag.storage.RustFsStorageService;
 import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -17,7 +16,7 @@ import java.util.UUID;
  * DocumentIndexingService .
  *
  * <p>
- * RAG 文档索引门面服务，负责创建异步任务和保存 RustFS 原始文件
+ * RAG 文档索引门面服务，负责把已归档文件转换为异步索引任务
  * 真正 ETL 执行交给 MetaEtlPipeline，避免 @Async 被同类自调用绕过
  *
  * <p>
@@ -26,24 +25,12 @@ import java.util.UUID;
  * 所以当前类只负责快速返回 job，耗时的解析、切分、embedding 和写库交给 MetaEtlPipeline
  *
  * <p>
- * 当前索引采用异步任务模型
- * 上传接口先把原始文件保存到 RustFS，再把 job 状态写入 Redis，最后触发后台 ETL
+ * 当前索引采用异步任务模型，RAG 只消费已经归档好的对象存储对象或受控本地文件
+ * 调用方先完成原始文件归档，再把 job 状态写入 Redis，最后触发后台 ETL
  * 这样 HTTP 请求不会被大文件解析、模型 embedding 或向量库写入长时间阻塞
  *
  * <p>
- * API 示例
- * <pre>{@code
- * curl -X POST http://localhost:8008/v1/rag/documents/upload
- *   -F provider=dashscope
- *   -F vectorStore=redis
- *   -F tenantId=t1
- *   -F knowledgeBaseId=kb1
- *   -F documentId=doc-001
- *   -F file=@spring-ai-rag.md
- * }</pre>
- *
- * <p>
- * RustFS 既有对象导入示例
+ * 对象存储对象导入示例
  * <pre>{@code
  * curl -X POST http://localhost:8008/v1/rag/documents/import
  *   -d provider=dashscope
@@ -82,36 +69,6 @@ public class DocumentIndexingService {
     }
 
     /**
-     * 上传文件并创建 RAG 文档索引任务
-     *
-     * <p>
-     * 该方法适合前端或调试工具直接上传文件
-     * source 当前使用对象存储 objectKey，后续如果接入文档表，可以替换为业务侧可读来源
-     *
-     * @param provider        provider
-     * @param vectorStore     向量库后端
-     * @param tenantId        租户 ID
-     * @param knowledgeBaseId 知识库 ID
-     * @param documentId      文档 ID
-     * @param documentType    文档类型
-     * @param file            上传文件
-     * @return 文档索引任务
-     */
-    public DocumentIndexingJob uploadAndIndex(String provider,
-                                              String vectorStore,
-                                              String tenantId,
-                                              String knowledgeBaseId,
-                                              String documentId,
-                                              String documentType,
-                                              MultipartFile file) {
-        String objectKey = storageService.upload(file, tenantId, knowledgeBaseId);
-        DocumentIndexingRequest request = new DocumentIndexingRequest(EmbeddingProvider.from(provider),
-                VectorStoreBackend.from(vectorStore), tenantId, knowledgeBaseId, documentId, documentType,
-                DocumentSourceType.OBJECT_STORAGE, objectKey, storageService.defaultBucket(), objectKey, null);
-        return submit(request);
-    }
-
-    /**
      * 从受控本地目录创建 RAG 文档索引任务
      *
      * <p>
@@ -143,17 +100,19 @@ public class DocumentIndexingService {
     }
 
     /**
-     * 从 RustFS 既有对象创建 RAG 文档索引任务
+     * 从已归档对象或受控本地文件创建 RAG 文档索引任务
      *
      * <p>
-     * 该方法适合对象已经由其他系统写入 RustFS 的场景
-     * 例如管理后台先完成文件归档，再调用本接口把对象导入指定知识库
+     * 这是对象存储和本地文件统一进入 Spring AI ETL 的边界
+     * submit 只接收可解析的资源描述，不负责保存原始文件
      *
      * @param request 文档索引请求
      * @return 文档索引任务
      */
     public DocumentIndexingJob submit(DocumentIndexingRequest request) {
+        // 资源工厂负责把对象存储 objectKey 或本地相对路径转换为 Spring Resource
         MetaDocumentResource documentResource = documentResourceFactory.create(request);
+        // documentType 和 source 在资源解析后落定，后续 job、metadata 和 Reader 使用同一份值
         DocumentIndexingRequest resolvedRequest = request.withResolvedDocument(documentResource.documentType(),
                 documentResource.source());
         DocumentIndexingContext context = new DocumentIndexingContext(resolvedRequest, documentResource);

@@ -38,10 +38,13 @@ public record MetaEtlUpsertPipeline(
      * @return Pipeline 执行结果
      */
     public MetaEtlPipelineResult upsert() {
+        // read 阶段只解析原始文件，不补业务 metadata，也不做切分
         List<Document> documents = reader.read();
         for (DocumentTransformer transformer : transformers) {
+            // transform 阶段按工厂定义的顺序执行，前一个输出就是后一个输入
             documents = transformer.transform(documents);
         }
+        // upsert 阶段先删除同 documentId 的旧 chunk，再写入本次生成的新 chunk
         sink.upsert(documents);
         return new MetaEtlPipelineResult(documents.size());
     }

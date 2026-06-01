@@ -6,10 +6,10 @@
  *
  * <p>
  * 1、文档进入系统
- * 用户可以通过上传文件进入 RAG 文档索引链路，也可以传入已经存在于对象存储的 bucket + objectKey
- * 上传接口适合管理后台、调试工具和前端页面
- * 对象存储 objectKey 导入适合文件已经由其他系统完成归档的场景
+ * RAG 索引链路只消费已经归档好的文件资源
+ * 生产入口是对象存储 bucket + objectKey，适合管理后台或业务系统先完成原始文件归档的场景
  * 本地文件导入适合开发调试和受控离线知识库目录
+ * 如果业务需要接收原始文件，应在独立文件归档模块先写入对象存储，再调用对象存储导入接口
  *
  * <p>
  * 2、原始文件存储
@@ -21,6 +21,7 @@
  * 3、异步文档索引任务创建
  * DocumentIndexingService 创建 DocumentIndexingJob，并把任务状态写入 Redis
  * DocumentIndexingService 不直接执行耗时 ETL，真正文档索引交给 MetaEtlPipeline
+ * DocumentIndexingService 也不负责原始文件归档，它只接收已经可被 ResourceFactory 解析的资源描述
  * 这样可以避免 HTTP 请求被大文件解析、embedding 和 VectorStore 写入阻塞
  *
  * <p>
@@ -170,18 +171,6 @@
  * }</pre>
  *
  * <p>
- * 写入示例
- * <pre>{@code
- * curl -X POST http://localhost:8008/v1/rag/documents/upload
- *   -F provider=dashscope
- *   -F vectorStore=redis
- *   -F tenantId=t1
- *   -F knowledgeBaseId=kb1
- *   -F documentId=doc-001
- *   -F file=@spring-ai-rag.md
- * }</pre>
- *
- * <p>
  * 对象存储 objectKey 导入示例
  * <pre>{@code
  * curl -X POST http://localhost:8008/v1/rag/documents/import
@@ -249,6 +238,30 @@
  *   "retrievedCount": 5,
  *   "usedCount": 3
  * }
+ * }</pre>
+ *
+ * <p>
+ * 索引链路顺序示例
+ * <pre>{@code
+ * bucket + objectKey
+ *   -> MetaDocumentResourceFactory
+ *   -> MetaDocumentReader
+ *   -> MetaDocumentMetadataTransformer
+ *   -> TokenTextSplitter
+ *   -> MetaChunkMetadataTransformer
+ *   -> ContentFormatTransformer
+ *   -> VectorStore.write
+ * }</pre>
+ *
+ * <p>
+ * 检索链路顺序示例
+ * <pre>{@code
+ * user query
+ *   -> CompressionQueryTransformer / RewriteQueryTransformer
+ *   -> VectorStoreDocumentRetriever
+ *   -> DefaultDocumentPostProcessor
+ *   -> ContextualQueryAugmenter
+ *   -> ChatModel
  * }</pre>
  *
  * <p>

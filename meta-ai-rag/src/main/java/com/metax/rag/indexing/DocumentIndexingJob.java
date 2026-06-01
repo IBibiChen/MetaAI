@@ -6,7 +6,7 @@ import java.time.Instant;
  * DocumentIndexingJob .
  *
  * <p>
- * RAG 文档索引任务快照，记录上传文件、目标向量库、chunk 数量和错误信息
+ * RAG 文档索引任务快照，记录文件来源、目标向量库、chunk 数量和错误信息
  *
  * <p>
  * 字段说明：job 是异步 ETL 的最小可观察单元

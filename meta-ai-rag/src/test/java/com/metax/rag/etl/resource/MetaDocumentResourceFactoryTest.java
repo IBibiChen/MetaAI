@@ -2,7 +2,6 @@ package com.metax.rag.etl.resource;
 
 import com.metax.rag.config.RagProperties;
 import com.metax.rag.etl.model.DocumentSourceType;
-import com.metax.rag.etl.reader.MetaDocumentTypeResolver;
 import com.metax.rag.indexing.DocumentIndexingRequest;
 import com.metax.rag.model.EmbeddingProvider;
 import com.metax.rag.model.VectorStoreBackend;
