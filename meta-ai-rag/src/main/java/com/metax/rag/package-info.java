@@ -138,7 +138,7 @@
  * ChatClient 把增强后的 prompt 发送给 ChatModel
  * 普通 RAG 接口只返回模型回答文本，适合业务对话
  * details RAG 接口返回 answer、conversationId、references 和 trace，适合调试召回质量和展示引用来源
- * RetrievalResponseMapper 从 ChatClientResponse 中提取 answer、命中文档上下文和 RetrievalTrace
+ * RetrievalResponseAssembler 从 ChatClientResponse 中提取 answer、命中文档上下文和 RetrievalTrace
  *
  * <p>
  * 18、检索链路 trace 阶段

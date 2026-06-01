@@ -8,10 +8,10 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 
 /**
- * RetrievalResponseMapper .
+ * RetrievalResponseAssembler .
  *
  * <p>
- * RAG 响应映射器，从 ChatClientResponse 中提取最终回答和 RetrievalAugmentationAdvisor 保存的命中文档上下文
+ * RAG 响应组装器，从 ChatClientResponse 中提取最终回答和 RetrievalAugmentationAdvisor 保存的命中文档上下文
  *
  * <p>
  * 设计说明：为什么 details 接口需要 ChatClientResponse
@@ -43,10 +43,10 @@ import java.util.List;
  * @since 2026/5/31
  */
 @Component
-public class RetrievalResponseMapper {
+public class RetrievalResponseAssembler {
 
     /**
-     * 映射 RAG 详情响应
+     * 组装 RAG 详情响应
      *
      * <p>
      * answer 来自模型最终输出
@@ -56,13 +56,14 @@ public class RetrievalResponseMapper {
      * @param conversationId 会话 ID
      * @return RAG 详情响应
      */
-    public RetrievalChatResponse toResponse(ChatClientResponse response, String conversationId) {
-        String answer = response.chatResponse() == null || response.chatResponse().getResult() == null
-                ? null : response.chatResponse().getResult().getOutput().getText();
+    public RetrievalChatResponse details(ChatClientResponse response, String conversationId) {
+        // ChatResponse 可能为空，details 接口要优先保证响应结构稳定
+        String answer = response.chatResponse() == null ? null : response.chatResponse().getResult().getOutput().getText();
         return new RetrievalChatResponse(answer, conversationId, references(response), trace(response));
     }
 
     private RetrievalTrace trace(ChatClientResponse response) {
+        // Controller 放入的 builder 会随 ChatClientResponse context 返回，这里统一转成只读快照
         Object value = response.context().get(RetrievalTrace.CONTEXT_KEY);
         if (value instanceof RetrievalTrace.Builder builder) {
             return builder.build();
@@ -70,18 +71,19 @@ public class RetrievalResponseMapper {
         return null;
     }
 
-    @SuppressWarnings("unchecked")
     private List<RetrievalReference> references(ChatClientResponse response) {
         // 没有 ChatResponse 时直接返回空引用，避免 details 接口因为模型异常产生空指针
         if (response.chatResponse() == null) {
             return List.of();
         }
         // RetrievalAugmentationAdvisor.after 会把检索到的 Document 写入 ChatResponse metadata
+        // 这里读取的是最终参与 prompt 增强的 Document，不是向量库中的全部候选结果
         Object documents = response.chatResponse().getMetadata().get(RetrievalAugmentationAdvisor.DOCUMENT_CONTEXT);
         if (!(documents instanceof List<?> list)) {
             return List.of();
         }
         // 只保留真正的 Document，避免 metadata 中出现非预期对象时影响接口稳定性
+        // RetrievalReference 保留文本、分数和 metadata，供前端展示来源和排查召回质量
         return list.stream()
                 .filter(Document.class::isInstance)
                 .map(Document.class::cast)

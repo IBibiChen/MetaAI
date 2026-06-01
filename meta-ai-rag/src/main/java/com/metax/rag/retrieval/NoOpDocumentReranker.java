@@ -2,6 +2,7 @@ package com.metax.rag.retrieval;
 
 import org.springframework.ai.document.Document;
 import org.springframework.ai.rag.Query;
+import org.springframework.lang.NonNull;
 
 import java.util.List;
 
@@ -30,7 +31,8 @@ public class NoOpDocumentReranker implements DocumentReranker {
      * @return 原始文档列表
      */
     @Override
-    public List<Document> rerank(Query query, List<Document> documents) {
+    @NonNull
+    public List<Document> rerank(@NonNull Query query, @NonNull List<Document> documents) {
         return documents;
     }
 }

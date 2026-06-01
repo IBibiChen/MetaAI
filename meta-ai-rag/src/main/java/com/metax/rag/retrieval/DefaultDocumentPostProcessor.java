@@ -5,6 +5,7 @@ import com.metax.rag.model.MetadataKeys;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.rag.Query;
 import org.springframework.ai.rag.postretrieval.document.DocumentPostProcessor;
+import org.springframework.lang.NonNull;
 import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
@@ -70,12 +71,17 @@ public class DefaultDocumentPostProcessor implements DocumentPostProcessor {
      * @return 最终进入 ContextualQueryAugmenter 的文档列表
      */
     @Override
-    public List<Document> process(Query query, List<Document> documents) {
+    @NonNull
+    public List<Document> process(@NonNull Query query, @NonNull List<Document> documents) {
+        // rerank 放在最前面，真实 rerank 接入后应先调整候选文档顺序，再进入去重和截断
         List<Document> reranked = properties.isRerankEnabled() ? documentReranker.rerank(query, documents) : documents;
+        // 去重在截断前执行，避免重复 chunk 占用有限的上下文名额
         List<Document> candidates = properties.isDeduplicateEnabled() ? deduplicate(reranked) : reranked;
+        // 最后限制文档数量和文本长度，控制最终 prompt 的上下文规模
         List<Document> limited = limit(candidates);
         RetrievalTrace.Builder traceBuilder = RetrievalTraceContext.builder(query);
         if (traceBuilder != null) {
+            // 这里记录的是后处理视角的数量变化，用于判断文档治理是否过严
             traceBuilder.retrievedCount(documents.size())
                     .usedCount(limited.size());
         }
@@ -94,6 +100,7 @@ public class DefaultDocumentPostProcessor implements DocumentPostProcessor {
         for (Document document : documents) {
             String key = deduplicateKey(document);
             // 缺少统一 metadata 的临时文档不参与去重，避免误删调试数据
+            // 有 key 时使用 seen.add 的返回值判断是否第一次出现，保持原始召回顺序
             if (!StringUtils.hasText(key) || seen.add(key)) {
                 result.add(document);
             }
@@ -108,10 +115,12 @@ public class DefaultDocumentPostProcessor implements DocumentPostProcessor {
      * @return chunkId 或 contentHash
      */
     private String deduplicateKey(Document document) {
+        // chunkId 优先级最高，同一个文档的不同 chunk 不会被误判成重复
         Object chunkId = document.getMetadata().get(MetadataKeys.CHUNK_ID);
         if (chunkId != null) {
             return chunkId.toString();
         }
+        // contentHash 是兜底方案，适合同一内容被多次写入向量库后的重复治理
         Object contentHash = document.getMetadata().get(MetadataKeys.CONTENT_HASH);
         return contentHash == null ? null : contentHash.toString();
     }
@@ -127,6 +136,7 @@ public class DefaultDocumentPostProcessor implements DocumentPostProcessor {
         int totalChars = 0;
         for (Document document : documents) {
             if (result.size() >= properties.getMaxContextDocuments()) {
+                // 文档数量达到上限后直接停止，保留前面相关度更高的候选文档
                 break;
             }
             String text = document.getText();

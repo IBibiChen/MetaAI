@@ -2,6 +2,7 @@ package com.metax.rag.retrieval;
 
 import org.springframework.ai.document.Document;
 import org.springframework.ai.rag.Query;
+import org.springframework.lang.NonNull;
 
 import java.util.List;
 
@@ -29,5 +30,6 @@ public interface DocumentReranker {
      * @param documents 向量库召回的候选文档
      * @return rerank 后的文档列表
      */
-    List<Document> rerank(Query query, List<Document> documents);
+    @NonNull
+    List<Document> rerank(@NonNull Query query, @NonNull List<Document> documents);
 }

@@ -52,10 +52,12 @@ public class RetrievalFilterExpressionFactory {
      */
     public Filter.Expression create(RetrievalOptions options) {
         if (StringUtils.hasText(options.filterExpression())) {
+            // 原始表达式由 Controller 透传到 advisor context，这里不再混合结构化条件
             return null;
         }
 
         FilterExpressionBuilder builder = new FilterExpressionBuilder();
+        // 先生成租户和知识库强约束，再追加可选的文档级收窄条件
         FilterExpressionBuilder.Op expression = requiredExpression(builder, options);
         if (StringUtils.hasText(options.documentId())) {
             // documentId 是可选收窄条件，适合只问某一份文档的问题
@@ -71,9 +73,11 @@ public class RetrievalFilterExpressionFactory {
     private FilterExpressionBuilder.Op requiredExpression(FilterExpressionBuilder builder, RetrievalOptions options) {
         // tenantId 和 knowledgeBaseId 是默认强约束，少了这两个字段就无法保证多租户和多知识库隔离
         if (!StringUtils.hasText(options.tenantId())) {
+            // 这里选择快速失败，不让缺少租户边界的请求进入向量检索
             throw new IllegalArgumentException("tenantId must not be blank");
         }
         if (!StringUtils.hasText(options.knowledgeBaseId())) {
+            // 知识库边界缺失会导致同租户下跨知识库召回，必须阻断
             throw new IllegalArgumentException("knowledgeBaseId must not be blank");
         }
         return builder.and(

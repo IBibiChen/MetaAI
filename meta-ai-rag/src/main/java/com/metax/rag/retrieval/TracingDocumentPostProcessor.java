@@ -4,6 +4,7 @@ import org.springframework.ai.document.Document;
 import org.springframework.ai.rag.Query;
 import org.springframework.ai.rag.postretrieval.document.DocumentPostProcessor;
 import org.springframework.ai.vectorstore.filter.Filter;
+import org.springframework.lang.NonNull;
 
 import java.util.List;
 
@@ -54,18 +55,22 @@ public class TracingDocumentPostProcessor implements DocumentPostProcessor {
      * @return 后处理后的文档
      */
     @Override
-    public List<Document> process(Query query, List<Document> documents) {
+    @NonNull
+    public List<Document> process(@NonNull Query query, @NonNull List<Document> documents) {
         long start = System.nanoTime();
+        // delegate 决定是否真正执行去重、rerank 预留和上下文截断
         List<Document> processed = delegate.process(query, documents);
         RetrievalTrace.Builder traceBuilder = RetrievalTraceContext.builder(query);
         if (traceBuilder != null) {
             // postProcess 阶段能看到处理前后数量，适合记录 retrievedCount 和 usedCount
+            // topK 和 similarityThreshold 写入 trace，便于把召回效果和本次参数直接对齐
             traceBuilder.topK(topK)
                     .similarityThreshold(similarityThreshold)
                     .retrievedCount(documents.size())
                     .usedCount(processed.size())
                     .timing("postProcess", elapsedMillis(start));
             if (filterExpression != null) {
+                // filter 只记录表达式摘要，方便排查是否命中了正确租户、知识库和文档范围
                 traceBuilder.filter(filterExpression.toString());
             }
         }

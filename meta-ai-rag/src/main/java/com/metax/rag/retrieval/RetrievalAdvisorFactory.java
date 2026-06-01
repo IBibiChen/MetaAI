@@ -169,29 +169,36 @@ public class RetrievalAdvisorFactory {
                            Double similarityThreshold,
                            Filter.Expression filterExpression,
                            ChatModel chatModel) {
+        // 请求参数为空时回落到全局默认值，保证普通 RAG 调用不需要理解底层检索参数
         int resolvedTopK = topK == null ? properties.getRetrieval().getTopK() : topK;
         double resolvedSimilarityThreshold = similarityThreshold == null
                 ? properties.getRetrieval().getSimilarityThreshold() : similarityThreshold;
-        // retriever 是真正访问 VectorStore 的组件，Advisor 负责把它接入 ChatClient 调用链
+        // retriever 是真正访问 VectorStore 的组件，负责把 query embedding 后做 similaritySearch
+        // topK 和 similarityThreshold 会直接影响召回数量、上下文质量和 token 成本
         VectorStoreDocumentRetriever.Builder retrieverBuilder = VectorStoreDocumentRetriever.builder()
                 .vectorStore(vectorStore)
                 .topK(resolvedTopK)
                 .similarityThreshold(resolvedSimilarityThreshold);
         if (filterExpression != null) {
+            // 结构化过滤表达式在这里绑定到 retriever，确保检索阶段就完成租户和知识库隔离
             retrieverBuilder.filterExpression(filterExpression);
         }
         RetrievalAugmentationAdvisor.Builder advisorBuilder = RetrievalAugmentationAdvisor.builder()
                 .documentRetriever(retrieverBuilder.build())
                 .queryAugmenter(ContextualQueryAugmenter.builder()
+                        // 没有召回上下文时拒绝继续增强，避免 RAG 接口退化成普通聊天
                         .allowEmptyContext(false)
                         .build());
+        // query transformer 位于检索前，先把用户问题整理成更适合向量检索的 query
         List<QueryTransformer> queryTransformers = queryTransformers(chatModel);
         if (!queryTransformers.isEmpty()) {
+            // 只有显式启用时才接入，避免每次 RAG 都额外调用一次 ChatModel
             advisorBuilder.queryTransformers(queryTransformers);
         }
         List<DocumentPostProcessor> documentPostProcessors = documentPostProcessors(resolvedTopK,
                 resolvedSimilarityThreshold, filterExpression);
         if (!documentPostProcessors.isEmpty()) {
+            // post processor 位于检索后、prompt 增强前，负责治理最终进入上下文的 Document
             advisorBuilder.documentPostProcessors(documentPostProcessors);
         }
         // allowEmptyContext=false 表示没有召回上下文时不让模型自由发挥，避免 RAG 场景编造答案
@@ -207,9 +214,11 @@ public class RetrievalAdvisorFactory {
     private List<QueryTransformer> queryTransformers(ChatModel chatModel) {
         RagProperties.QueryTransformer config = properties.getRetrieval().getQueryTransformer();
         if (!config.isEnabled() || !StringUtils.hasText(config.getMode()) || "none".equalsIgnoreCase(config.getMode())) {
+            // none 表示保留用户原始 query，适合简单单轮问题和排查召回质量
             return List.of();
         }
         if (chatModel == null) {
+            // transformer 本身需要调用模型，多模型项目必须显式传入当前 provider 的 ChatModel
             throw new IllegalArgumentException("ChatModel is required when query transformer is enabled");
         }
         // query 转换追求稳定性，使用低温 ChatOptions 构造临时 ChatClient
@@ -219,9 +228,11 @@ public class RetrievalAdvisorFactory {
                         .maxTokens(config.getMaxTokens())
                         .build());
         QueryTransformer transformer = switch (config.getMode().toLowerCase()) {
+            // compression 适合多轮追问，会结合上下文把省略问题压缩成独立检索 query
             case "compression" -> CompressionQueryTransformer.builder()
                     .chatClientBuilder(builder)
                     .build();
+            // rewrite 适合单轮问题优化，会把口语化表达改写成更适合向量召回的 query
             case "rewrite" -> RewriteQueryTransformer.builder()
                     .chatClientBuilder(builder)
                     .targetSearchSystem(config.getTargetSearchSystem())
@@ -248,6 +259,7 @@ public class RetrievalAdvisorFactory {
         }
         List<DocumentPostProcessor> processors = new ArrayList<>();
         // observability 开启但 post processor 关闭时，仍保留 tracing 装饰器记录召回数量和耗时
+        // delegate 决定是否真的治理文档，TracingDocumentPostProcessor 只负责采集链路数据
         DocumentPostProcessor delegate = config.isEnabled()
                 ? new DefaultDocumentPostProcessor(config)
                 : (query, documents) -> documents;

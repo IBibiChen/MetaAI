@@ -11,7 +11,7 @@ import com.metax.rag.model.VectorStoreBackend;
 import com.metax.rag.retrieval.RetrievalAdvisorFactory;
 import com.metax.rag.retrieval.RetrievalChatResponse;
 import com.metax.rag.retrieval.RetrievalFilterExpressionFactory;
-import com.metax.rag.retrieval.RetrievalResponseMapper;
+import com.metax.rag.retrieval.RetrievalResponseAssembler;
 import com.metax.rag.retrieval.RetrievalOptions;
 import com.metax.rag.retrieval.RetrievalTrace;
 import lombok.RequiredArgsConstructor;
@@ -62,7 +62,7 @@ public class ChatController {
 
     private final RetrievalFilterExpressionFactory retrievalFilterExpressionFactory;
 
-    private final RetrievalResponseMapper retrievalResponseMapper;
+    private final RetrievalResponseAssembler retrievalResponseAssembler;
 
     /**
      * 默认记忆对话
@@ -175,7 +175,7 @@ public class ChatController {
                 })
                 .user(msg);
 
-        return retrievalResponseMapper.toResponse(requestSpec.call().chatClientResponse(), resolvedConversationId);
+        return retrievalResponseAssembler.details(requestSpec.call().chatClientResponse(), resolvedConversationId);
     }
 
     /**

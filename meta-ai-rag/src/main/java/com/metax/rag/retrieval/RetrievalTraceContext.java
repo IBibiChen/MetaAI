@@ -27,8 +27,10 @@ final class RetrievalTraceContext {
     }
 
     static RetrievalTrace.Builder builder(Query query) {
+        // Query context 是 Spring AI RAG 各阶段共享的上下文载体
         Object value = query.context().get(RetrievalTrace.CONTEXT_KEY);
         if (value instanceof RetrievalTrace.Builder builder) {
+            // 返回同一个 builder，让 query transformer 和 post processor 追加到同一份 trace
             return builder;
         }
         return null;
