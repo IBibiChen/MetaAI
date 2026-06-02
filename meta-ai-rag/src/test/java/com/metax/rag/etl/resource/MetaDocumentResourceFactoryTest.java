@@ -3,8 +3,6 @@ package com.metax.rag.etl.resource;
 import com.metax.rag.config.RagProperties;
 import com.metax.rag.etl.model.DocumentSourceType;
 import com.metax.rag.indexing.DocumentIndexingRequest;
-import com.metax.rag.model.EmbeddingProvider;
-import com.metax.rag.model.VectorStoreBackend;
 import com.metax.rag.storage.DocumentStorageService;
 import org.junit.jupiter.api.Test;
 
@@ -101,8 +99,8 @@ class MetaDocumentResourceFactoryTest {
                                         String bucket,
                                         String objectKey,
                                         String localPath) {
-        return new DocumentIndexingRequest(EmbeddingProvider.DASHSCOPE, VectorStoreBackend.REDIS,
-                "tenant-1", "kb-1", "doc-1", documentType, sourceType, null, bucket, objectKey, localPath);
+        return new DocumentIndexingRequest("tenant-1", "kb-1", "doc-1", documentType, sourceType,
+                null, bucket, objectKey, localPath);
     }
 }
 

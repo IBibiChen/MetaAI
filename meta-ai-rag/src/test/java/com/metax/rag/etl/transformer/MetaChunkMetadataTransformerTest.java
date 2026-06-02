@@ -3,8 +3,6 @@ package com.metax.rag.etl.transformer;
 import com.metax.rag.etl.model.DocumentSourceType;
 import com.metax.rag.indexing.DocumentIndexingRequest;
 import com.metax.rag.model.MetadataKeys;
-import com.metax.rag.model.EmbeddingProvider;
-import com.metax.rag.model.VectorStoreBackend;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.document.Document;
 
@@ -27,8 +25,8 @@ class MetaChunkMetadataTransformerTest {
      */
     @Test
     void shouldAppendChunkMetadata() {
-        DocumentIndexingRequest request = new DocumentIndexingRequest(EmbeddingProvider.DASHSCOPE, VectorStoreBackend.REDIS,
-                "tenant-1", "kb-1", "doc-1", "markdown", DocumentSourceType.OBJECT_STORAGE,
+        DocumentIndexingRequest request = new DocumentIndexingRequest("tenant-1", "kb-1", "doc-1",
+                "markdown", DocumentSourceType.OBJECT_STORAGE,
                 "docs/demo.md", "bucket", "object", null);
         MetaChunkMetadataTransformer transformer = new MetaChunkMetadataTransformer(request);
 

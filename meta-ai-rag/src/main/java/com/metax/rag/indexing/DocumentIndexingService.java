@@ -3,8 +3,6 @@ package com.metax.rag.indexing;
 import com.metax.rag.etl.model.DocumentSourceType;
 import com.metax.rag.etl.resource.MetaDocumentResource;
 import com.metax.rag.etl.resource.MetaDocumentResourceFactory;
-import com.metax.rag.model.EmbeddingProvider;
-import com.metax.rag.model.VectorStoreBackend;
 import com.metax.rag.pipeline.MetaEtlPipeline;
 import org.springframework.stereotype.Service;
 
@@ -29,8 +27,6 @@ import org.springframework.stereotype.Service;
  * 对象存储对象导入示例
  * <pre>{@code
  * curl -X POST http://localhost:8008/v1/rag/documents/import
- *   -d provider=dashscope
- *   -d vectorStore=redis
  *   -d tenantId=t1
  *   -d knowledgeBaseId=kb1
  *   -d documentId=doc-001
@@ -67,8 +63,6 @@ public class DocumentIndexingService {
      * localPath 必须是相对 metax.ai.rag.storage.local-root 的路径
      * documentType 可以为空，为空时根据 localPath 后缀自动识别
      *
-     * @param provider        provider
-     * @param vectorStore     向量库后端
      * @param tenantId        租户 ID
      * @param knowledgeBaseId 知识库 ID
      * @param documentId      文档 ID
@@ -77,18 +71,15 @@ public class DocumentIndexingService {
      * @param source          来源标识
      * @return 文档索引任务
      */
-    public DocumentIndexingJob importLocalFile(String provider,
-                                               String vectorStore,
-                                               String tenantId,
+    public DocumentIndexingJob importLocalFile(String tenantId,
                                                String knowledgeBaseId,
                                                String documentId,
                                                String documentType,
                                                String localPath,
                                                String source) {
         // 阶段 1：把 Controller 传入的字符串参数适配成项目内部索引请求
-        DocumentIndexingRequest request = new DocumentIndexingRequest(EmbeddingProvider.from(provider),
-                VectorStoreBackend.from(vectorStore), tenantId, knowledgeBaseId, documentId, documentType,
-                DocumentSourceType.LOCAL_FILE, source, null, null, localPath);
+        DocumentIndexingRequest request = new DocumentIndexingRequest(tenantId, knowledgeBaseId, documentId,
+                documentType, DocumentSourceType.LOCAL_FILE, source, null, null, localPath);
 
         // 阶段 2：本地文件和对象存储文件最终统一进入 submit 索引入口
         return submit(request);

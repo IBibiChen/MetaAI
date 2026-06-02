@@ -38,50 +38,46 @@ public class EmbeddingModelConfig {
      *
      * 自动装配规则
      *
-     * 当前项目同时使用 DashScope / Ollama / OpenAI 兼容三套 EmbeddingModel
-     * 三套 EmbeddingModel 均由各自 Spring AI starter 根据 application.properties 自动装配
-     * 当前项目不要配置 spring.ai.model.embedding，因为它是 provider 单选开关，会关闭未选中的 EmbeddingModel 自动装配
+     * 当前项目保留 DashScope / Ollama / OpenAI 兼容三套 provider 配置，运行时只启用其中一套
+     * spring.ai.model.embedding 是官方 EmbeddingModel 单选开关，用于决定当前默认 EmbeddingModel
+     * spring.ai.model.chat 是官方 ChatModel 单选开关，用于决定当前默认 ChatModel
      * 当前类不手动声明 EmbeddingModel Bean，是为了保留官方 starter 的连接配置、options 映射、metadata-mode、观测和生命周期处理
-     * 存在多个 EmbeddingModel bean 后禁止裸类型注入，必须使用 @Qualifier 或具体 bean 名区分
+     * 单套运行时推荐直接注入 EmbeddingModel，避免多套 Bean 名矩阵带来的维护成本
      *
      * VectorStore 绑定规则
      *
-     * 项目只在 VectorStore 配置类中通过 @Qualifier 显式选择 EmbeddingModel bean
+     * VectorStore 自动绑定当前唯一 EmbeddingModel
      * 向量模型和向量数据库必须成对使用
      * 同一个知识库的写入和查询必须使用同一个 EmbeddingModel 对应的语义空间
-     * 不同 provider 的向量维度、分布和语义空间可能不同，禁止混用同一个 collection / index / prefix
+     * 切换 spring.ai.model.embedding 后必须同步检查向量维度、collection / index 和历史数据是否需要重建
      *
      * 向量数据库隔离方式
      *
-     * RedisVectorStoreConfig 使用 indexName + prefix 隔离三套 Redis 向量数据
-     * QdrantVectorStoreConfig 使用 collectionName 隔离三套 Qdrant 向量数据
-     * MilvusVectorStoreConfig 使用 collectionName 隔离三套 Milvus 向量数据，并要求 embeddingDimension 与模型输出维度一致
+     * spring.ai.vectorstore.type 是 Spring AI 官方 SpringAIVectorStoreTypes.TYPE 属性
+     * Redis / Qdrant / Milvus 官方自动配置都通过该属性判断是否启用
+     * 项目必须显式配置该属性，避免多个 VectorStore starter 同时存在时因为 matchIfMissing 同时尝试启用
+     * spring.ai.vectorstore.type=redis 时使用 Redis
+     * spring.ai.vectorstore.type=qdrant 时使用 Qdrant
+     * spring.ai.vectorstore.type=milvus 时使用 Milvus
+     * Redis 使用 MetaRedisVectorStoreConfig 补齐 metadataFields，Qdrant / Milvus 使用官方自动装配
      *
      * RAG ChatClient 绑定规则
      *
-     * RAG ChatClient 不直接绑定 EmbeddingModel，而是绑定已经构造好的 provider + backend 专属 VectorStore
-     * 这样可以把模型 provider 和向量数据库 backend 的组合关系固定在配置层，避免业务代码临时拼装错误链路
-     * 当前项目还引入 Redis ChatMemory 和 JDBC ChatMemory 两套记忆后端，因此 RAG ChatClient 名称同时包含 memory backend 和 vector backend
-     * memory backend 只影响对话历史存储位置，vector backend 只影响知识库检索位置，两者不能混为一谈
+     * ChatClient 绑定当前唯一 ChatModel 和当前唯一 ChatMemory
+     * RAG 不再创建独立 ChatClient，检索增强能力在请求阶段通过 RetrievalAugmentationAdvisor 动态追加
+     * ChatMemory 只影响对话历史存储位置，不影响知识库检索使用的 VectorStore
      *
-     * provider + vector backend + rag client 装配图
+     * 当前主链路装配图
      *
-     * dashscopeEmbeddingModel -> dashScopeRedisVectorStore -> dashScopeRedisMemoryRedisRagChatClient / dashScopeJdbcMemoryRedisRagChatClient
-     * dashscopeEmbeddingModel -> dashScopeQdrantVectorStore -> dashScopeRedisMemoryQdrantRagChatClient / dashScopeJdbcMemoryQdrantRagChatClient
-     * dashscopeEmbeddingModel -> dashScopeMilvusVectorStore -> dashScopeRedisMemoryMilvusRagChatClient / dashScopeJdbcMemoryMilvusRagChatClient
-     *
-     * openAiEmbeddingModel -> openAiRedisVectorStore -> openAiRedisMemoryRedisRagChatClient / openAiJdbcMemoryRedisRagChatClient
-     * openAiEmbeddingModel -> openAiQdrantVectorStore -> openAiRedisMemoryQdrantRagChatClient / openAiJdbcMemoryQdrantRagChatClient
-     * openAiEmbeddingModel -> openAiMilvusVectorStore -> openAiRedisMemoryMilvusRagChatClient / openAiJdbcMemoryMilvusRagChatClient
-     *
-     * ollamaEmbeddingModel -> ollamaRedisVectorStore -> ollamaRedisMemoryRedisRagChatClient / ollamaJdbcMemoryRedisRagChatClient
-     * ollamaEmbeddingModel -> ollamaQdrantVectorStore -> ollamaRedisMemoryQdrantRagChatClient / ollamaJdbcMemoryQdrantRagChatClient
-     * ollamaEmbeddingModel -> ollamaMilvusVectorStore -> ollamaRedisMemoryMilvusRagChatClient / ollamaJdbcMemoryMilvusRagChatClient
+     * spring.ai.model.embedding -> EmbeddingModel -> vectorStore
+     * spring.ai.model.chat -> ChatModel -> chatClient
+     * redisChatMemory -> chatClient
+     * spring.ai.vectorstore.type -> VectorStore -> RetrievalAugmentationAdvisor
      *
      * 禁止事项和排查方式
      *
-     * 写入知识库时选择哪个 VectorStore，查询 RAG 时就必须使用同一个 VectorStore
-     * 只复用 metadata key 规范，不复用不同 provider 的向量索引或 collection
+     * 写入知识库和查询 RAG 使用同一个默认 VectorStore
+     * 切换 provider 或 vectorStore 后不要直接复用旧索引，除非能证明 embedding 维度和语义空间一致
      * AiBeanInspector 可用于启动后核实 EmbeddingModel 和 VectorStore 的实际 bean 名与类型
      */
 

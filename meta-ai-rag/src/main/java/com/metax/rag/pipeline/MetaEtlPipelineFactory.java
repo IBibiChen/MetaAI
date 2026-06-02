@@ -1,13 +1,12 @@
 package com.metax.rag.pipeline;
 
-import com.metax.rag.core.VectorStoreRouter;
 import com.metax.rag.etl.reader.MetaDocumentReaderFactory;
 import com.metax.rag.etl.transformer.MetaDocumentTransformerFactory;
 import com.metax.rag.etl.writer.MetaDocumentSnapshotWriter;
+import com.metax.rag.config.RagProperties;
 import com.metax.rag.indexing.DocumentIndexingContext;
 import com.metax.rag.indexing.DocumentIndexingRequest;
 import com.metax.rag.model.MetadataKeys;
-import com.metax.rag.config.RagProperties;
 import org.springframework.ai.document.DocumentReader;
 import org.springframework.ai.document.DocumentTransformer;
 import org.springframework.ai.document.DocumentWriter;
@@ -38,18 +37,18 @@ public class MetaEtlPipelineFactory {
 
     private final RagProperties properties;
 
-    private final VectorStoreRouter vectorStoreRouter;
+    private final VectorStore vectorStore;
 
     private final MetaDocumentReaderFactory documentReaderFactory;
 
     private final MetaDocumentTransformerFactory documentTransformerFactory;
 
     public MetaEtlPipelineFactory(RagProperties properties,
-                                  VectorStoreRouter vectorStoreRouter,
+                                  VectorStore vectorStore,
                                   MetaDocumentReaderFactory documentReaderFactory,
                                   MetaDocumentTransformerFactory documentTransformerFactory) {
         this.properties = properties;
-        this.vectorStoreRouter = vectorStoreRouter;
+        this.vectorStore = vectorStore;
         this.documentReaderFactory = documentReaderFactory;
         this.documentTransformerFactory = documentTransformerFactory;
     }
@@ -66,8 +65,8 @@ public class MetaEtlPipelineFactory {
      */
     public MetaEtlUpsertPipeline createIndexingPipeline(DocumentIndexingContext context) {
         DocumentIndexingRequest request = context.request();
-        // provider + vectorStore 决定写入哪个向量空间，查询时必须使用同一组选择
-        VectorStore vectorStore = vectorStoreRouter.getVectorStore(request.provider(), request.vectorStore());
+        // 当前应用只启用一套 VectorStore，写入和查询都使用配置文件选中的同一个向量库
+        VectorStore resolvedVectorStore = vectorStore;
         // Reader 阶段把对象存储或本地文件解析为 Spring AI Document
         DocumentReader reader = documentReaderFactory.create(context.documentResource());
         // Transformer 顺序固定为文档 metadata -> chunk 切分 -> chunk metadata -> 内容格式化
@@ -80,7 +79,7 @@ public class MetaEtlPipelineFactory {
         // snapshot writer 用于导出 ETL 快照，排查实际写入向量库前的 chunk 内容
         List<DocumentWriter> snapshotWriters = snapshotWriters(request);
         // Sink 收敛 delete + write 策略，最终写入仍委托 Spring AI VectorStore
-        MetaVectorStoreSink sink = new MetaVectorStoreSink(vectorStore, documentFilter(request));
+        MetaVectorStoreSink sink = new MetaVectorStoreSink(resolvedVectorStore, documentFilter(request));
         return new MetaEtlUpsertPipeline(request, reader, transformers, snapshotWriters, sink);
     }
 

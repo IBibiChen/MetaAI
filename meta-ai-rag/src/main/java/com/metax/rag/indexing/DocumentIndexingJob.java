@@ -7,7 +7,7 @@ import java.util.UUID;
  * DocumentIndexingJob .
  *
  * <p>
- * RAG 文档索引任务快照，记录文件来源、目标向量库、chunk 数量和错误信息
+ * RAG 文档索引任务快照，记录文件来源、chunk 数量和错误信息
  *
  * <p>
  * 字段说明：job 是异步 ETL 的最小可观察单元
@@ -22,8 +22,6 @@ import java.util.UUID;
  * {
  *   "jobId": "uuid",
  *   "status": "SUCCEEDED",
- *   "provider": "dashscope",
- *   "vectorStore": "redis",
  *   "chunkCount": 12,
  *   "message": "RAG document indexing succeeded"
  * }
@@ -58,14 +56,6 @@ public record DocumentIndexingJob(
          * 文档类型
          */
         String documentType,
-        /**
-         * embedding provider 名称
-         */
-        String provider,
-        /**
-         * 向量库后端名称
-         */
-        String vectorStore,
         /**
          * 对象存储 bucket 名称
          */
@@ -106,8 +96,7 @@ public record DocumentIndexingJob(
         Instant now = Instant.now();
         return new DocumentIndexingJob(UUID.randomUUID().toString(), DocumentIndexingStatus.PENDING,
                 request.tenantId(), request.knowledgeBaseId(), request.documentId(), request.documentType(),
-                request.provider().apiName(), request.vectorStore().apiName(), request.bucket(), request.objectKey(),
-                0, "RAG document indexing submitted", now, now);
+                request.bucket(), request.objectKey(), 0, "RAG document indexing submitted", now, now);
     }
 
     /**
@@ -121,6 +110,6 @@ public record DocumentIndexingJob(
     public DocumentIndexingJob withStatus(DocumentIndexingStatus status, int chunkCount, String message) {
         // record 不可变，状态流转通过创建新快照完成，避免多线程异步任务修改同一个对象
         return new DocumentIndexingJob(jobId, status, tenantId, knowledgeBaseId, documentId, documentType,
-                provider, vectorStore, bucket, objectKey, chunkCount, message, createdAt, Instant.now());
+                bucket, objectKey, chunkCount, message, createdAt, Instant.now());
     }
 }

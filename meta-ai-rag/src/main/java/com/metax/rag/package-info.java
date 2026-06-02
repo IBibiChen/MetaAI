@@ -19,7 +19,7 @@
  *
  * <p>
  * 三、VectorStore 语义空间写入
- * VectorStoreRouter 按 provider + vectorStore 选择目标向量库
+ * VectorStore 由 Spring AI 官方 spring.ai.vectorstore.type 选择，索引和检索使用同一个默认向量库
  * MetaVectorStoreSink 负责按 documentId 删除旧 chunk，再写入新 chunk
  *
  * <p>
@@ -124,10 +124,12 @@
  *
  * <p>
  * 11、VectorStore 写入阶段
- * VectorStoreRouter 按 provider + vectorStore 选择目标 VectorStore Bean
- * provider 决定 EmbeddingModel，例如 dashscope、ollama、openai
- * vectorStore 决定向量数据库后端，例如 redis、qdrant、milvus
- * 不同 EmbeddingModel 的向量维度和语义空间可能不同，写入和查询必须选择同一组 provider + vectorStore
+ * VectorStore 由 Spring AI 官方自动装配提供，Redis 场景通过项目轻量配置补齐 metadataFields
+ * spring.ai.model.embedding 决定 EmbeddingModel，例如 dashscope、ollama、openai
+ * spring.ai.vectorstore.type 来自 Spring AI 官方 SpringAIVectorStoreTypes.TYPE 常量
+ * spring.ai.vectorstore.type 决定向量数据库后端，例如 redis、qdrant、milvus
+ * 项目必须显式配置 spring.ai.vectorstore.type，避免多个 VectorStore starter 因 matchIfMissing 同时尝试启用
+ * 不同 EmbeddingModel 的向量维度和语义空间可能不同，切换 provider 后通常需要重建索引
  * VectorStore 实现 Spring AI DocumentWriter 接口，写入时统一使用 write
  *
  * <p>
@@ -135,11 +137,10 @@
  *
  * <p>
  * 12、RAG 查询入口阶段
- * ChatController 接收 provider、vectorStore、memory、tenantId、knowledgeBaseId 和用户问题
+ * ChatController 接收 tenantId、knowledgeBaseId 和用户问题
  * 普通 RAG 查询必须传 tenantId 和 knowledgeBaseId，避免无过滤全库检索
- * provider 用于选择 ChatModel 和 EmbeddingModel 语义空间
- * vectorStore 用于选择 Redis、Qdrant 或 Milvus 向量库后端
- * memory 用于选择 Redis ChatMemory 或 JDBC ChatMemory
+ * ChatModel、EmbeddingModel、VectorStore 和 ChatMemory 都由配置文件选择
+ * ChatMemory 由 metax.ai.chat.memory.type 选择，接口层不再暴露 memory 路由参数
  *
  * <p>
  * 13、检索参数组装阶段
@@ -154,7 +155,7 @@
  * RetrievalAdvisorFactory 构造 Spring AI RetrievalAugmentationAdvisor
  * 当前项目使用官方 Modular RAG 扩展点，不手写检索增强主流程
  * QueryTransformer、VectorStoreDocumentRetriever、DocumentPostProcessor 和 ContextualQueryAugmenter 都在这里按配置组装
- * ChatModel 必须由调用侧按 provider 显式传入，避免多 ChatModel 共存时注入错误模型
+ * ChatModel 使用当前配置选中的默认 Bean，避免接口层暴露 provider 选择错误入口
  *
  * <p>
  * 15、检索前 query 转换阶段
@@ -171,7 +172,7 @@
  * topK 控制最多返回多少个 chunk
  * similarityThreshold 控制最低相似度
  * filterExpression 控制 metadata 过滤，例如 tenantId、knowledgeBaseId、documentType
- * 写入和查询必须选择同一组 provider + vectorStore，避免 embedding 语义空间错配
+ * 写入和查询使用同一套配置选中的 EmbeddingModel 和 VectorStore，避免 embedding 语义空间错配
  *
  * <p>
  * 17、检索后文档处理阶段
@@ -234,8 +235,6 @@
  * 对象存储 objectKey 导入示例
  * <pre>{@code
  * curl -X POST http://localhost:8008/v1/rag/documents/import
- *   -d provider=dashscope
- *   -d vectorStore=redis
  *   -d tenantId=t1
  *   -d knowledgeBaseId=kb1
  *   -d documentId=doc-001
@@ -248,8 +247,6 @@
  * 本地文件导入示例
  * <pre>{@code
  * curl -X POST http://localhost:8008/v1/rag/documents/import/local
- *   -d provider=dashscope
- *   -d vectorStore=redis
  *   -d tenantId=t1
  *   -d knowledgeBaseId=kb1
  *   -d documentId=doc-001
@@ -259,7 +256,7 @@
  * <p>
  * 检索详情示例
  * <pre>{@code
- * curl -X POST http://localhost:8008/v1/dashscope/rag/redis/redis/details
+ * curl -X POST http://localhost:8008/v1/rag/details
  *   -d tenantId=t1
  *   -d knowledgeBaseId=kb1
  *   -d msg=Spring AI 的 ETL 是什么

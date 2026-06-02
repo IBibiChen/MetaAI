@@ -81,13 +81,13 @@ public class MetaDocumentSnapshotWriter implements DocumentWriter {
      * 生成本次 ETL 快照文件名
      *
      * <p>
-     * 文件名由 tenantId、knowledgeBaseId、documentId、provider、vectorStore 组成
-     * 这样同一份文档在同一向量空间内重复索引时，会覆盖同一个快照文件，方便查看最近一次处理结果
+     * 文件名由 tenantId、knowledgeBaseId、documentId 组成
+     * 当前运行环境只启用一套 EmbeddingModel 和一套 VectorStore，同一份文档重复索引时会覆盖同一个快照文件
      *
      * <p>
      * 示例
      * <pre>{@code
-     * tenant-1_kb-1_doc-1_dashscope_redis.txt
+     * tenant-1_kb-1_doc-1.txt
      * }</pre>
      *
      * @return 快照文件名
@@ -96,9 +96,7 @@ public class MetaDocumentSnapshotWriter implements DocumentWriter {
         return String.join("_",
                 safeValue(request.tenantId()),
                 safeValue(request.knowledgeBaseId()),
-                safeValue(request.documentId()),
-                safeValue(request.provider().name().toLowerCase()),
-                safeValue(request.vectorStore().name().toLowerCase())) + ".txt";
+                safeValue(request.documentId())) + ".txt";
     }
 
     /**

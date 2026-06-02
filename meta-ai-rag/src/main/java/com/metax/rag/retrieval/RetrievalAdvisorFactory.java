@@ -29,8 +29,8 @@ import java.util.List;
  *
  * <p>
  * 链路说明：本类只负责组装 Spring AI 官方 Modular RAG 组件
- * Controller 负责解析 provider、vectorStore、memory 和租户边界
- * VectorStoreRouter 负责选择正确的 VectorStore
+ * Controller 负责解析 memory 和租户边界
+ * VectorStore 由 spring.ai.vectorstore.type 选择，并作为当前唯一向量库传入
  * RetrievalFilterExpressionFactory 负责生成结构化 metadata filter
  * 当前类负责把 QueryTransformer、VectorStoreDocumentRetriever、DocumentPostProcessor 和 ContextualQueryAugmenter 串起来
  *
@@ -54,7 +54,7 @@ import java.util.List;
  * QueryTransformer 的职责
  * compression 模式适合多轮追问，会把会话历史和当前追问压缩为独立检索 query
  * rewrite 模式适合单轮检索优化，会把口语化或歧义 query 改写为更适合向量检索的 query
- * query 转换使用当前 provider 对应的 ChatModel，并固定低温参数，避免多 ChatModel 环境下选错模型
+ * query 转换使用当前配置选中的 ChatModel，并固定低温参数，避免改写结果不稳定
  *
  * <p>
  * DocumentPostProcessor 的职责
@@ -119,10 +119,10 @@ public class RetrievalAdvisorFactory {
      *
      * <p>
      * chatModel 只用于 query transformer，不参与 VectorStore 检索
-     * 多 ChatModel 共存时必须由调用侧按 provider 显式传入，避免 Spring 隐式选择错误模型
+     * chatModel 使用当前配置选中的默认模型，避免 query transformer 另行选择模型
      *
      * @param vectorStore      向量库
-     * @param chatModel        当前 provider 对应的 ChatModel
+     * @param chatModel        当前配置选中的 ChatModel
      * @param options          检索参数
      * @param filterExpression 默认过滤表达式
      * @return Advisor
@@ -196,7 +196,7 @@ public class RetrievalAdvisorFactory {
                         .build());
 
         // 阶段 4：按配置接入检索前 query transformer
-        // none 模式不改写 query，compression / rewrite 会额外调用一次当前 provider 的 ChatModel
+        // none 模式不改写 query，compression / rewrite 会额外调用一次当前配置选中的 ChatModel
         // query transformer 位于检索前，先把用户问题整理成更适合向量检索的 query
         List<QueryTransformer> queryTransformers = queryTransformers(chatModel);
         if (!queryTransformers.isEmpty()) {
@@ -233,10 +233,10 @@ public class RetrievalAdvisorFactory {
      *
      * <p>
      * compression 和 rewrite 都会额外调用一次 ChatModel
-     * 多模型项目必须传入当前 provider 对应的 ChatModel，不能依赖 Spring 隐式注入
+     * 当前方法必须传入 ChatModel，因为 query transformer 本身需要额外调用模型
      * 改写后的 transformedQuery 会进入 details trace，用于判断检索失败是否由 query 改偏导致
      *
-     * @param chatModel 当前 provider 对应的 ChatModel
+     * @param chatModel 当前配置选中的 ChatModel
      * @return QueryTransformer 列表
      */
     private List<QueryTransformer> queryTransformers(ChatModel chatModel) {
@@ -246,7 +246,7 @@ public class RetrievalAdvisorFactory {
             return List.of();
         }
         if (chatModel == null) {
-            // transformer 本身需要调用模型，多模型项目必须显式传入当前 provider 的 ChatModel
+            // transformer 本身需要调用模型，必须显式传入当前配置选中的 ChatModel
             throw new IllegalArgumentException("ChatModel is required when query transformer is enabled");
         }
         // query 转换追求稳定性，使用低温 ChatOptions 构造临时 ChatClient

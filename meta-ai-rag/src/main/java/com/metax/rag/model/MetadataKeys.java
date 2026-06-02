@@ -9,7 +9,7 @@ package com.metax.rag.model;
  * <p>
  * 字段说明：metadata key 必须全链路统一
  * 写入时叫 tenantId，检索时 filterExpression 也必须叫 tenantId
- * Redis 还需要在 RedisVectorStoreConfig 中声明 metadataFields，否则字段即使写入也不能过滤
+ * Redis 还需要在 MetaRedisVectorStoreConfig 中声明 metadataFields，否则字段即使写入也不能过滤
  * Qdrant / Milvus 不需要 Redis MetadataField 声明，但 key 仍然必须一致
  *
  * <p>

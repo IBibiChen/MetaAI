@@ -2,8 +2,6 @@ package com.metax.rag.pipeline;
 
 import com.metax.rag.etl.model.DocumentSourceType;
 import com.metax.rag.indexing.DocumentIndexingRequest;
-import com.metax.rag.model.EmbeddingProvider;
-import com.metax.rag.model.VectorStoreBackend;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.document.DocumentReader;
@@ -119,8 +117,8 @@ class MetaEtlUpsertPipelineTest {
     }
 
     private DocumentIndexingRequest request() {
-        return new DocumentIndexingRequest(EmbeddingProvider.DASHSCOPE, VectorStoreBackend.REDIS,
-                "tenant-1", "kb-1", "doc-1", "markdown", DocumentSourceType.OBJECT_STORAGE,
+        return new DocumentIndexingRequest("tenant-1", "kb-1", "doc-1",
+                "markdown", DocumentSourceType.OBJECT_STORAGE,
                 "docs/demo.md", "bucket", "object", null);
     }
 }

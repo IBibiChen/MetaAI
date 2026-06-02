@@ -1,7 +1,6 @@
 package com.metax.rag.pipeline;
 
 import com.metax.rag.config.RagProperties;
-import com.metax.rag.core.VectorStoreRouter;
 import com.metax.rag.etl.model.DocumentSourceType;
 import com.metax.rag.etl.reader.JsonDocumentReaderStrategy;
 import com.metax.rag.etl.reader.MarkdownDocumentReaderStrategy;
@@ -12,16 +11,13 @@ import com.metax.rag.etl.resource.MetaDocumentResource;
 import com.metax.rag.etl.transformer.MetaDocumentTransformerFactory;
 import com.metax.rag.indexing.DocumentIndexingContext;
 import com.metax.rag.indexing.DocumentIndexingRequest;
-import com.metax.rag.model.EmbeddingProvider;
-import com.metax.rag.model.VectorStoreBackend;
 import org.junit.jupiter.api.Test;
-import org.springframework.core.io.FileSystemResource;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.core.io.FileSystemResource;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
-import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -48,7 +44,7 @@ class MetaEtlPipelineFactoryTest {
         VectorStore vectorStore = mock(VectorStore.class);
         MetaEtlPipelineFactory factory = new MetaEtlPipelineFactory(
                 properties,
-                new VectorStoreRouter(Map.of("dashScopeRedisVectorStore", vectorStore)),
+                vectorStore,
                 readerFactory(),
                 new MetaDocumentTransformerFactory(properties)
         );
@@ -84,7 +80,7 @@ class MetaEtlPipelineFactoryTest {
         VectorStore vectorStore = mock(VectorStore.class);
         MetaEtlPipelineFactory factory = new MetaEtlPipelineFactory(
                 properties,
-                new VectorStoreRouter(Map.of("dashScopeRedisVectorStore", vectorStore)),
+                vectorStore,
                 readerFactory(),
                 new MetaDocumentTransformerFactory(properties)
         );
@@ -108,8 +104,8 @@ class MetaEtlPipelineFactoryTest {
     }
 
     private DocumentIndexingRequest request() {
-        return new DocumentIndexingRequest(EmbeddingProvider.DASHSCOPE, VectorStoreBackend.REDIS,
-                "tenant-1", "kb-1", "doc-1", "txt", DocumentSourceType.LOCAL_FILE,
+        return new DocumentIndexingRequest("tenant-1", "kb-1", "doc-1",
+                "txt", DocumentSourceType.LOCAL_FILE,
                 "docs/demo.txt", null, null, "docs/demo.txt");
     }
 }

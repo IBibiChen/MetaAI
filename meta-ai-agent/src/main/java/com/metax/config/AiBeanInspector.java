@@ -1,6 +1,9 @@
 package com.metax.config;
 
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.memory.ChatMemoryRepository;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.vectorstore.VectorStore;
@@ -14,8 +17,8 @@ import org.springframework.stereotype.Component;
  *
  * <p>
  * AI 相关 bean 的诊断打印工具，仅当 metax.debug.print-ai-beans=true 时启用 (默认关闭，不影响正常启动)
- * 用于核实多 ChatModel / EmbeddingModel / VectorStore 的实际装配情况 (bean 名与具体类型)
- * 验证 "未设 spring.ai.model.chat 时三模型共存" 与 "按具体类型注入" 的前提是否成立
+ * 用于核实当前 ChatModel / EmbeddingModel / VectorStore / ChatMemory / ChatMemoryRepository 的实际装配情况 (bean 名与具体类型)
+ * ChatMemory 预期包含 redisChatMemory 和 jdbcChatMemory，默认 ChatClient 显式绑定 redisChatMemory
  *
  * <p>
  * 启用方式：启动参数追加 --metax.debug.print-ai-beans=true
@@ -24,10 +27,11 @@ import org.springframework.stereotype.Component;
  * @version v1.0
  * @since 2026/5/29
  */
-@Slf4j
 @Component
 @ConditionalOnProperty(name = "metax.debug.print-ai-beans", havingValue = "true")
 public class AiBeanInspector implements CommandLineRunner {
+
+    private static final Logger log = LoggerFactory.getLogger(AiBeanInspector.class);
 
     private final ApplicationContext ctx;
 
@@ -40,6 +44,8 @@ public class AiBeanInspector implements CommandLineRunner {
         printBeans(ChatModel.class);
         printBeans(EmbeddingModel.class);
         printBeans(VectorStore.class);
+        printBeans(ChatMemory.class);
+        printBeans(ChatMemoryRepository.class);
     }
 
     /**

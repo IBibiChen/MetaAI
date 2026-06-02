@@ -1,19 +1,17 @@
 package com.metax.rag.indexing;
 
 import com.metax.rag.etl.model.DocumentSourceType;
-import com.metax.rag.model.EmbeddingProvider;
-import com.metax.rag.model.VectorStoreBackend;
 
 /**
  * DocumentIndexingRequest .
  *
  * <p>
- * RAG 文档索引请求，调用方必须显式选择 embedding provider 和 vectorStore，避免不同 embedding 语义空间混写
+ * RAG 文档索引请求，调用方只提交文档来源和业务过滤字段
  *
  * <p>
- * 字段说明：文档索引请求决定数据写到哪个语义空间
- * provider 决定使用哪套 EmbeddingModel，不代表 ChatModel provider
- * vectorStore 决定写入 Redis、Qdrant 还是 Milvus
+ * 字段说明：文档索引请求不再决定模型和向量库
+ * EmbeddingModel 由 spring.ai.model.embedding 选择
+ * VectorStore 由 spring.ai.vectorstore.type 选择
  * tenantId 和 knowledgeBaseId 决定后续检索过滤边界
  * documentId 决定重复上传时覆盖哪份文档的旧 chunk
  * sourceType 决定文件来自对象存储文件流还是受控本地目录
@@ -22,8 +20,6 @@ import com.metax.rag.model.VectorStoreBackend;
  * 示例
  * <pre>{@code
  * new DocumentIndexingRequest(
- *     EmbeddingProvider.DASHSCOPE,
- *     VectorStoreBackend.REDIS,
  *     "t1",
  *     "kb1",
  *     "doc-001",
@@ -40,14 +36,6 @@ import com.metax.rag.model.VectorStoreBackend;
  * @since 2026/5/31
  */
 public record DocumentIndexingRequest(
-        /**
-         * embedding provider，决定文档索引时使用哪套 EmbeddingModel
-         */
-        EmbeddingProvider provider,
-        /**
-         * 向量库后端，决定写入 Redis、Qdrant 还是 Milvus
-         */
-        VectorStoreBackend vectorStore,
         /**
          * 租户 ID，后续检索必须用它做隔离过滤
          */
@@ -106,7 +94,7 @@ public record DocumentIndexingRequest(
      * @return RAG 文档索引请求
      */
     public DocumentIndexingRequest withResolvedDocument(String resolvedDocumentType, String resolvedSource) {
-        return new DocumentIndexingRequest(provider, vectorStore, tenantId, knowledgeBaseId, documentId,
-                resolvedDocumentType, sourceType, resolvedSource, bucket, objectKey, localPath);
+        return new DocumentIndexingRequest(tenantId, knowledgeBaseId, documentId, resolvedDocumentType, sourceType,
+                resolvedSource, bucket, objectKey, localPath);
     }
 }
