@@ -5,7 +5,7 @@ import com.metax.rag.etl.model.DocumentSourceType;
 import com.metax.rag.indexing.DocumentIndexingRequest;
 import com.metax.rag.model.EmbeddingProvider;
 import com.metax.rag.model.VectorStoreBackend;
-import com.metax.rag.storage.RustFsStorageService;
+import com.metax.rag.storage.DocumentStorageService;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Files;
@@ -92,7 +92,8 @@ class MetaDocumentResourceFactoryTest {
     private MetaDocumentResourceFactory factory(Path localRoot) {
         RagProperties properties = new RagProperties();
         properties.getStorage().setLocalRoot(localRoot.toString());
-        return new MetaDocumentResourceFactory(properties, mock(RustFsStorageService.class), new MetaDocumentTypeResolver());
+        return new MetaDocumentResourceFactory(properties, mock(DocumentStorageService.class),
+                new MetaDocumentTypeResolver());
     }
 
     private DocumentIndexingRequest request(DocumentSourceType sourceType,

@@ -66,11 +66,11 @@ public record DocumentIndexingJob(
          */
         String vectorStore,
         /**
-         * RustFS bucket 名称
+         * 对象存储 bucket 名称
          */
         String bucket,
         /**
-         * RustFS object key
+         * 对象存储 object key
          */
         String objectKey,
         /**

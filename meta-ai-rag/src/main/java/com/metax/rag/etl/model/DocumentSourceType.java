@@ -14,7 +14,7 @@ package com.metax.rag.etl.model;
 public enum DocumentSourceType {
 
     /**
-     * 对象存储文件流，覆盖 RustFS、OSS 和 S3
+     * 对象存储文件流，覆盖 RustFS、MinIO、OSS 和 S3 兼容存储
      */
     OBJECT_STORAGE,
 

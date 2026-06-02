@@ -1,6 +1,6 @@
 package com.metax.rag.etl.resource;
 
-import com.metax.rag.storage.RustFsStorageService;
+import com.metax.rag.storage.DocumentStorageService;
 import org.springframework.core.io.AbstractResource;
 import org.springframework.lang.NonNull;
 
@@ -10,8 +10,8 @@ import java.io.InputStream;
  * MetaObjectStorageResource .
  *
  * <p>
- * 对象存储 Resource，当前底层复用 RustFS S3 兼容访问服务
- * 后续接入 OSS 或其他 S3 兼容存储时，Reader 链路不需要变化
+ * 对象存储 Resource，底层通过 DocumentStorageService 读取已归档原始文件
+ * 后续接入 RustFS、MinIO 或老系统文件服务时，Reader 链路不需要变化
  *
  * @author IBibiChen
  * @version v1.0
@@ -19,13 +19,13 @@ import java.io.InputStream;
  */
 public class MetaObjectStorageResource extends AbstractResource {
 
-    private final RustFsStorageService storageService;
+    private final DocumentStorageService storageService;
 
     private final String bucket;
 
     private final String objectKey;
 
-    public MetaObjectStorageResource(RustFsStorageService storageService, String bucket, String objectKey) {
+    public MetaObjectStorageResource(DocumentStorageService storageService, String bucket, String objectKey) {
         this.storageService = storageService;
         this.bucket = bucket;
         this.objectKey = objectKey;

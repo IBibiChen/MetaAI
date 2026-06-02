@@ -6,7 +6,6 @@ import com.metax.rag.etl.resource.MetaDocumentResourceFactory;
 import com.metax.rag.model.EmbeddingProvider;
 import com.metax.rag.model.VectorStoreBackend;
 import com.metax.rag.pipeline.MetaEtlPipeline;
-import com.metax.rag.storage.RustFsStorageService;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -50,19 +49,15 @@ import java.util.UUID;
 @Service
 public class DocumentIndexingService {
 
-    private final RustFsStorageService storageService;
-
     private final DocumentIndexingJobRepository jobRepository;
 
     private final MetaEtlPipeline etlPipeline;
 
     private final MetaDocumentResourceFactory documentResourceFactory;
 
-    public DocumentIndexingService(RustFsStorageService storageService,
-                                   DocumentIndexingJobRepository jobRepository,
+    public DocumentIndexingService(DocumentIndexingJobRepository jobRepository,
                                    MetaEtlPipeline etlPipeline,
                                    MetaDocumentResourceFactory documentResourceFactory) {
-        this.storageService = storageService;
         this.jobRepository = jobRepository;
         this.etlPipeline = etlPipeline;
         this.documentResourceFactory = documentResourceFactory;

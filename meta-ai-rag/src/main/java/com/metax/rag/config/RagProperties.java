@@ -7,7 +7,7 @@ import org.springframework.ai.document.MetadataMode;
  * RagProperties .
  *
  * <p>
- * RAG 模块统一配置入口，集中管理文档切分、检索参数、异步入库任务和 RustFS 对象存储配置
+ * RAG 模块统一配置入口，集中管理文档切分、检索参数、异步入库任务和文档存储配置
  * 默认值只作为企业级保守起点，具体知识库可以在请求侧覆盖 topK、similarityThreshold 和 filter 条件
  *
  * <p>
@@ -15,7 +15,7 @@ import org.springframework.ai.document.MetadataMode;
  * chunk 参数影响入库质量和 embedding 成本
  * retrieval 参数影响召回质量和模型上下文占用
  * ingestion 参数影响异步任务状态保存周期
- * storage 参数决定 RustFS 对象存储连接方式
+ * storage 参数决定文档存储实现和连接方式
  *
  * <p>
  * 配置示例
@@ -27,6 +27,7 @@ import org.springframework.ai.document.MetadataMode;
  * metax.ai.rag.ingestion.redis-key-prefix=rag:ingestion:job:
  * metax.ai.rag.snapshot.enabled=false
  * metax.ai.rag.snapshot.output-dir=D:/meta-ai/rag-snapshots
+ * metax.ai.rag.storage.provider=object
  * metax.ai.rag.storage.endpoint=http://localhost:9000
  * metax.ai.rag.storage.local-root=D:/meta-ai/knowledge
  * }</pre>
@@ -492,10 +493,19 @@ public class RagProperties {
     public static class Storage {
 
         /**
-         * RustFS S3 endpoint
+         * 文档存储 provider
          *
          * <p>
-         * 本地 Docker 常见值为 http://localhost:9000
+         * object 表示对象存储，当前默认使用 RustFS，兼容 MinIO 等 S3 协议对象存储
+         * legacy 预留给老系统文件服务适配器
+         */
+        private String provider = "object";
+
+        /**
+         * 对象存储 endpoint
+         *
+         * <p>
+         * RustFS / MinIO 本地 Docker 常见值为 http://localhost:9000
          */
         private String endpoint = "http://localhost:9000";
 
@@ -505,7 +515,7 @@ public class RagProperties {
         private String bucket = "meta-ai-knowledge";
 
         /**
-         * RustFS access key
+         * 对象存储 access key
          *
          * <p>
          * 生产环境必须通过环境变量或密钥系统注入，不要写死真实密钥
@@ -513,7 +523,7 @@ public class RagProperties {
         private String accessKey = "rustfsadmin";
 
         /**
-         * RustFS secret key
+         * 对象存储 secret key
          *
          * <p>
          * 生产环境必须通过环境变量或密钥系统注入，不要写死真实密钥
@@ -521,10 +531,10 @@ public class RagProperties {
         private String secretKey = "rustfsadmin";
 
         /**
-         * S3 region
+         * 对象存储 region
          *
          * <p>
-         * RustFS 私有化部署通常不强依赖 region，但 AWS SDK 仍要求提供一个值
+         * RustFS / MinIO 私有化部署通常不强依赖 region，但 AWS SDK 仍要求提供一个值
          */
         private String region = "us-east-1";
 
@@ -535,6 +545,14 @@ public class RagProperties {
          * 本地导入只允许读取该目录下的相对路径，避免接口读取任意系统文件
          */
         private String localRoot = "D:/meta-ai/knowledge";
+
+        public String getProvider() {
+            return provider;
+        }
+
+        public void setProvider(String provider) {
+            this.provider = provider;
+        }
 
         public String getEndpoint() {
             return endpoint;

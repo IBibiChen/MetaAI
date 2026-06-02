@@ -178,7 +178,7 @@ public class ChatController {
     }
 
     /**
-     * 从 RustFS 既有对象创建 RAG 异步文档索引任务
+     * 从对象存储既有对象创建 RAG 异步文档索引任务
      *
      * @param provider        embedding provider
      * @param vectorStore     向量库后端
@@ -187,8 +187,8 @@ public class ChatController {
      * @param documentId      文档 ID
      * @param documentType    文档类型
      * @param source          来源标识
-     * @param bucket          RustFS bucket
-     * @param objectKey       RustFS object key
+     * @param bucket          对象存储 bucket
+     * @param objectKey       对象存储 object key
      * @return 文档索引任务
      */
     @PostMapping(value = "/v1/rag/documents/import")

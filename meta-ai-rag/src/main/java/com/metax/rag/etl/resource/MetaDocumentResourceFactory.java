@@ -3,7 +3,7 @@ package com.metax.rag.etl.resource;
 import com.metax.rag.config.RagProperties;
 import com.metax.rag.etl.model.DocumentSourceType;
 import com.metax.rag.indexing.DocumentIndexingRequest;
-import com.metax.rag.storage.RustFsStorageService;
+import com.metax.rag.storage.DocumentStorageService;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Component;
@@ -27,12 +27,12 @@ public class MetaDocumentResourceFactory {
 
     private final RagProperties properties;
 
-    private final RustFsStorageService storageService;
+    private final DocumentStorageService storageService;
 
     private final MetaDocumentTypeResolver documentTypeResolver;
 
     public MetaDocumentResourceFactory(RagProperties properties,
-                                       RustFsStorageService storageService,
+                                       DocumentStorageService storageService,
                                        MetaDocumentTypeResolver documentTypeResolver) {
         this.properties = properties;
         this.storageService = storageService;
