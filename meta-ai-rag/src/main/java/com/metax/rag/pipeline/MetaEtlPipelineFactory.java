@@ -70,7 +70,6 @@ public class MetaEtlPipelineFactory {
         VectorStore vectorStore = vectorStoreRouter.getVectorStore(request.provider(), request.vectorStore());
         // Reader 阶段把对象存储或本地文件解析为 Spring AI Document
         DocumentReader reader = documentReaderFactory.create(context.documentResource());
-        // Transformer 顺序是 ETL 语义约束：先补文档级 metadata，再切分 chunk，再补 chunk 级 metadata，最后设置内容格式化规则
         // Transformer 顺序固定为文档 metadata -> chunk 切分 -> chunk metadata -> 内容格式化
         List<DocumentTransformer> transformers = List.of(
                 documentTransformerFactory.documentMetadataEnricher(request),

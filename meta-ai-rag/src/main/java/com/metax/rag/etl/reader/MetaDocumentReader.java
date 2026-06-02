@@ -17,6 +17,11 @@ import java.util.List;
  * 具体 JsonReader、TextReader、MarkdownDocumentReader、TikaDocumentReader 的创建参数由策略 Bean 管理
  * 当前类只持有请求级 Resource 和已选择的 delegate Reader
  *
+ * <p>
+ * 当前类是 Delegation(委托模式) 的落点
+ * MetaDocumentReader.get 不做格式判断，也不解析文件内容
+ * 它只把 Spring AI DocumentReader 标准调用委托给 delegate Reader
+ *
  * @author IBibiChen
  * @version v1.0
  * @since 2026/5/31

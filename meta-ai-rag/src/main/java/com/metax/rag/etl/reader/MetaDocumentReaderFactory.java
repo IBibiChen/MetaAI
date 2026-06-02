@@ -13,6 +13,12 @@ import java.util.List;
  * MetaDocumentReader 工厂，负责选择无状态 Reader 策略，并创建请求级 MetaDocumentReader
  * 官方 Reader 本身绑定 Resource，是有状态对象，不注册为 Spring 单例 Bean
  *
+ * <p>
+ * 当前类是 Factory(工厂模式) + Strategy(策略模式) 的组合入口
+ * Factory(工厂模式) 负责接收 MetaDocumentResource 并创建统一的 DocumentReader
+ * Strategy(策略模式) 负责封装不同 documentType 的官方 Reader 创建细节
+ * 最终返回的 MetaDocumentReader 再通过 Delegation(委托模式) 把读取动作交给官方 Reader
+ *
  * @author IBibiChen
  * @version v1.0
  * @since 2026/5/31

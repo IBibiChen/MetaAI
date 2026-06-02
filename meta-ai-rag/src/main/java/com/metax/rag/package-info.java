@@ -5,6 +5,37 @@
  * 本包是 MetaAI 的 RAG 核心模块，负责按 Spring AI 官方 ETL 接口完成文档索引，并通过 Modular RAG 完成检索增强生成
  *
  * <p>
+ * 模块级总览
+ *
+ * <p>
+ * 一、文档来源与资源归一化
+ * 对象存储对象或受控本地文件先统一转换为 Spring Resource
+ * documentType 和 source 在资源阶段落定，后续 Reader、metadata 和索引任务共用同一份解析结果
+ *
+ * <p>
+ * 二、Spring AI ETL 文档索引
+ * DocumentReader 负责解析文件，DocumentTransformer 负责补 metadata、切分 chunk 和设置内容格式化规则
+ * MetaEtlPipeline 负责异步状态流转，MetaEtlUpsertPipeline 负责执行一次完整索引计划
+ *
+ * <p>
+ * 三、VectorStore 语义空间写入
+ * VectorStoreRouter 按 provider + vectorStore 选择目标向量库
+ * MetaVectorStoreSink 负责按 documentId 删除旧 chunk，再写入新 chunk
+ *
+ * <p>
+ * 四、Spring AI Modular RAG 检索增强
+ * RetrievalAdvisorFactory 组装 QueryTransformer、VectorStoreDocumentRetriever、DocumentPostProcessor 和 ContextualQueryAugmenter
+ * QueryTransformer 默认关闭，开启后会在检索前改写 query
+ *
+ * <p>
+ * 五、回答、引用和 trace 返回
+ * 普通 RAG 接口返回模型回答文本
+ * details RAG 接口返回 answer、references 和 RetrievalTrace，用于排查 query 改写、metadata filter、召回数量和后处理效果
+ *
+ * <p>
+ * 一、文档来源与资源归一化
+ *
+ * <p>
  * 1、文档进入系统
  * RAG 索引链路只消费已经归档好的文件资源
  * 生产入口是对象存储 bucket + objectKey，适合管理后台或业务系统先完成原始文件归档的场景
@@ -18,6 +49,9 @@
  * 这样后续需要重新切分、重建索引、审计来源时，可以从原始文件来源重新读取原文件
  *
  * <p>
+ * 二、Spring AI ETL 文档索引
+ *
+ * <p>
  * 3、异步文档索引任务创建
  * DocumentIndexingService 创建 DocumentIndexingJob，并把任务状态写入 Redis
  * DocumentIndexingService 不直接执行耗时 ETL，真正文档索引交给 MetaEtlPipeline
@@ -28,6 +62,8 @@
  * 4、DocumentReader 阶段
  * MetaDocumentResourceFactory 先把对象存储文件流或本地文件统一转换为 Spring Resource
  * MetaDocumentReader 实现 Spring AI DocumentReader 接口，并委托官方 Reader 解析
+ * Reader 设计使用 Factory(工厂模式) + Strategy(策略模式) + Delegation(委托模式) 组合
+ * MetaDocumentReaderFactory 负责选择策略，MetaDocumentReaderStrategy 负责创建官方 Reader，MetaDocumentReader 负责委托执行
  * txt 使用 Spring AI TextReader
  * md / markdown 使用 Spring AI MarkdownDocumentReader
  * json 使用 Spring AI JsonReader
@@ -65,19 +101,29 @@
  * TokenTextSplitter 自带的 parent_document_id、chunk_index、total_chunks 会继续保留
  *
  * <p>
- * 8、ETL 快照阶段
+ * 8、内容格式化阶段
+ * ContentFormatTransformer 不修改 Document 的原始 text
+ * 它只为 Document 设置 ContentFormatter，用于控制 metadata 是否拼接进 EMBED / INFERENCE 文本
+ * tenantId、knowledgeBaseId、documentId、chunkId、chunkIndex、contentHash、createdAt 等技术 metadata 仍保留在 Document.metadata 中
+ * 但这些技术 metadata 会被排除在 EMBED / INFERENCE 文本格式化之外，避免污染 embedding 语义和 prompt 上下文
+ *
+ * <p>
+ * 9、ETL 快照阶段
  * 写入新 chunk 前，MetaEtlUpsertPipeline.execute 可以先通过 FileDocumentWriter 导出 ETL 快照
  * 快照用于观察最终进入 VectorStore 前的 chunk 内容、metadata 和格式化结果
  * 快照不是索引成功凭证，生产写入仍以 VectorStore 为准
  *
  * <p>
- * 9、向量库 upsert 阶段
+ * 三、VectorStore 语义空间写入
+ *
+ * <p>
+ * 10、向量库 upsert 阶段
  * 写入新 chunk 前，MetaVectorStoreSink 会按 tenantId + knowledgeBaseId + documentId 删除旧 chunk
  * 这样同一个 documentId 重复上传时不会产生重复召回数据
  * 这一步依赖写入 metadata 与 Redis / Qdrant / Milvus 过滤字段保持同名
  *
  * <p>
- * 10、VectorStore 写入阶段
+ * 11、VectorStore 写入阶段
  * VectorStoreRouter 按 provider + vectorStore 选择目标 VectorStore Bean
  * provider 决定 EmbeddingModel，例如 dashscope、ollama、openai
  * vectorStore 决定向量数据库后端，例如 redis、qdrant、milvus
@@ -85,7 +131,10 @@
  * VectorStore 实现 Spring AI DocumentWriter 接口，写入时统一使用 write
  *
  * <p>
- * 11、RAG 查询入口阶段
+ * 四、Spring AI Modular RAG 检索增强
+ *
+ * <p>
+ * 12、RAG 查询入口阶段
  * ChatController 接收 provider、vectorStore、memory、tenantId、knowledgeBaseId 和用户问题
  * 普通 RAG 查询必须传 tenantId 和 knowledgeBaseId，避免无过滤全库检索
  * provider 用于选择 ChatModel 和 EmbeddingModel 语义空间
@@ -93,30 +142,31 @@
  * memory 用于选择 Redis ChatMemory 或 JDBC ChatMemory
  *
  * <p>
- * 12、检索参数组装阶段
+ * 13、检索参数组装阶段
  * RetrievalOptions 保存本次请求的过滤参数、召回参数和原始 query
  * RetrievalFilterExpressionFactory 优先使用结构化字段生成 Filter.Expression
  * tenantId 和 knowledgeBaseId 是强制过滤边界
  * documentId 和 documentType 是可选收窄条件
- * 原始 filterExpression 只建议用于 details 调试场景
+ * 原始 filterExpression 只建议用于 details 调试场景，由 Controller 透传到 advisor context
  *
  * <p>
- * 13、RAG Advisor 组装阶段
+ * 14、RAG Advisor 组装阶段
  * RetrievalAdvisorFactory 构造 Spring AI RetrievalAugmentationAdvisor
  * 当前项目使用官方 Modular RAG 扩展点，不手写检索增强主流程
  * QueryTransformer、VectorStoreDocumentRetriever、DocumentPostProcessor 和 ContextualQueryAugmenter 都在这里按配置组装
  * ChatModel 必须由调用侧按 provider 显式传入，避免多 ChatModel 共存时注入错误模型
  *
  * <p>
- * 14、检索前 query 转换阶段
+ * 15、检索前 query 转换阶段
  * QueryTransformer 是 Spring AI pre-retrieval 阶段组件
+ * none 模式不创建 QueryTransformer，直接使用用户原始 query 检索
  * compression 模式使用 CompressionQueryTransformer，适合多轮追问场景
  * rewrite 模式使用 RewriteQueryTransformer，适合单轮检索优化场景
  * query 转换会额外调用一次 ChatModel，因此生产环境应按场景开启
  * query 转换使用低 temperature，避免改写结果不稳定
  *
  * <p>
- * 15、向量召回阶段
+ * 16、向量召回阶段
  * VectorStoreDocumentRetriever 使用 query embedding 到 VectorStore 做 similaritySearch
  * topK 控制最多返回多少个 chunk
  * similarityThreshold 控制最低相似度
@@ -124,7 +174,7 @@
  * 写入和查询必须选择同一组 provider + vectorStore，避免 embedding 语义空间错配
  *
  * <p>
- * 16、检索后文档处理阶段
+ * 17、检索后文档处理阶段
  * DocumentPostProcessor 是 Spring AI post-retrieval 阶段组件
  * DefaultDocumentPostProcessor 当前负责 rerank 扩展预留、chunk 去重、限制上下文文档数量和限制上下文总字符数
  * DocumentReranker 是项目内部 rerank 抽象，用于后续接入真实 rerank 模型
@@ -135,20 +185,23 @@
  * rerank-enabled 当前只会调用 NoOpDocumentReranker，后续可接 cross-encoder 或第三方 rerank 模型
  *
  * <p>
- * 17、提示词增强阶段
+ * 18、提示词增强阶段
  * ContextualQueryAugmenter 把后处理后的 Document 上下文注入用户问题
  * allowEmptyContext=false 表示没有召回上下文时不让模型自由发挥
  * 这样可以降低 RAG 场景中脱离知识库编造答案的风险
  *
  * <p>
- * 18、回答与引用返回阶段
+ * 五、回答、引用和 trace 返回
+ *
+ * <p>
+ * 19、回答与引用返回阶段
  * ChatClient 把增强后的 prompt 发送给 ChatModel
  * 普通 RAG 接口只返回模型回答文本，适合业务对话
  * details RAG 接口返回 answer、conversationId、references 和 trace，适合调试召回质量和展示引用来源
  * RetrievalResponseAssembler 从 ChatClientResponse 中提取 answer、命中文档上下文和 RetrievalTrace
  *
  * <p>
- * 19、检索链路 trace 阶段
+ * 20、检索链路 trace 阶段
  * RetrievalTrace 不参与 prompt 构造，只用于 details 响应
  * TracingQueryTransformer 记录 transformedQuery 和 queryTransform 耗时
  * TracingDocumentPostProcessor 记录 retrievedCount、usedCount、topK、similarityThreshold、filter 和 postProcess 耗时
@@ -261,6 +314,11 @@
  * 索引链路顺序示例
  * <pre>{@code
  * bucket + objectKey
+ *   -> DocumentIndexingService.submit
+ *   -> DocumentIndexingJobRepository.save(PENDING)
+ *   -> MetaEtlPipeline.runIndexing
+ *   -> MetaEtlPipelineFactory.createIndexingPipeline
+ *   -> MetaEtlUpsertPipeline.execute
  *   -> MetaDocumentResourceFactory
  *   -> MetaDocumentReader
  *   -> MetaDocumentMetadataTransformer
@@ -276,7 +334,7 @@
  * 检索链路顺序示例
  * <pre>{@code
  * user query
- *   -> CompressionQueryTransformer / RewriteQueryTransformer
+ *   -> optional QueryTransformer(none / compression / rewrite)
  *   -> VectorStoreDocumentRetriever
  *   -> DefaultDocumentPostProcessor
  *   -> ContextualQueryAugmenter

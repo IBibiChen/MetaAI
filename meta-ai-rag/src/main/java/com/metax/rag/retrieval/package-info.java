@@ -10,13 +10,14 @@
  * 1、Controller 接收 provider、vectorStore、memory、tenantId、knowledgeBaseId 和用户问题
  * 2、Controller 创建 RetrievalOptions，保存本次请求的过滤字段、召回参数和原始 query
  * 3、RetrievalFilterExpressionFactory 根据 tenantId、knowledgeBaseId、documentId、documentType 生成 metadata filter
- * 4、RetrievalAdvisorFactory 组装 Spring AI RetrievalAugmentationAdvisor
- * 5、QueryTransformer 在检索前改写 query，none 模式会跳过这一步
- * 6、VectorStoreDocumentRetriever 使用改写后的 query 到 VectorStore 召回相似 chunk
- * 7、DocumentPostProcessor 对召回结果做 rerank 预留、去重、上下文数量限制和上下文长度限制
- * 8、ContextualQueryAugmenter 把最终文档上下文注入用户问题
- * 9、ChatClient 把增强后的 prompt 发送给当前 provider 对应的 ChatModel
- * 10、RetrievalResponseAssembler 从 ChatClientResponse 组装 answer、references 和 trace
+ * 4、details 调试入口传入原始 filterExpression 时，Controller 会把表达式透传到 advisor context
+ * 5、RetrievalAdvisorFactory 组装 Spring AI RetrievalAugmentationAdvisor
+ * 6、QueryTransformer 在检索前改写 query，none 模式会跳过这一步
+ * 7、VectorStoreDocumentRetriever 使用改写后的 query 到 VectorStore 召回相似 chunk
+ * 8、DocumentPostProcessor 对召回结果做 rerank 预留、去重、上下文数量限制和上下文长度限制
+ * 9、ContextualQueryAugmenter 把最终文档上下文注入用户问题
+ * 10、ChatClient 把增强后的 prompt 发送给当前 provider 对应的 ChatModel
+ * 11、RetrievalResponseAssembler 从 ChatClientResponse 组装 answer、references 和 trace
  *
  * <p>
  * query transformer 阶段说明
@@ -30,6 +31,7 @@
  * 普通 RAG 与 details RAG 的区别
  * 普通 RAG 只返回模型回答文本，适合业务对话接口
  * details RAG 返回 answer、references 和 trace，适合排查 metadata filter、topK、相似度阈值和 query 改写效果
+ * raw filterExpression 只建议用于 details 调试入口，普通业务接口优先使用结构化过滤字段
  * references 来自 Spring AI RetrievalAugmentationAdvisor 保存的最终上下文 Document
  * trace 只用于调试响应，不参与 prompt 构造，也不会改变模型输入
  *
