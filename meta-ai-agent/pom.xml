@@ -27,6 +27,12 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
+        <!-- Knife4j OpenAPI3 接口文档 UI，适配 Spring Boot 3 / Jakarta -->
+        <dependency>
+            <groupId>com.github.xiaoymin</groupId>
+            <artifactId>knife4j-openapi3-jakarta-spring-boot-starter</artifactId>
+            <version>${knife4j.version}</version>
+        </dependency>
         <!-- 引入 SpringAI Alibaba DashScope 模型适配的 Starter -->
         <dependency>
             <groupId>com.alibaba.cloud.ai</groupId>

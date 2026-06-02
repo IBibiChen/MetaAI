@@ -14,6 +14,10 @@ import com.metax.rag.retrieval.RetrievalFilterExpressionFactory;
 import com.metax.rag.retrieval.RetrievalResponseAssembler;
 import com.metax.rag.retrieval.RetrievalOptions;
 import com.metax.rag.retrieval.RetrievalTrace;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.enums.ParameterIn;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -41,6 +45,7 @@ import java.util.Objects;
  */
 @RestController
 @RequiredArgsConstructor
+@Tag(name = "智能问答与 RAG", description = "模型直连、记忆对话、RAG 检索增强和文档索引调试接口")
 public class ChatController {
 
     private static final String DEFAULT_CONVERSATION_ID = "tenantId:userId:sessionId";
@@ -77,10 +82,18 @@ public class ChatController {
      * @return 模型响应内容
      */
     @GetMapping(value = "/v1/{provider}/chat/{memory}")
-    public String chat(@PathVariable String provider,
-                       @PathVariable String memory,
-                       @RequestParam(name = "conversationId", required = false) String conversationId,
-                       @RequestParam(name = "msg", defaultValue = "你是谁") String msg) {
+    @Operation(summary = "默认记忆对话", description = "通过 provider 选择 ChatModel，通过 memory 选择 Redis 或 JDBC 对话记忆")
+    public String chat(
+            @Parameter(description = "模型 provider，可选值：dashscope、openai、ollama", example = "dashscope",
+                    required = true, in = ParameterIn.PATH)
+            @PathVariable String provider,
+            @Parameter(description = "记忆后端，可选值：redis、jdbc", example = "redis", required = true,
+                    in = ParameterIn.PATH)
+            @PathVariable String memory,
+            @Parameter(description = "会话 ID，建议格式：tenantId:userId:sessionId", example = "t1:u1:s1")
+            @RequestParam(name = "conversationId", required = false) String conversationId,
+            @Parameter(description = "用户消息", example = "你是谁")
+            @RequestParam(name = "msg", defaultValue = "你是谁") String msg) {
         return chat(resolveDefaultChatClient(provider, memory), conversationId, msg);
     }
 
@@ -103,15 +116,29 @@ public class ChatController {
      * @return 模型响应内容
      */
     @GetMapping(value = "/v1/{provider}/rag/{vectorStore}/{memory}")
-    public String rag(@PathVariable String provider,
-                      @PathVariable String vectorStore,
-                      @PathVariable String memory,
-                      @RequestParam(name = "conversationId", required = false) String conversationId,
-                      @RequestParam(name = "msg", defaultValue = "你是谁") String msg,
-                      @RequestParam(name = "tenantId", required = false) String tenantId,
-                      @RequestParam(name = "knowledgeBaseId", required = false) String knowledgeBaseId,
-                      @RequestParam(name = "documentId", required = false) String documentId,
-                      @RequestParam(name = "documentType", required = false) String documentType) {
+    @Operation(summary = "RAG 检索增强对话", description = "通过 provider、vectorStore、memory 手动选择模型、向量库和记忆后端")
+    public String rag(
+            @Parameter(description = "模型 provider，可选值：dashscope、openai、ollama", example = "dashscope",
+                    required = true, in = ParameterIn.PATH)
+            @PathVariable String provider,
+            @Parameter(description = "向量库后端，可选值：redis、qdrant、milvus", example = "redis",
+                    required = true, in = ParameterIn.PATH)
+            @PathVariable String vectorStore,
+            @Parameter(description = "记忆后端，可选值：redis、jdbc", example = "redis", required = true,
+                    in = ParameterIn.PATH)
+            @PathVariable String memory,
+            @Parameter(description = "会话 ID，建议格式：tenantId:userId:sessionId", example = "t1:u1:s1")
+            @RequestParam(name = "conversationId", required = false) String conversationId,
+            @Parameter(description = "用户消息", example = "Spring AI 的 RAG 是什么")
+            @RequestParam(name = "msg", defaultValue = "你是谁") String msg,
+            @Parameter(description = "租户 ID，RAG 查询强制过滤字段", example = "t1")
+            @RequestParam(name = "tenantId", required = false) String tenantId,
+            @Parameter(description = "知识库 ID，RAG 查询强制过滤字段", example = "kb1")
+            @RequestParam(name = "knowledgeBaseId", required = false) String knowledgeBaseId,
+            @Parameter(description = "文档 ID，可选收窄条件", example = "doc-001")
+            @RequestParam(name = "documentId", required = false) String documentId,
+            @Parameter(description = "文档类型，可选收窄条件，例如 txt、md、json、tika", example = "md")
+            @RequestParam(name = "documentType", required = false) String documentType) {
         validateRetrievalScope(tenantId, knowledgeBaseId);
         RetrievalOptions options = new RetrievalOptions(tenantId, knowledgeBaseId, documentId, documentType,
                 null, null, null, msg);
@@ -140,18 +167,35 @@ public class ChatController {
      * @return RAG 详情响应
      */
     @PostMapping(value = "/v1/{provider}/rag/{vectorStore}/{memory}/details")
-    public RetrievalChatResponse ragDetails(@PathVariable String provider,
-                                      @PathVariable String vectorStore,
-                                      @PathVariable String memory,
-                                      @RequestParam(name = "conversationId", required = false) String conversationId,
-                                      @RequestParam(name = "msg") String msg,
-                                      @RequestParam(name = "tenantId") String tenantId,
-                                      @RequestParam(name = "knowledgeBaseId") String knowledgeBaseId,
-                                      @RequestParam(name = "documentId", required = false) String documentId,
-                                      @RequestParam(name = "documentType", required = false) String documentType,
-                                      @RequestParam(name = "topK", required = false) Integer topK,
-                                      @RequestParam(name = "threshold", required = false) Double threshold,
-                                      @RequestParam(name = "filterExpression", required = false) String filterExpression) {
+    @Operation(summary = "RAG 检索增强详情对话", description = "返回 answer、references 和 trace，用于调试召回质量、过滤条件和后处理效果")
+    public RetrievalChatResponse ragDetails(
+            @Parameter(description = "模型 provider，可选值：dashscope、openai、ollama", example = "dashscope",
+                    required = true, in = ParameterIn.PATH)
+            @PathVariable String provider,
+            @Parameter(description = "向量库后端，可选值：redis、qdrant、milvus", example = "redis",
+                    required = true, in = ParameterIn.PATH)
+            @PathVariable String vectorStore,
+            @Parameter(description = "记忆后端，可选值：redis、jdbc", example = "redis", required = true,
+                    in = ParameterIn.PATH)
+            @PathVariable String memory,
+            @Parameter(description = "会话 ID，建议格式：tenantId:userId:sessionId", example = "t1:u1:s1")
+            @RequestParam(name = "conversationId", required = false) String conversationId,
+            @Parameter(description = "用户消息", example = "Spring AI 的 ETL 是什么", required = true)
+            @RequestParam(name = "msg") String msg,
+            @Parameter(description = "租户 ID，RAG 查询强制过滤字段", example = "t1", required = true)
+            @RequestParam(name = "tenantId") String tenantId,
+            @Parameter(description = "知识库 ID，RAG 查询强制过滤字段", example = "kb1", required = true)
+            @RequestParam(name = "knowledgeBaseId") String knowledgeBaseId,
+            @Parameter(description = "文档 ID，可选收窄条件", example = "doc-001")
+            @RequestParam(name = "documentId", required = false) String documentId,
+            @Parameter(description = "文档类型，可选收窄条件，例如 txt、md、json、tika", example = "md")
+            @RequestParam(name = "documentType", required = false) String documentType,
+            @Parameter(description = "本次检索 topK，不传时使用全局配置", example = "5")
+            @RequestParam(name = "topK", required = false) Integer topK,
+            @Parameter(description = "本次检索相似度阈值，不传时使用全局配置", example = "0.5")
+            @RequestParam(name = "threshold", required = false) Double threshold,
+            @Parameter(description = "高级过滤表达式，仅建议调试使用", example = "tenantId == 't1' && knowledgeBaseId == 'kb1'")
+            @RequestParam(name = "filterExpression", required = false) String filterExpression) {
         String resolvedConversationId = resolveConversationId(conversationId);
         validateRetrievalScope(tenantId, knowledgeBaseId);
         RetrievalOptions options = new RetrievalOptions(tenantId, knowledgeBaseId, documentId, documentType,
@@ -192,15 +236,28 @@ public class ChatController {
      * @return 文档索引任务
      */
     @PostMapping(value = "/v1/rag/documents/import")
-    public DocumentIndexingJob importRagDocument(@RequestParam(name = "provider") String provider,
-                                             @RequestParam(name = "vectorStore") String vectorStore,
-                                             @RequestParam(name = "tenantId") String tenantId,
-                                             @RequestParam(name = "knowledgeBaseId") String knowledgeBaseId,
-                                             @RequestParam(name = "documentId") String documentId,
-                                             @RequestParam(name = "documentType", required = false) String documentType,
-                                             @RequestParam(name = "source", required = false) String source,
-                                             @RequestParam(name = "bucket") String bucket,
-                                             @RequestParam(name = "objectKey") String objectKey) {
+    @Operation(summary = "从对象存储创建 RAG 文档索引任务", description = "原始文件必须已经归档到对象存储，本接口只创建异步 ETL 索引任务")
+    public DocumentIndexingJob importRagDocument(
+            @Parameter(description = "embedding provider，可选值：dashscope、openai、ollama", example = "dashscope",
+                    required = true)
+            @RequestParam(name = "provider") String provider,
+            @Parameter(description = "向量库后端，可选值：redis、qdrant、milvus", example = "redis", required = true)
+            @RequestParam(name = "vectorStore") String vectorStore,
+            @Parameter(description = "租户 ID", example = "t1", required = true)
+            @RequestParam(name = "tenantId") String tenantId,
+            @Parameter(description = "知识库 ID", example = "kb1", required = true)
+            @RequestParam(name = "knowledgeBaseId") String knowledgeBaseId,
+            @Parameter(description = "文档 ID，同一 documentId 重复导入会覆盖旧 chunk", example = "doc-001",
+                    required = true)
+            @RequestParam(name = "documentId") String documentId,
+            @Parameter(description = "文档类型，可为空，为空时根据 objectKey 后缀识别", example = "md")
+            @RequestParam(name = "documentType", required = false) String documentType,
+            @Parameter(description = "来源标识，可用于前端展示引用来源", example = "knowledge/t1/kb1/demo.md")
+            @RequestParam(name = "source", required = false) String source,
+            @Parameter(description = "对象存储 bucket", example = "meta-ai-knowledge", required = true)
+            @RequestParam(name = "bucket") String bucket,
+            @Parameter(description = "对象存储 object key", example = "knowledge/t1/kb1/demo.md", required = true)
+            @RequestParam(name = "objectKey") String objectKey) {
         return documentIndexingService.submit(new DocumentIndexingRequest(EmbeddingProvider.from(provider),
                 VectorStoreBackend.from(vectorStore), tenantId, knowledgeBaseId, documentId, documentType,
                 DocumentSourceType.OBJECT_STORAGE, source, bucket, objectKey, null));
@@ -220,14 +277,26 @@ public class ChatController {
      * @return 文档索引任务
      */
     @PostMapping(value = "/v1/rag/documents/import/local")
-    public DocumentIndexingJob importLocalRagDocument(@RequestParam(name = "provider") String provider,
-                                                  @RequestParam(name = "vectorStore") String vectorStore,
-                                                  @RequestParam(name = "tenantId") String tenantId,
-                                                  @RequestParam(name = "knowledgeBaseId") String knowledgeBaseId,
-                                                  @RequestParam(name = "documentId") String documentId,
-                                                  @RequestParam(name = "documentType", required = false) String documentType,
-                                                  @RequestParam(name = "source", required = false) String source,
-                                                  @RequestParam(name = "path") String path) {
+    @Operation(summary = "从受控本地目录创建 RAG 文档索引任务", description = "path 必须是 metax.ai.rag.storage.local-root 下的相对路径")
+    public DocumentIndexingJob importLocalRagDocument(
+            @Parameter(description = "embedding provider，可选值：dashscope、openai、ollama", example = "dashscope",
+                    required = true)
+            @RequestParam(name = "provider") String provider,
+            @Parameter(description = "向量库后端，可选值：redis、qdrant、milvus", example = "redis", required = true)
+            @RequestParam(name = "vectorStore") String vectorStore,
+            @Parameter(description = "租户 ID", example = "t1", required = true)
+            @RequestParam(name = "tenantId") String tenantId,
+            @Parameter(description = "知识库 ID", example = "kb1", required = true)
+            @RequestParam(name = "knowledgeBaseId") String knowledgeBaseId,
+            @Parameter(description = "文档 ID，同一 documentId 重复导入会覆盖旧 chunk", example = "doc-001",
+                    required = true)
+            @RequestParam(name = "documentId") String documentId,
+            @Parameter(description = "文档类型，可为空，为空时根据 path 后缀识别", example = "md")
+            @RequestParam(name = "documentType", required = false) String documentType,
+            @Parameter(description = "来源标识，可用于前端展示引用来源", example = "local/demo.md")
+            @RequestParam(name = "source", required = false) String source,
+            @Parameter(description = "本地知识库文件相对路径", example = "demo.md", required = true)
+            @RequestParam(name = "path") String path) {
         return documentIndexingService.importLocalFile(provider, vectorStore, tenantId, knowledgeBaseId,
                 documentId, documentType, path, source);
     }
@@ -239,7 +308,11 @@ public class ChatController {
      * @return 文档索引任务
      */
     @GetMapping(value = "/v1/rag/documents/jobs/{jobId}")
-    public DocumentIndexingJob getDocumentIndexingJob(@PathVariable String jobId) {
+    @Operation(summary = "查询 RAG 文档索引任务", description = "根据 jobId 查询异步索引任务状态、写入 chunk 数和失败原因")
+    public DocumentIndexingJob getDocumentIndexingJob(
+            @Parameter(description = "文档索引任务 ID", example = "c2a6bb6d-b0e6-4c40-9f32-3b08b5b19d62",
+                    required = true, in = ParameterIn.PATH)
+            @PathVariable String jobId) {
         return documentIndexingService.getJob(jobId);
     }
 
@@ -250,7 +323,10 @@ public class ChatController {
      * @return 模型响应内容
      */
     @GetMapping(value = "/v1/dashscope/model")
-    public String dashScopeModel(@RequestParam(name = "msg", defaultValue = "你是谁") String msg) {
+    @Operation(summary = "DashScope ChatModel 直连", description = "绕过 ChatClient 和 ChatMemory，直接调用 DashScopeChatModel")
+    public String dashScopeModel(
+            @Parameter(description = "用户消息", example = "你是谁")
+            @RequestParam(name = "msg", defaultValue = "你是谁") String msg) {
         return dashScopeChatModel.call(msg);
     }
 
@@ -261,7 +337,10 @@ public class ChatController {
      * @return 模型响应内容
      */
     @GetMapping(value = "/v1/openai/model")
-    public String openAiModel(@RequestParam(name = "msg", defaultValue = "你是谁") String msg) {
+    @Operation(summary = "OpenAI 兼容 ChatModel 直连", description = "绕过 ChatClient 和 ChatMemory，直接调用 OpenAiChatModel")
+    public String openAiModel(
+            @Parameter(description = "用户消息", example = "你是谁")
+            @RequestParam(name = "msg", defaultValue = "你是谁") String msg) {
         return openAiChatModel.call(msg);
     }
 
@@ -272,7 +351,10 @@ public class ChatController {
      * @return 模型响应内容
      */
     @GetMapping(value = "/v1/ollama/model")
-    public String ollamaModel(@RequestParam(name = "msg", defaultValue = "你是谁") String msg) {
+    @Operation(summary = "Ollama ChatModel 直连", description = "绕过 ChatClient 和 ChatMemory，直接调用 OllamaChatModel")
+    public String ollamaModel(
+            @Parameter(description = "用户消息", example = "你是谁")
+            @RequestParam(name = "msg", defaultValue = "你是谁") String msg) {
         return ollamaChatModel.call(msg);
     }
 
