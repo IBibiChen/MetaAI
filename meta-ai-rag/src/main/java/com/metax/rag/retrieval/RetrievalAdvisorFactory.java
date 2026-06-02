@@ -169,10 +169,13 @@ public class RetrievalAdvisorFactory {
                            Double similarityThreshold,
                            Filter.Expression filterExpression,
                            ChatModel chatModel) {
+        // 阶段 1：解析本次请求最终生效的召回参数
         // 请求参数为空时回落到全局默认值，保证普通 RAG 调用不需要理解底层检索参数
         int resolvedTopK = topK == null ? properties.getRetrieval().getTopK() : topK;
         double resolvedSimilarityThreshold = similarityThreshold == null
                 ? properties.getRetrieval().getSimilarityThreshold() : similarityThreshold;
+
+        // 阶段 2：创建检索器，真正访问 VectorStore 的是 VectorStoreDocumentRetriever
         // retriever 是真正访问 VectorStore 的组件，负责把 query embedding 后做 similaritySearch
         // topK 和 similarityThreshold 会直接影响召回数量、上下文质量和 token 成本
         VectorStoreDocumentRetriever.Builder retrieverBuilder = VectorStoreDocumentRetriever.builder()
@@ -183,30 +186,55 @@ public class RetrievalAdvisorFactory {
             // 结构化过滤表达式在这里绑定到 retriever，确保检索阶段就完成租户和知识库隔离
             retrieverBuilder.filterExpression(filterExpression);
         }
+
+        // 阶段 3：创建 Advisor 基础结构，retriever 负责召回，augmenter 负责把召回文档注入 prompt
         RetrievalAugmentationAdvisor.Builder advisorBuilder = RetrievalAugmentationAdvisor.builder()
                 .documentRetriever(retrieverBuilder.build())
                 .queryAugmenter(ContextualQueryAugmenter.builder()
                         // 没有召回上下文时拒绝继续增强，避免 RAG 接口退化成普通聊天
                         .allowEmptyContext(false)
                         .build());
+
+        // 阶段 4：按配置接入检索前 query transformer
+        // none 模式不改写 query，compression / rewrite 会额外调用一次当前 provider 的 ChatModel
         // query transformer 位于检索前，先把用户问题整理成更适合向量检索的 query
         List<QueryTransformer> queryTransformers = queryTransformers(chatModel);
         if (!queryTransformers.isEmpty()) {
             // 只有显式启用时才接入，避免每次 RAG 都额外调用一次 ChatModel
             advisorBuilder.queryTransformers(queryTransformers);
         }
+
+        // 阶段 5：按配置接入检索后处理器
+        // post processor 看到的是 VectorStore 已召回的候选 Document，处理结果才会进入 prompt 上下文
         List<DocumentPostProcessor> documentPostProcessors = documentPostProcessors(resolvedTopK,
                 resolvedSimilarityThreshold, filterExpression);
         if (!documentPostProcessors.isEmpty()) {
             // post processor 位于检索后、prompt 增强前，负责治理最终进入上下文的 Document
             advisorBuilder.documentPostProcessors(documentPostProcessors);
         }
+
+        // 阶段 6：返回可直接挂到 ChatClient.advisors 的 RetrievalAugmentationAdvisor
         // allowEmptyContext=false 表示没有召回上下文时不让模型自由发挥，避免 RAG 场景编造答案
         return advisorBuilder.build();
     }
 
     /**
      * 按配置创建检索前 query transformer
+     *
+     * <p>
+     * query transformer 是 pre-retrieval 组件，发生在 VectorStore 检索之前
+     * 它改变的是用于向量检索的 query，不是最终发送给 ChatModel 的完整回答 prompt
+     *
+     * <p>
+     * 三种模式说明
+     * none：不改写，直接用用户原始 query 检索
+     * compression：适合多轮追问，把省略问题压缩成可以独立检索的 query
+     * rewrite：适合单轮问题优化，把口语化表达改写成更适合向量召回的 query
+     *
+     * <p>
+     * compression 和 rewrite 都会额外调用一次 ChatModel
+     * 多模型项目必须传入当前 provider 对应的 ChatModel，不能依赖 Spring 隐式注入
+     * 改写后的 transformedQuery 会进入 details trace，用于判断检索失败是否由 query 改偏导致
      *
      * @param chatModel 当前 provider 对应的 ChatModel
      * @return QueryTransformer 列表
@@ -222,6 +250,7 @@ public class RetrievalAdvisorFactory {
             throw new IllegalArgumentException("ChatModel is required when query transformer is enabled");
         }
         // query 转换追求稳定性，使用低温 ChatOptions 构造临时 ChatClient
+        // 这里创建的 ChatClient 只服务 query transformer，不替代业务对话使用的 ChatClient
         ChatClient.Builder builder = ChatClient.builder(chatModel)
                 .defaultOptions(ChatOptions.builder()
                         .temperature(config.getTemperature())
@@ -229,16 +258,19 @@ public class RetrievalAdvisorFactory {
                         .build());
         QueryTransformer transformer = switch (config.getMode().toLowerCase()) {
             // compression 适合多轮追问，会结合上下文把省略问题压缩成独立检索 query
+            // 示例：用户追问“第二点呢”，压缩后应变成包含历史主题的完整检索问题
             case "compression" -> CompressionQueryTransformer.builder()
                     .chatClientBuilder(builder)
                     .build();
             // rewrite 适合单轮问题优化，会把口语化表达改写成更适合向量召回的 query
+            // targetSearchSystem 告诉改写模型面向 vector store，而不是面向全文搜索或 SQL 查询
             case "rewrite" -> RewriteQueryTransformer.builder()
                     .chatClientBuilder(builder)
                     .targetSearchSystem(config.getTargetSearchSystem())
                     .build();
             default -> throw new IllegalArgumentException("Unsupported query transformer mode: " + config.getMode());
         };
+        // tracing 装饰器只记录 mode、transformedQuery 和耗时，不改变官方 transformer 行为
         return List.of(new TracingQueryTransformer(transformer, config.getMode()));
     }
 

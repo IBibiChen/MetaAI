@@ -58,8 +58,13 @@ public class TracingDocumentPostProcessor implements DocumentPostProcessor {
     @NonNull
     public List<Document> process(@NonNull Query query, @NonNull List<Document> documents) {
         long start = System.nanoTime();
+        // 阶段 1：执行真正的检索后处理
+        // documents 是 VectorStoreDocumentRetriever 刚召回的候选 Document
         // delegate 决定是否真正执行去重、rerank 预留和上下文截断
         List<Document> processed = delegate.process(query, documents);
+
+        // 阶段 2：记录处理前后数量和本次检索参数
+        // processed 是最终交给 ContextualQueryAugmenter 的 Document
         RetrievalTrace.Builder traceBuilder = RetrievalTraceContext.builder(query);
         if (traceBuilder != null) {
             // postProcess 阶段能看到处理前后数量，适合记录 retrievedCount 和 usedCount

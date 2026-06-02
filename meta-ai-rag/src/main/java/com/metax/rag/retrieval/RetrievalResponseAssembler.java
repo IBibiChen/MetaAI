@@ -57,12 +57,17 @@ public class RetrievalResponseAssembler {
      * @return RAG 详情响应
      */
     public RetrievalChatResponse details(ChatClientResponse response, String conversationId) {
+        // 阶段 1：读取模型最终回答，answer 是 ChatModel 生成后的文本
         // ChatResponse 可能为空，details 接口要优先保证响应结构稳定
         String answer = response.chatResponse() == null ? null : response.chatResponse().getResult().getOutput().getText();
+
+        // 阶段 2：组装 answer、references 和 trace，供 details 接口排查完整检索链路
         return new RetrievalChatResponse(answer, conversationId, references(response), trace(response));
     }
 
     private RetrievalTrace trace(ChatClientResponse response) {
+        // trace 来自 advisor context 中同一个 RetrievalTrace.Builder
+        // QueryTransformer 和 DocumentPostProcessor 会在执行过程中把数据追加到 builder
         // Controller 放入的 builder 会随 ChatClientResponse context 返回，这里统一转成只读快照
         Object value = response.context().get(RetrievalTrace.CONTEXT_KEY);
         if (value instanceof RetrievalTrace.Builder builder) {
@@ -72,6 +77,8 @@ public class RetrievalResponseAssembler {
     }
 
     private List<RetrievalReference> references(ChatClientResponse response) {
+        // references 来自 RetrievalAugmentationAdvisor 保存的最终上下文 Document
+        // 它不是 VectorStore 原始候选全集，而是后处理后实际参与 prompt 增强的文档
         // 没有 ChatResponse 时直接返回空引用，避免 details 接口因为模型异常产生空指针
         if (response.chatResponse() == null) {
             return List.of();

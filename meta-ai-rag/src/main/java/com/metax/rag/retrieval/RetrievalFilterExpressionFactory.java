@@ -51,19 +51,23 @@ public class RetrievalFilterExpressionFactory {
      * @return Filter.Expression
      */
     public Filter.Expression create(RetrievalOptions options) {
+        // 阶段 1：高级原始表达式优先交给 Controller 透传，不和结构化字段混合
         if (StringUtils.hasText(options.filterExpression())) {
             // 原始表达式由 Controller 透传到 advisor context，这里不再混合结构化条件
             return null;
         }
 
         FilterExpressionBuilder builder = new FilterExpressionBuilder();
+        // 阶段 2：先构造租户和知识库强约束，缺失时直接阻断检索
         // 先生成租户和知识库强约束，再追加可选的文档级收窄条件
         FilterExpressionBuilder.Op expression = requiredExpression(builder, options);
         if (StringUtils.hasText(options.documentId())) {
+            // 阶段 3：按 documentId 收窄到指定文档
             // documentId 是可选收窄条件，适合只问某一份文档的问题
             expression = builder.and(expression, builder.eq(MetadataKeys.DOCUMENT_ID, options.documentId()));
         }
         if (StringUtils.hasText(options.documentType())) {
+            // 阶段 4：按 documentType 收窄到指定文档类型
             // documentType 是可选收窄条件，适合只检索 markdown、pdf、json 等某类知识
             expression = builder.and(expression, builder.eq(MetadataKeys.DOCUMENT_TYPE, options.documentType()));
         }

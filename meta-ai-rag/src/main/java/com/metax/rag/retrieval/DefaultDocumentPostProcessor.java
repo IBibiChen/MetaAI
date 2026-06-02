@@ -73,12 +73,19 @@ public class DefaultDocumentPostProcessor implements DocumentPostProcessor {
     @Override
     @NonNull
     public List<Document> process(@NonNull Query query, @NonNull List<Document> documents) {
+        // 阶段 1：rerank 预留，真实 rerank 接入后先调整候选文档顺序
         // rerank 放在最前面，真实 rerank 接入后应先调整候选文档顺序，再进入去重和截断
         List<Document> reranked = properties.isRerankEnabled() ? documentReranker.rerank(query, documents) : documents;
+
+        // 阶段 2：按 chunkId 或 contentHash 去重，避免重复 chunk 占用上下文名额
         // 去重在截断前执行，避免重复 chunk 占用有限的上下文名额
         List<Document> candidates = properties.isDeduplicateEnabled() ? deduplicate(reranked) : reranked;
+
+        // 阶段 3：按文档数和总字符数截断，控制最终进入 prompt 的上下文规模
         // 最后限制文档数量和文本长度，控制最终 prompt 的上下文规模
         List<Document> limited = limit(candidates);
+
+        // 阶段 4：记录后处理数量变化，details 接口可用它判断后处理是否过严
         RetrievalTrace.Builder traceBuilder = RetrievalTraceContext.builder(query);
         if (traceBuilder != null) {
             // 这里记录的是后处理视角的数量变化，用于判断文档治理是否过严
