@@ -21,7 +21,7 @@ import java.util.List;
  * MetaEtlPipelineFactory .
  *
  * <p>
- * RAG ETL Pipeline 工厂，负责把文档索引请求组装成可执行的 upsert pipeline
+ * RAG ETL Pipeline 工厂，负责把文档索引请求组装成可执行的 indexing pipeline
  * 这里集中完成 dataSource、transformations、dataSink 和 upsert policy 的装配
  * snapshot 开启时会额外装配 FileDocumentWriter 快照写入，不影响 VectorStore 作为最终写入端
  *
@@ -55,12 +55,16 @@ public class MetaEtlPipelineFactory {
     }
 
     /**
-     * 创建 upsert pipeline
+     * 创建文档索引 pipeline
+     *
+     * <p>
+     * indexing pipeline 表达一次完整文档索引执行计划
+     * upsert policy 只保留在 MetaVectorStoreSink，避免工厂入口和最终写入端使用同一个动作名
      *
      * @param context 文档索引上下文
-     * @return upsert pipeline
+     * @return 文档索引 pipeline
      */
-    public MetaEtlUpsertPipeline createUpsertPipeline(DocumentIndexingContext context) {
+    public MetaEtlUpsertPipeline createIndexingPipeline(DocumentIndexingContext context) {
         DocumentIndexingRequest request = context.request();
         // provider + vectorStore 决定写入哪个向量空间，查询时必须使用同一组选择
         VectorStore vectorStore = vectorStoreRouter.getVectorStore(request.provider(), request.vectorStore());

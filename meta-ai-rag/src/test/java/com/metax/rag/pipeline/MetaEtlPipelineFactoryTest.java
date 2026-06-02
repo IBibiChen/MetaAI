@@ -36,10 +36,10 @@ import static org.mockito.Mockito.mock;
 class MetaEtlPipelineFactoryTest {
 
     /**
-     * factory 应组装完整 upsert pipeline
+     * factory 应组装完整 indexing pipeline
      */
     @Test
-    void shouldCreateUpsertPipeline() throws Exception {
+    void shouldCreateIndexingPipeline() throws Exception {
         Path localRoot = Files.createTempDirectory("meta-rag-pipeline-root");
         Files.createDirectories(localRoot.resolve("docs"));
         Files.writeString(localRoot.resolve("docs/demo.txt"), "Spring AI RAG");
@@ -56,7 +56,7 @@ class MetaEtlPipelineFactoryTest {
                 new MetaDocumentResource(new FileSystemResource(localRoot.resolve("docs/demo.txt")),
                         "txt", "docs/demo.txt"));
 
-        MetaEtlUpsertPipeline pipeline = factory.createUpsertPipeline(context);
+        MetaEtlUpsertPipeline pipeline = factory.createIndexingPipeline(context);
 
         assertThat(pipeline.request()).isEqualTo(request());
         assertThat(pipeline.reader()).isNotNull();
@@ -92,7 +92,7 @@ class MetaEtlPipelineFactoryTest {
                 new MetaDocumentResource(new FileSystemResource(localRoot.resolve("docs/demo.txt")),
                         "txt", "docs/demo.txt"));
 
-        MetaEtlUpsertPipeline pipeline = factory.createUpsertPipeline(context);
+        MetaEtlUpsertPipeline pipeline = factory.createIndexingPipeline(context);
 
         assertThat(pipeline.snapshotWriters()).hasSize(1);
     }

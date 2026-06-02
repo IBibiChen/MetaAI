@@ -12,7 +12,7 @@ import java.util.List;
  * MetaEtlUpsertPipeline .
  *
  * <p>
- * RAG 文档 upsert 执行计划，保存一次文档索引所需的 Reader、Transformer 和 VectorStore Sink
+ * RAG 文档覆盖式索引执行计划，保存一次文档索引所需的 Reader、Transformer 和 VectorStore Sink
  * 它对应 DashScope upsertPipeline 中先组装 pipeline request，再统一执行的设计思路
  * snapshotWriters 用于导出 ETL 快照，例如 FileDocumentWriter 快照，不改变生产索引写入端
  *
@@ -131,14 +131,15 @@ public record MetaEtlUpsertPipeline(
     }
 
     /**
-     * 执行 upsert 文档索引
+     * 执行文档索引计划
      *
      * <p>
-     * upsert 语义固定为先按 tenantId + knowledgeBaseId + documentId 删除旧 chunk，再写入新 chunk
+     * execute 只表达执行当前 ETL 计划，不把命名绑定到最终写库动作
+     * 真正 upsert 语义保留在 MetaVectorStoreSink，用于表达先删旧 chunk 再写新 chunk 的写入策略
      *
      * @return Pipeline 执行结果
      */
-    public MetaEtlPipelineResult upsert() {
+    public MetaEtlPipelineResult execute() {
         // read 阶段只解析原始文件，不补业务 metadata，也不做切分
         List<Document> documents = reader.read();
         for (DocumentTransformer transformer : transformers) {

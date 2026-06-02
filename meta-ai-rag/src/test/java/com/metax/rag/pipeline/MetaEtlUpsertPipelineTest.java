@@ -28,7 +28,7 @@ import static org.mockito.Mockito.mock;
 class MetaEtlUpsertPipelineTest {
 
     /**
-     * upsert 应按 read、transform、delete、write 的顺序执行
+     * execute 应按 read、transform、delete、write 的顺序执行
      */
     @Test
     void shouldExecuteUpsertPipelineInOrder() {
@@ -50,7 +50,7 @@ class MetaEtlUpsertPipelineTest {
         MetaEtlUpsertPipeline pipeline = new MetaEtlUpsertPipeline(request(), reader,
                 List.of(firstTransformer, secondTransformer), List.of(), sink);
 
-        MetaEtlPipelineResult result = pipeline.upsert();
+        MetaEtlPipelineResult result = pipeline.execute();
 
         assertThat(steps).containsExactly("read", "transform-1", "transform-2", "delete", "write");
         assertThat(result.chunkCount()).isEqualTo(1);
@@ -77,7 +77,7 @@ class MetaEtlUpsertPipelineTest {
         MetaEtlUpsertPipeline pipeline = new MetaEtlUpsertPipeline(request(), reader,
                 List.of(transformer), List.of(snapshotWriter), sink);
 
-        MetaEtlPipelineResult result = pipeline.upsert();
+        MetaEtlPipelineResult result = pipeline.execute();
 
         assertThat(steps).containsExactly("read", "transform", "snapshot", "delete", "write");
         assertThat(result.chunkCount()).isEqualTo(1);

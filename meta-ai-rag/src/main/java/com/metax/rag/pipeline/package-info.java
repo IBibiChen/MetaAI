@@ -3,12 +3,14 @@
  *
  * <p>
  * 本包负责按 Spring AI ETL 顺序编排文档索引链路
- * Reader、Transformer、Writer 各自保持单一职责，Pipeline 只负责组装执行计划、状态更新和幂等覆盖
+ * Reader、Transformer、Writer 各自保持单一职责，Pipeline 负责异步状态流转、执行计划组装和幂等覆盖
  *
  * <p>
  * 设计参考 DashScope upsertPipeline 的结构
  * 先把 dataSource、transformations、dataSink 和 upsert policy 组装成 pipeline，再统一执行
  * 当前项目是本地 Spring AI ETL，不照搬 DashScope 远程 request schema
+ * upsert 命名只保留在 MetaVectorStoreSink，表示最终 delete + write 写入策略
+ * 上层调度和执行计划使用 runIndexing / execute，避免多个层次复用同一个动作名
  *
  * <p>
  * 标准链路顺序

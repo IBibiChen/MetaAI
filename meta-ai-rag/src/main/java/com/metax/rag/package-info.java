@@ -65,13 +65,13 @@
  * TokenTextSplitter 自带的 parent_document_id、chunk_index、total_chunks 会继续保留
  *
  * <p>
- * 8、幂等覆盖阶段
- * 写入新 chunk 前，MetaEtlUpsertPipeline 可以先通过 FileDocumentWriter 导出 ETL 快照
+ * 8、ETL 快照阶段
+ * 写入新 chunk 前，MetaEtlUpsertPipeline.execute 可以先通过 FileDocumentWriter 导出 ETL 快照
  * 快照用于观察最终进入 VectorStore 前的 chunk 内容、metadata 和格式化结果
  * 快照不是索引成功凭证，生产写入仍以 VectorStore 为准
  *
  * <p>
- * 9、幂等覆盖阶段
+ * 9、向量库 upsert 阶段
  * 写入新 chunk 前，MetaVectorStoreSink 会按 tenantId + knowledgeBaseId + documentId 删除旧 chunk
  * 这样同一个 documentId 重复上传时不会产生重复召回数据
  * 这一步依赖写入 metadata 与 Redis / Qdrant / Milvus 过滤字段保持同名
@@ -268,6 +268,7 @@
  *   -> MetaChunkMetadataTransformer
  *   -> ContentFormatTransformer
  *   -> MetaDocumentSnapshotWriter
+ *   -> MetaVectorStoreSink.upsert
  *   -> VectorStore.write
  * }</pre>
  *

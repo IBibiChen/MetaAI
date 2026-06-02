@@ -8,9 +8,6 @@ import com.metax.rag.model.VectorStoreBackend;
 import com.metax.rag.pipeline.MetaEtlPipeline;
 import org.springframework.stereotype.Service;
 
-import java.time.Instant;
-import java.util.UUID;
-
 /**
  * DocumentIndexingService .
  *
@@ -88,9 +85,12 @@ public class DocumentIndexingService {
                                                String documentType,
                                                String localPath,
                                                String source) {
+        // 阶段 1：把 Controller 传入的字符串参数适配成项目内部索引请求
         DocumentIndexingRequest request = new DocumentIndexingRequest(EmbeddingProvider.from(provider),
                 VectorStoreBackend.from(vectorStore), tenantId, knowledgeBaseId, documentId, documentType,
                 DocumentSourceType.LOCAL_FILE, source, null, null, localPath);
+
+        // 阶段 2：本地文件和对象存储文件最终统一进入 submit 索引入口
         return submit(request);
     }
 
@@ -105,20 +105,25 @@ public class DocumentIndexingService {
      * @return 文档索引任务
      */
     public DocumentIndexingJob submit(DocumentIndexingRequest request) {
-        // 资源工厂负责把对象存储 objectKey 或本地相对路径转换为 Spring Resource
+        // 阶段 1：解析文件资源，统一对象存储 objectKey 和本地相对路径为 Spring Resource
         MetaDocumentResource documentResource = documentResourceFactory.create(request);
-        // documentType 和 source 在资源解析后落定，后续 job、metadata 和 Reader 使用同一份值
+
+        // 阶段 2：落定 documentType 和 source，后续 job、metadata、Reader 都使用这份解析结果
         DocumentIndexingRequest resolvedRequest = request.withResolvedDocument(documentResource.documentType(),
                 documentResource.source());
+
+        // 阶段 3：创建索引上下文，避免异步 Worker 重复创建 Resource 或重复推断 documentType
         DocumentIndexingContext context = new DocumentIndexingContext(resolvedRequest, documentResource);
-        Instant now = Instant.now();
-        DocumentIndexingJob job = new DocumentIndexingJob(UUID.randomUUID().toString(), DocumentIndexingStatus.PENDING,
-                resolvedRequest.tenantId(), resolvedRequest.knowledgeBaseId(), resolvedRequest.documentId(),
-                resolvedRequest.documentType(), resolvedRequest.provider().apiName(), resolvedRequest.vectorStore().apiName(),
-                resolvedRequest.bucket(), resolvedRequest.objectKey(),
-                0, "RAG document indexing submitted", now, now);
+
+        // 阶段 4：创建 PENDING 任务快照，调用方可以用 jobId 查询异步索引状态
+        DocumentIndexingJob job = DocumentIndexingJob.pending(resolvedRequest);
+
+        // 阶段 5：先保存任务，再触发异步 Worker，避免异步执行过快导致查询不到 job
         jobRepository.save(job);
-        etlPipeline.upsert(job, context);
+
+        // 阶段 6：触发后台索引，内部执行 read -> transform -> snapshot -> VectorStore upsert
+        etlPipeline.runIndexing(job, context);
+
         return job;
     }
 
