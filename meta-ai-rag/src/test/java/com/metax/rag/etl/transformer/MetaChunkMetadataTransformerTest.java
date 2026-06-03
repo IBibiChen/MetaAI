@@ -8,8 +8,10 @@ import org.springframework.ai.document.Document;
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
 /**
  * MetaChunkMetadataTransformerTest .
@@ -25,16 +27,28 @@ class MetaChunkMetadataTransformerTest {
      */
     @Test
     void shouldAppendChunkMetadata() {
-        DocumentIndexingRequest request = new DocumentIndexingRequest("tenant-1", "kb-1", "doc-1",
-                "markdown", DocumentSourceType.OBJECT_STORAGE,
-                "docs/demo.md", "bucket", "object", null);
+        DocumentIndexingRequest request = DocumentIndexingRequest.builder()
+                .tenantId("tenant-1")
+                .knowledgeBaseId("kb-1")
+                .documentId("doc-1")
+                .visibility("PUBLIC")
+                .documentType("markdown")
+                .sourceType(DocumentSourceType.OBJECT_STORAGE)
+                .source("docs/demo.md")
+                .filename("demo.md")
+                .bucket("bucket")
+                .objectKey("object")
+                .build();
         MetaChunkMetadataTransformer transformer = new MetaChunkMetadataTransformer(request);
 
         List<Document> chunks = transformer.transform(List.of(new Document("chunk text", Map.of(MetadataKeys.DOCUMENT_ID, "doc-1"))));
+        List<Document> repeatedChunks = transformer.transform(List.of(new Document("chunk text",
+                Map.of(MetadataKeys.DOCUMENT_ID, "doc-1"))));
 
         assertThat(chunks).hasSize(1);
         Document chunk = chunks.get(0);
-        assertThat(chunk.getId()).isEqualTo("doc-1:0");
+        assertThatCode(() -> UUID.fromString(chunk.getId())).doesNotThrowAnyException();
+        assertThat(chunk.getId()).isEqualTo(repeatedChunks.get(0).getId());
         assertThat(chunk.getMetadata())
                 .containsEntry(MetadataKeys.DOCUMENT_ID, "doc-1")
                 .containsEntry(MetadataKeys.CHUNK_ID, "doc-1:0")

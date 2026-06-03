@@ -1,6 +1,9 @@
 package com.metax.rag.retrieval;
 
+import com.metax.rag.config.RagProperties;
 import org.junit.jupiter.api.Test;
+
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -14,21 +17,76 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class RetrievalFilterExpressionFactoryTest {
 
-    private final RetrievalFilterExpressionFactory filterExpressionFactory = new RetrievalFilterExpressionFactory();
-
     /**
-     * 结构化查询参数应生成租户和知识库过滤表达式
+     * 默认过滤表达式只包含租户和知识库边界
      */
     @Test
     void shouldCreateFilterExpressionFromStructuredOptions() {
-        RetrievalOptions options = new RetrievalOptions("tenant-1", "kb-1",
-                "doc-1", "markdown", 5, 0.5, null);
+        RetrievalFilterExpressionFactory filterExpressionFactory = new RetrievalFilterExpressionFactory(
+                new RagProperties());
+        RetrievalOptions options = RetrievalOptions.builder()
+                .tenantId("tenant-1")
+                .knowledgeBaseId("kb-1")
+                .documentId("doc-1")
+                .documentType("markdown")
+                .topK(5)
+                .similarityThreshold(0.5)
+                .build();
 
         assertThat(filterExpressionFactory.create(options).toString())
                 .contains("tenantId")
                 .contains("knowledgeBaseId")
                 .contains("documentId")
-                .contains("documentType");
+                .contains("documentType")
+                .doesNotContain("visibility");
+    }
+
+    /**
+     * 权限过滤开启时公共文档过滤表达式不应包含 Group
+     */
+    @Test
+    void shouldCreatePublicFilterExpressionWithoutGroup() {
+        RetrievalFilterExpressionFactory filterExpressionFactory = new RetrievalFilterExpressionFactory(
+                propertiesWithPermissionFilter());
+        RetrievalOptions options = RetrievalOptions.builder()
+                .tenantId("tenant-1")
+                .knowledgeBaseId("kb-1")
+                .deptIds(List.of())
+                .topK(5)
+                .similarityThreshold(0.5)
+                .query("query")
+                .build();
+
+        assertThat(filterExpressionFactory.create(options).toString())
+                .contains("PUBLIC")
+                .doesNotContain("Group");
+    }
+
+    /**
+     * 结构化查询参数应生成权限过滤表达式
+     */
+    @Test
+    void shouldCreatePermissionFilterExpression() {
+        RetrievalFilterExpressionFactory filterExpressionFactory = new RetrievalFilterExpressionFactory(
+                propertiesWithPermissionFilter());
+        RetrievalOptions options = RetrievalOptions.builder()
+                .tenantId("tenant-1")
+                .knowledgeBaseId("kb-1")
+                .userId("user-1")
+                .deptIds(List.of("dept-1", "dept-2"))
+                .topK(5)
+                .similarityThreshold(0.5)
+                .query("query")
+                .build();
+
+        assertThat(filterExpressionFactory.create(options).toString())
+                .contains("PUBLIC")
+                .contains("DEPT")
+                .contains("deptId")
+                .contains("dept-1")
+                .contains("USER")
+                .contains("userId")
+                .contains("user-1");
     }
 
     /**
@@ -36,11 +94,23 @@ class RetrievalFilterExpressionFactoryTest {
      */
     @Test
     void shouldRejectMissingRetrievalScope() {
-        RetrievalOptions options = new RetrievalOptions("", "kb-1",
-                null, null, 5, 0.5, null);
+        RetrievalFilterExpressionFactory filterExpressionFactory = new RetrievalFilterExpressionFactory(
+                new RagProperties());
+        RetrievalOptions options = RetrievalOptions.builder()
+                .tenantId("")
+                .knowledgeBaseId("kb-1")
+                .topK(5)
+                .similarityThreshold(0.5)
+                .build();
 
         assertThatThrownBy(() -> filterExpressionFactory.create(options))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("tenantId");
+    }
+
+    private RagProperties propertiesWithPermissionFilter() {
+        RagProperties properties = new RagProperties();
+        properties.getRetrieval().setPermissionFilterEnabled(true);
+        return properties;
     }
 }

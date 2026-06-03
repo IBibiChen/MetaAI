@@ -17,6 +17,12 @@ import java.util.Map;
  * 最后看 retrievedCount 与 usedCount 判断是召回不足、后处理过严还是上下文过长
  *
  * <p>
+ * Builder 是跨 RAG 组件共享的可变 trace 收集器，不是普通 DTO 构造器
+ * Controller 先把 Builder 放入 advisor context
+ * QueryTransformer、DocumentPostProcessor 在执行过程中分阶段写入数据
+ * ResponseAssembler 最后调用 build 生成不可变 RetrievalTrace 快照
+ *
+ * <p>
  * details 响应示例
  * <pre>{@code
  * {
@@ -80,15 +86,27 @@ public record RetrievalTrace(
     public static final String CONTEXT_KEY = "metax_rag_retrieval_trace";
 
     /**
-     * 创建 trace builder
+     * 创建 trace 收集器
+     *
+     * <p>
+     * 返回的 Builder 会放入 advisor context，在一次 RAG 调用中被多个组件陆续写入
      *
      * @param query 原始用户 query
-     * @return Builder
+     * @return trace 收集器
      */
     public static Builder builder(String query) {
         return new Builder(query);
     }
 
+    /**
+     * RAG 检索链路可变 trace 收集器
+     *
+     * <p>
+     * 该类手写而不是使用 Lombok @Builder，是因为 trace 数据来自多个阶段
+     * QueryTransformer 负责写入 query 转换信息
+     * DocumentPostProcessor 负责写入召回数量、使用数量、过滤表达式和后处理耗时
+     * build 方法负责把当前累计状态冻结成 RetrievalTrace 响应快照
+     */
     public static final class Builder {
 
         private final String query;
@@ -158,12 +176,34 @@ public record RetrievalTrace(
         }
 
         /**
+         * 记录最终生效的 topK
+         *
+         * @param topK 检索数量
+         * @return Builder
+         */
+        public Builder resolvedTopK(int topK) {
+            this.topK = topK;
+            return this;
+        }
+
+        /**
          * 记录相似度阈值
          *
          * @param similarityThreshold 相似度阈值
          * @return Builder
          */
         public Builder similarityThreshold(Double similarityThreshold) {
+            this.similarityThreshold = similarityThreshold;
+            return this;
+        }
+
+        /**
+         * 记录最终生效的相似度阈值
+         *
+         * @param similarityThreshold 相似度阈值
+         * @return Builder
+         */
+        public Builder resolvedSimilarityThreshold(double similarityThreshold) {
             this.similarityThreshold = similarityThreshold;
             return this;
         }
@@ -193,6 +233,9 @@ public record RetrievalTrace(
         /**
          * 记录阶段耗时
          *
+         * <p>
+         * timings 使用 LinkedHashMap 保留收集过程的写入顺序
+         *
          * @param stage  阶段名称
          * @param millis 耗时毫秒
          * @return Builder
@@ -204,6 +247,9 @@ public record RetrievalTrace(
 
         /**
          * 构建 trace 快照
+         *
+         * <p>
+         * build 时复制 timings，避免响应对象继续受到后续写入影响
          *
          * @return RetrievalTrace
          */

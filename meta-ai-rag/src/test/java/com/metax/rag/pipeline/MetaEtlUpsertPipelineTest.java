@@ -117,8 +117,17 @@ class MetaEtlUpsertPipelineTest {
     }
 
     private DocumentIndexingRequest request() {
-        return new DocumentIndexingRequest("tenant-1", "kb-1", "doc-1",
-                "markdown", DocumentSourceType.OBJECT_STORAGE,
-                "docs/demo.md", "bucket", "object", null);
+        return DocumentIndexingRequest.builder()
+                .tenantId("tenant-1")
+                .knowledgeBaseId("kb-1")
+                .documentId("doc-1")
+                .visibility("PUBLIC")
+                .documentType("markdown")
+                .sourceType(DocumentSourceType.OBJECT_STORAGE)
+                .source("docs/demo.md")
+                .filename("demo.md")
+                .bucket("bucket")
+                .objectKey("object")
+                .build();
     }
 }

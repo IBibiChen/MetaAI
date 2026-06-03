@@ -10,7 +10,7 @@
  * <p>
  * 一、文档来源与资源归一化
  * 对象存储对象或受控本地文件先统一转换为 Spring Resource
- * documentType 和 source 在资源阶段落定，后续 Reader、metadata 和索引任务共用同一份解析结果
+ * documentType 和 source 在资源阶段落定，后续 Reader、metadata 和索引执行共用同一份解析结果
  *
  * <p>
  * 二、Spring AI ETL 文档索引
@@ -29,8 +29,8 @@
  *
  * <p>
  * 五、回答、引用和 trace 返回
- * 普通 RAG 接口返回模型回答文本
- * details RAG 接口返回 answer、references 和 RetrievalTrace，用于排查 query 改写、metadata filter、召回数量和后处理效果
+ * 普通 RAG 接口返回 answer 和 references
+ * details RAG 接口额外返回 RetrievalTrace，用于排查 query 改写、metadata filter、召回数量和后处理效果
  *
  * <p>
  * 一、文档来源与资源归一化
@@ -52,8 +52,8 @@
  * 二、Spring AI ETL 文档索引
  *
  * <p>
- * 3、异步文档索引任务创建
- * DocumentIndexingService 创建 DocumentIndexingJob，并把任务状态写入 Redis
+ * 3、异步文档索引执行创建
+ * DocumentIndexingService 创建 DocumentIndexingRun，并把执行状态写入 Redis
  * DocumentIndexingService 不直接执行耗时 ETL，真正文档索引交给 MetaEtlPipeline
  * DocumentIndexingService 也不负责原始文件归档，它只接收已经可被 ResourceFactory 解析的资源描述
  * 这样可以避免 HTTP 请求被大文件解析、embedding 和 VectorStore 写入阻塞
@@ -79,6 +79,7 @@
  * documentId 用于幂等覆盖和按文档收窄查询
  * documentType 用于选择解析器和按类型过滤
  * source 用于返回引用来源和定位对象存储 objectKey 或本地相对路径
+ * filename 用于前端展示原始文件名
  * createdAt 使用 epoch millis，便于范围过滤
  *
  * <p>
@@ -95,7 +96,7 @@
  * 7、chunk 级 metadata 增强阶段
  * MetaChunkMetadataTransformer 实现 Spring AI DocumentTransformer 接口
  * 它在 TokenTextSplitter 之后为 chunk Document 补齐项目统一 chunk 字段
- * chunkId 使用 documentId + chunkIndex 构造
+ * Document.id 使用稳定 UUID 兼容 Qdrant，chunkId 使用 documentId + chunkIndex 构造作为业务定位字段
  * chunkIndex 用于还原文档片段顺序和前端定位
  * contentHash 后续可用于增量索引和审计
  * TokenTextSplitter 自带的 parent_document_id、chunk_index、total_chunks 会继续保留
@@ -139,8 +140,9 @@
  * 12、RAG 查询入口阶段
  * ChatController 接收 tenantId、knowledgeBaseId 和用户问题
  * 普通 RAG 查询必须传 tenantId 和 knowledgeBaseId，避免无过滤全库检索
- * ChatModel、EmbeddingModel、VectorStore 和 ChatMemory 都由配置文件选择
- * ChatMemory 由 metax.ai.chat.memory.type 选择，接口层不再暴露 memory 路由参数
+ * ChatModel、EmbeddingModel 和 VectorStore 都由配置文件选择
+ * 默认 ChatClient 显式绑定 redisChatMemory 作为模型上下文窗口
+ * 完整用户历史由 ChatHistory 独立归档，不能从 ChatMemory 读取完整历史
  *
  * <p>
  * 13、检索参数组装阶段
@@ -148,7 +150,7 @@
  * RetrievalFilterExpressionFactory 优先使用结构化字段生成 Filter.Expression
  * tenantId 和 knowledgeBaseId 是强制过滤边界
  * documentId 和 documentType 是可选收窄条件
- * 原始 filterExpression 只建议用于 details 调试场景，由 Controller 透传到 advisor context
+ * 原始 filterExpression 仅用于 trace 调试展示，实际检索使用结构化权限过滤
  *
  * <p>
  * 14、RAG Advisor 组装阶段
@@ -188,7 +190,7 @@
  * <p>
  * 18、提示词增强阶段
  * ContextualQueryAugmenter 把后处理后的 Document 上下文注入用户问题
- * allowEmptyContext=false 表示没有召回上下文时不让模型自由发挥
+ * allowEmptyContext=true 表示知识库优先，空上下文时允许模型按通用能力回答
  * 这样可以降低 RAG 场景中脱离知识库编造答案的风险
  *
  * <p>
@@ -197,8 +199,8 @@
  * <p>
  * 19、回答与引用返回阶段
  * ChatClient 把增强后的 prompt 发送给 ChatModel
- * 普通 RAG 接口只返回模型回答文本，适合业务对话
- * details RAG 接口返回 answer、conversationId、references 和 trace，适合调试召回质量和展示引用来源
+ * 普通 RAG 接口返回 answer、conversationId 和 references，适合业务对话并展示引用来源
+ * details RAG 接口额外返回 trace，适合调试召回质量
  * RetrievalResponseAssembler 从 ChatClientResponse 中提取 answer、命中文档上下文和 RetrievalTrace
  *
  * <p>
@@ -312,7 +314,7 @@
  * <pre>{@code
  * bucket + objectKey
  *   -> DocumentIndexingService.submit
- *   -> DocumentIndexingJobRepository.save(PENDING)
+ *   -> DocumentIndexingRunRepository.save(PENDING)
  *   -> MetaEtlPipeline.runIndexing
  *   -> MetaEtlPipelineFactory.createIndexingPipeline
  *   -> MetaEtlUpsertPipeline.execute
@@ -343,9 +345,11 @@
  * <pre>{@code
  * tenantId=t1
  * knowledgeBaseId=kb1
+ * visibility=PUBLIC
  * documentId=doc-001
  * documentType=markdown
  * source=knowledge/t1/kb1/demo.md
+ * filename=demo.md
  * createdAt=1710000000000
  * chunkId=doc-001:0
  * chunkIndex=0

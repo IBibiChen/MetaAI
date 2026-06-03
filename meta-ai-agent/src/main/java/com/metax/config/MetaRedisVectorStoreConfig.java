@@ -1,22 +1,23 @@
 package com.metax.config;
 
 import com.metax.rag.model.MetadataKeys;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.embedding.BatchingStrategy;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.vectorstore.redis.RedisVectorStore;
 import org.springframework.ai.vectorstore.redis.RedisVectorStore.MetadataField;
 import org.springframework.ai.vectorstore.redis.autoconfigure.RedisVectorStoreProperties;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.connection.jedis.JedisConnectionFactory;
-
 import redis.clients.jedis.DefaultJedisClientConfig;
 import redis.clients.jedis.HostAndPort;
 import redis.clients.jedis.JedisClientConfig;
 import redis.clients.jedis.JedisPooled;
+
+import java.util.Arrays;
 
 /**
  * MetaRedisVectorStoreConfig .
@@ -36,6 +37,7 @@ import redis.clients.jedis.JedisPooled;
  * @version v1.0
  * @since 2026/6/2
  */
+@Slf4j
 @Configuration
 @ConditionalOnProperty(name = "spring.ai.vectorstore.type", havingValue = "redis", matchIfMissing = true)
 public class MetaRedisVectorStoreConfig {
@@ -46,7 +48,7 @@ public class MetaRedisVectorStoreConfig {
      * <p>
      * RAG 向量库基础设施，绑定当前唯一 EmbeddingModel，并复用 spring.ai.vectorstore.redis 官方配置
      * metadataFields 是 Redis RediSearch 过滤能力的关键绑定关系，未声明字段即使写入 Redis JSON，也不能可靠参与 filterExpression
-     * 如果启动时提示缺少 VectorStore Bean，优先检查 Spring Boot 是否创建了 JedisConnectionFactory
+     * 方法参数强制绑定 JedisConnectionFactory，避免条件注解提前判断导致项目 vectorStore Bean 被跳过
      *
      * @param embeddingModel         当前配置选中的 EmbeddingModel
      * @param properties             Spring AI Redis VectorStore 官方属性
@@ -55,16 +57,19 @@ public class MetaRedisVectorStoreConfig {
      * @return RedisVectorStore
      */
     @Bean
-    @ConditionalOnBean(JedisConnectionFactory.class)
     public RedisVectorStore vectorStore(EmbeddingModel embeddingModel,
                                         RedisVectorStoreProperties properties,
                                         JedisConnectionFactory jedisConnectionFactory,
                                         ObjectProvider<BatchingStrategy> batchingStrategy) {
+        MetadataField[] metadataFields = metadataFields();
+        log.info("启用项目 RedisVectorStore 配置：indexName = {}，prefix = {}，metadataFields = {}",
+                properties.getIndexName(), properties.getPrefix(), metadataFieldsLog(metadataFields));
+
         RedisVectorStore.Builder builder = RedisVectorStore.builder(jedisPooled(jedisConnectionFactory), embeddingModel)
                 .initializeSchema(properties.isInitializeSchema())
                 .indexName(properties.getIndexName())
                 .prefix(properties.getPrefix())
-                .metadataFields(metadataFields());
+                .metadataFields(metadataFields);
 
         batchingStrategy.ifAvailable(builder::batchingStrategy);
         return builder.build();
@@ -75,23 +80,34 @@ public class MetaRedisVectorStoreConfig {
      *
      * <p>
      * TAG 适合租户、知识库、文档 ID、文档类型等精确过滤字段
-     * TEXT 适合来源路径这种需要文本匹配的字段
+     * TEXT 适合来源路径、文件名这种展示和文本匹配字段
      * NUMERIC 适合时间戳和 chunk 序号等范围过滤字段
      *
      * @return metadata fields
      */
-    private MetadataField[] metadataFields() {
+    MetadataField[] metadataFields() {
         return new MetadataField[]{
                 MetadataField.tag(MetadataKeys.TENANT_ID),
                 MetadataField.tag(MetadataKeys.KNOWLEDGE_BASE_ID),
+                MetadataField.tag(MetadataKeys.VISIBILITY),
+                MetadataField.tag(MetadataKeys.DEPT_ID),
+                MetadataField.tag(MetadataKeys.USER_ID),
                 MetadataField.tag(MetadataKeys.DOCUMENT_ID),
                 MetadataField.tag(MetadataKeys.DOCUMENT_TYPE),
                 MetadataField.tag(MetadataKeys.CHUNK_ID),
                 MetadataField.tag(MetadataKeys.CONTENT_HASH),
                 MetadataField.text(MetadataKeys.SOURCE),
+                MetadataField.text(MetadataKeys.FILENAME),
                 MetadataField.numeric(MetadataKeys.CREATED_AT),
                 MetadataField.numeric(MetadataKeys.CHUNK_INDEX)
         };
+    }
+
+    private String metadataFieldsLog(MetadataField[] metadataFields) {
+        return Arrays.stream(metadataFields)
+                .map(metadataField -> metadataField.name() + ":" + metadataField.fieldType())
+                .toList()
+                .toString();
     }
 
     /**

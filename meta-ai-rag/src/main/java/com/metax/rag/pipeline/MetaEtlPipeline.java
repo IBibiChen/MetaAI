@@ -1,17 +1,21 @@
 package com.metax.rag.pipeline;
 
-import com.metax.rag.indexing.DocumentIndexingJob;
 import com.metax.rag.indexing.DocumentIndexingContext;
+import com.metax.rag.indexing.DocumentIndexingRun;
+import com.metax.rag.indexing.DocumentIndexingRunObserver;
 import com.metax.rag.indexing.DocumentIndexingStatus;
-import com.metax.rag.indexing.DocumentIndexingJobRepository;
+import com.metax.rag.indexing.DocumentIndexingRunRepository;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+
+import java.util.List;
 
 /**
  * MetaEtlPipeline .
  *
  * <p>
- * RAG 异步文档索引调度器，负责 job 状态流转，并执行已组装好的索引 pipeline
+ * RAG 异步文档索引调度器，负责 run 状态流转，并执行已组装好的索引 pipeline
  *
  * <p>
  * 链路说明：Spring AI ETL 标准链路
@@ -33,37 +37,46 @@ public class MetaEtlPipeline {
 
     private final MetaEtlPipelineFactory pipelineFactory;
 
-    private final DocumentIndexingJobRepository jobRepository;
+    private final DocumentIndexingRunRepository runRepository;
+
+    private final List<DocumentIndexingRunObserver> runObservers;
 
     public MetaEtlPipeline(MetaEtlPipelineFactory pipelineFactory,
-                           DocumentIndexingJobRepository jobRepository) {
+                           DocumentIndexingRunRepository runRepository,
+                           ObjectProvider<DocumentIndexingRunObserver> runObservers) {
         this.pipelineFactory = pipelineFactory;
-        this.jobRepository = jobRepository;
+        this.runRepository = runRepository;
+        this.runObservers = runObservers.orderedStream().toList();
     }
 
     /**
-     * 异步执行文档索引任务
+     * 异步执行文档索引 run
      *
      * <p>
      * 执行步骤
-     * 1. 把 job 标记为 RUNNING
+     * 1. 把 run 标记为 RUNNING
      * 2. 创建 indexing pipeline
      * 3. 执行 pipeline，内部完成 read、transform、delete、write
-     * 4. 根据执行结果更新 job 状态
+     * 4. 根据执行结果更新 run 状态
      *
-     * @param job     文档索引任务
+     * @param run     文档索引 run
      * @param context 文档索引上下文
      */
     @Async
-    public void runIndexing(DocumentIndexingJob job, DocumentIndexingContext context) {
-        jobRepository.save(job.withStatus(DocumentIndexingStatus.RUNNING, 0, "RAG document indexing started"));
+    public void runIndexing(DocumentIndexingRun run, DocumentIndexingContext context) {
+        saveAndNotify(run.withStatus(DocumentIndexingStatus.RUNNING, 0, "RAG document indexing started"));
         try {
             MetaEtlUpsertPipeline pipeline = pipelineFactory.createIndexingPipeline(context);
             MetaEtlPipelineResult result = pipeline.execute();
-            jobRepository.save(job.withStatus(DocumentIndexingStatus.SUCCEEDED, result.chunkCount(),
+            saveAndNotify(run.withStatus(DocumentIndexingStatus.SUCCEEDED, result.chunkCount(),
                     "RAG document indexing succeeded"));
         } catch (Exception ex) {
-            jobRepository.save(job.withStatus(DocumentIndexingStatus.FAILED, 0, ex.getMessage()));
+            saveAndNotify(run.withStatus(DocumentIndexingStatus.FAILED, 0, ex.getMessage()));
         }
+    }
+
+    private void saveAndNotify(DocumentIndexingRun run) {
+        runRepository.save(run);
+        runObservers.forEach(observer -> observer.onRunChanged(run));
     }
 }

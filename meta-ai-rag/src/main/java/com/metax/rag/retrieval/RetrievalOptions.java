@@ -1,5 +1,10 @@
 package com.metax.rag.retrieval;
 
+import lombok.Builder;
+import lombok.Getter;
+
+import java.util.List;
+
 /**
  * RetrievalOptions .
  *
@@ -8,69 +13,94 @@ package com.metax.rag.retrieval;
  *
  * <p>
  * 字段说明：检索参数分为过滤参数和召回参数
- * tenantId / knowledgeBaseId / documentId / documentType 用于 metadata filter
+ * tenantId / knowledgeBaseId / userId / deptIds / documentId / documentType 用于 metadata filter
  * topK / similarityThreshold 用于控制召回数量和相似度下限
- * filterExpression 是高级调试入口，普通业务接口应优先使用结构化字段
+ * filterExpression 仅用于 trace 调试展示，普通业务接口使用结构化字段生成实际过滤
  * query 是原始用户问题，只用于 details trace，不参与过滤表达式生成
  *
  * <p>
  * 普通结构化检索示例
  * <pre>{@code
- * new RetrievalOptions("t1", "kb1", null, "markdown", 5, 0.5, null)
+ * RetrievalOptions.builder()
+ *     .tenantId("t1")
+ *     .knowledgeBaseId("kb1")
+ *     .documentType("markdown")
+ *     .userId("u1")
+ *     .deptIds(List.of("d1"))
+ *     .topK(5)
+ *     .similarityThreshold(0.5)
+ *     .query("query")
+ *     .build()
  * }</pre>
  *
  * <p>
  * details trace 示例
  * <pre>{@code
- * new RetrievalOptions("t1", "kb1", null, null, 5, 0.5, null, "Spring AI 的 RAG 是什么")
+ * RetrievalOptions.builder()
+ *     .tenantId("t1")
+ *     .knowledgeBaseId("kb1")
+ *     .topK(5)
+ *     .similarityThreshold(0.5)
+ *     .query("Spring AI 的 RAG 是什么")
+ *     .build()
  * }</pre>
  *
  * @author IBibiChen
  * @version v1.0
  * @since 2026/5/31
  */
-public record RetrievalOptions(
-        /**
-         * 租户 ID，结构化过滤的必填字段
-         */
-        String tenantId,
-        /**
-         * 知识库 ID，结构化过滤的必填字段
-         */
-        String knowledgeBaseId,
-        /**
-         * 文档 ID，可选收窄条件
-         */
-        String documentId,
-        /**
-         * 文档类型，可选收窄条件
-         */
-        String documentType,
-        /**
-         * 请求级 topK 覆盖值，为空时使用配置默认值
-         */
-        Integer topK,
-        /**
-         * 请求级相似度阈值覆盖值，为空时使用配置默认值
-         */
-        Double similarityThreshold,
-        /**
-         * 高级原始过滤表达式，普通业务接口优先使用结构化字段
-         */
-        String filterExpression,
-        /**
-         * 原始用户 query，只用于 details trace
-         */
-        String query
-) {
+@Getter
+@Builder
+public final class RetrievalOptions {
 
-    public RetrievalOptions(String tenantId,
-                            String knowledgeBaseId,
-                            String documentId,
-                            String documentType,
-                            Integer topK,
-                            Double similarityThreshold,
-                            String filterExpression) {
-        this(tenantId, knowledgeBaseId, documentId, documentType, topK, similarityThreshold, filterExpression, null);
-    }
+    /**
+     * 租户 ID，结构化过滤的必填字段
+     */
+    private final String tenantId;
+
+    /**
+     * 知识库 ID，结构化过滤的必填字段
+     */
+    private final String knowledgeBaseId;
+
+    /**
+     * 文档 ID，可选收窄条件
+     */
+    private final String documentId;
+
+    /**
+     * 文档类型，可选收窄条件
+     */
+    private final String documentType;
+
+    /**
+     * 当前用户 ID，用于用户私有文档过滤
+     */
+    private final String userId;
+
+    /**
+     * 当前用户可访问部门 ID 列表，用于部门文档过滤
+     */
+    @Builder.Default
+    private final List<String> deptIds = List.of();
+
+    /**
+     * 请求级 topK 覆盖值，为空时使用配置默认值
+     */
+    private final Integer topK;
+
+    /**
+     * 请求级相似度阈值覆盖值，为空时使用配置默认值
+     */
+    private final Double similarityThreshold;
+
+    /**
+     * 原始过滤表达式，仅用于 trace 调试展示
+     */
+    private final String filterExpression;
+
+    /**
+     * 原始用户 query，只用于 details trace
+     */
+    private final String query;
 }

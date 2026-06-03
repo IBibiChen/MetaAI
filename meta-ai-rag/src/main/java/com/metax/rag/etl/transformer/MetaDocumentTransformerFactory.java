@@ -28,7 +28,13 @@ public class MetaDocumentTransformerFactory {
     private static final List<String> EXCLUDED_FORMAT_METADATA_KEYS = List.of(
             MetadataKeys.TENANT_ID,
             MetadataKeys.KNOWLEDGE_BASE_ID,
+            MetadataKeys.VISIBILITY,
+            MetadataKeys.DEPT_ID,
+            MetadataKeys.USER_ID,
             MetadataKeys.DOCUMENT_ID,
+            MetadataKeys.DOCUMENT_TYPE,
+            MetadataKeys.SOURCE,
+            MetadataKeys.FILENAME,
             MetadataKeys.CHUNK_ID,
             MetadataKeys.CHUNK_INDEX,
             MetadataKeys.CONTENT_HASH,
@@ -100,4 +106,3 @@ public class MetaDocumentTransformerFactory {
         return new ContentFormatTransformer(formatter);
     }
 }
-

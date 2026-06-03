@@ -36,7 +36,7 @@ public record PromptTemplateRequest(
      * 带变量、无模型参数的模板请求
      *
      * @param templateId prompt 模板 ID
-     * @param variables 模板变量
+     * @param variables  模板变量
      * @return prompt 模板请求
      */
     public static PromptTemplateRequest of(PromptTemplateId templateId, Map<String, Object> variables) {

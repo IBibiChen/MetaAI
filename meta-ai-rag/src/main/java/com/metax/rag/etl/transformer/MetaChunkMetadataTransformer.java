@@ -11,6 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.IntStream;
 
 /**
@@ -18,7 +19,7 @@ import java.util.stream.IntStream;
  *
  * <p>
  * MetaAI chunk 级 metadata Transformer，严格实现 Spring AI DocumentTransformer 接口
- * 负责在 TokenTextSplitter 之后补齐稳定 chunk ID、chunkIndex 和 contentHash
+ * 负责在 TokenTextSplitter 之后补齐稳定向量库 ID、chunkId、chunkIndex 和 contentHash
  *
  * <p>
  * TokenTextSplitter 会写入 Spring AI 自带的 parent_document_id、chunk_index 和 total_chunks
@@ -64,7 +65,8 @@ public class MetaChunkMetadataTransformer implements DocumentTransformer {
      * 补齐 chunk 级 metadata
      *
      * <p>
-     * chunkId 使用 documentId + chunkIndex 构造，保证同一文档重复索引时 chunk ID 稳定
+     * Document.id 使用稳定 UUID，兼容 Qdrant 对 point id 的 UUID 要求
+     * chunkId 使用 documentId + chunkIndex 构造，保留业务可读的 chunk 定位字段
      * contentHash 用于判断 chunk 内容是否变化，后续可以扩展为增量写入或索引审计
      *
      * @param documents 切分后的 chunk Document 列表
@@ -82,7 +84,7 @@ public class MetaChunkMetadataTransformer implements DocumentTransformer {
      * 为切分后的文档片段补齐 chunk 级 metadata
      *
      * <p>
-     * 该方法位于 TokenTextSplitter 之后，负责生成稳定 chunkId、chunkIndex 和 contentHash
+     * 该方法位于 TokenTextSplitter 之后，负责生成稳定向量库 ID、chunkId、chunkIndex 和 contentHash
      * 因为只有切分后才有 chunk 列表顺序，才能生成 chunkIndex
      *
      * @param document 切分后的 chunk Document
@@ -94,6 +96,7 @@ public class MetaChunkMetadataTransformer implements DocumentTransformer {
         String contentHash = hashContent(text);
         // chunkId 使用 documentId + chunkIndex，保证同一文档重复索引时 ID 稳定
         String chunkId = "%s:%s".formatted(request.documentId(), index);
+        String vectorStoreId = generateVectorStoreId(chunkId);
         // 保留切分器和文档级 transformer 已经写入的 metadata
         Map<String, Object> metadata = new HashMap<>(document.getMetadata());
         metadata.put(MetadataKeys.CHUNK_ID, chunkId);
@@ -102,7 +105,7 @@ public class MetaChunkMetadataTransformer implements DocumentTransformer {
         // contentHash 用于审计和后续增量索引能力
         metadata.put(MetadataKeys.CONTENT_HASH, contentHash);
         Document enriched = Document.builder()
-                .id(chunkId)
+                .id(vectorStoreId)
                 .text(text)
                 .metadata(metadata)
                 .score(document.getScore())
@@ -125,5 +128,20 @@ public class MetaChunkMetadataTransformer implements DocumentTransformer {
         String normalizedText = text == null ? "" : text;
         return DigestUtils.md5DigestAsHex(normalizedText.getBytes(StandardCharsets.UTF_8));
     }
-}
 
+    /**
+     * 生成 VectorStore 使用的稳定 ID
+     *
+     * <p>
+     * Spring AI QdrantVectorStore 会把 Document.id 按 UUID 解析，不能直接使用 documentId:chunkIndex 这类业务可读 ID
+     * 这里用 tenantId、knowledgeBaseId 和 chunkId 生成确定性 UUID，保证同一 chunk 重复索引时 ID 稳定
+     * 业务排查继续使用 metadata.chunkId，Document.id 只作为 Redis / Qdrant / Milvus 统一兼容的技术主键
+     *
+     * @param chunkId 业务可读 chunk ID
+     * @return VectorStore 技术主键
+     */
+    private String generateVectorStoreId(String chunkId) {
+        String seed = "%s:%s:%s".formatted(request.tenantId(), request.knowledgeBaseId(), chunkId);
+        return UUID.nameUUIDFromBytes(seed.getBytes(StandardCharsets.UTF_8)).toString();
+    }
+}

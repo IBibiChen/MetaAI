@@ -8,7 +8,7 @@ import org.springframework.scheduling.annotation.EnableAsync;
  * RagAutoConfiguration .
  *
  * <p>
- * RAG 模块基础配置，启用配置属性绑定和异步文档索引任务
+ * RAG 模块基础配置，启用配置属性绑定和异步文档索引执行
  *
  * @author IBibiChen
  * @version v1.0

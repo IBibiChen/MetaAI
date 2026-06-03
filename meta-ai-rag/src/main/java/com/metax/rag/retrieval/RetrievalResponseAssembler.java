@@ -59,10 +59,28 @@ public class RetrievalResponseAssembler {
     public RetrievalChatResponse details(ChatClientResponse response, String conversationId) {
         // 阶段 1：读取模型最终回答，answer 是 ChatModel 生成后的文本
         // ChatResponse 可能为空，details 接口要优先保证响应结构稳定
-        String answer = response.chatResponse() == null ? null : response.chatResponse().getResult().getOutput().getText();
+        String answer = answer(response);
 
         // 阶段 2：组装 answer、references 和 trace，供 details 接口排查完整检索链路
         return new RetrievalChatResponse(answer, conversationId, references(response), trace(response));
+    }
+
+    /**
+     * 组装 RAG 普通响应
+     *
+     * <p>
+     * 普通接口返回 answer 和 references，避免把调试 trace 暴露给前端常规调用
+     *
+     * @param response       ChatClientResponse
+     * @param conversationId 会话 ID
+     * @return RAG 普通响应
+     */
+    public RetrievalChatResponse chat(ChatClientResponse response, String conversationId) {
+        return new RetrievalChatResponse(answer(response), conversationId, references(response));
+    }
+
+    private String answer(ChatClientResponse response) {
+        return response.chatResponse() == null ? null : response.chatResponse().getResult().getOutput().getText();
     }
 
     private RetrievalTrace trace(ChatClientResponse response) {

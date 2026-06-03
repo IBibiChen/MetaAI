@@ -69,8 +69,8 @@ public class TracingDocumentPostProcessor implements DocumentPostProcessor {
         if (traceBuilder != null) {
             // postProcess 阶段能看到处理前后数量，适合记录 retrievedCount 和 usedCount
             // topK 和 similarityThreshold 写入 trace，便于把召回效果和本次参数直接对齐
-            traceBuilder.topK(topK)
-                    .similarityThreshold(similarityThreshold)
+            traceBuilder.resolvedTopK(topK)
+                    .resolvedSimilarityThreshold(similarityThreshold)
                     .retrievedCount(documents.size())
                     .usedCount(processed.size())
                     .timing("postProcess", elapsedMillis(start));

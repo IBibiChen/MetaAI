@@ -157,7 +157,7 @@ public final class PromptTemplates {
      * 校验模板必填变量
      *
      * @param templateId prompt 模板 ID
-     * @param variables 模板变量
+     * @param variables  模板变量
      */
     private static void validateVariables(PromptTemplateId templateId, Map<String, Object> variables) {
         Set<String> missingVariables = templateId.requiredVariables()

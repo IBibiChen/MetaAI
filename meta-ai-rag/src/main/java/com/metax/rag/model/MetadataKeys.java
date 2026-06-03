@@ -14,8 +14,9 @@ package com.metax.rag.model;
  *
  * <p>
  * key 分层
- * tenantId / knowledgeBaseId 是权限和知识库边界
- * documentId / documentType 是文档级过滤
+ * tenantId / knowledgeBaseId 是租户和知识库边界
+ * visibility / deptId / userId 是权限过滤边界
+ * documentId / documentType 是文档级收窄过滤
  * chunkId / chunkIndex / contentHash 是 chunk 级定位和幂等辅助信息
  *
  * @author IBibiChen
@@ -35,6 +36,21 @@ public final class MetadataKeys {
     public static final String KNOWLEDGE_BASE_ID = "knowledgeBaseId";
 
     /**
+     * 文档可见性，用于区分公共、部门和用户私有文档
+     */
+    public static final String VISIBILITY = "visibility";
+
+    /**
+     * 部门 ID，用于部门级权限过滤
+     */
+    public static final String DEPT_ID = "deptId";
+
+    /**
+     * 用户 ID，用于用户私有文档权限过滤
+     */
+    public static final String USER_ID = "userId";
+
+    /**
      * 文档 ID，用于同一文档重复索引时删除旧 chunk，也用于按文档收窄检索
      */
     public static final String DOCUMENT_ID = "documentId";
@@ -48,6 +64,11 @@ public final class MetadataKeys {
      * 文档来源，用于返回引用来源和定位对象存储 objectKey 或业务来源路径
      */
     public static final String SOURCE = "source";
+
+    /**
+     * 原始文件名，用于前端展示引用来源
+     */
+    public static final String FILENAME = "filename";
 
     /**
      * 文档索引时间，使用 epoch millis，便于按时间范围过滤

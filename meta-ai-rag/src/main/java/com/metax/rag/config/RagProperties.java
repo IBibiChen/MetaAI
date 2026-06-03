@@ -7,14 +7,14 @@ import org.springframework.ai.document.MetadataMode;
  * RagProperties .
  *
  * <p>
- * RAG 模块统一配置入口，集中管理文档切分、检索参数、异步入库任务和文档存储配置
+ * RAG 模块统一配置入口，集中管理文档切分、检索参数、异步索引执行和文档存储配置
  * 默认值只作为企业级保守起点，具体知识库可以在请求侧覆盖 topK、similarityThreshold 和 filter 条件
  *
  * <p>
  * 设计说明：RAG 参数不要硬编码在业务代码里
  * chunk 参数影响入库质量和 embedding 成本
  * retrieval 参数影响召回质量和模型上下文占用
- * ingestion 参数影响异步任务状态保存周期
+ * ingestion 参数影响异步执行状态保存周期
  * storage 参数决定文档存储实现和连接方式
  *
  * <p>
@@ -24,7 +24,7 @@ import org.springframework.ai.document.MetadataMode;
  * metax.ai.rag.chunk.min-chars=350
  * metax.ai.rag.retrieval.top-k=5
  * metax.ai.rag.retrieval.similarity-threshold=0.50
- * metax.ai.rag.ingestion.redis-key-prefix=rag:ingestion:job:
+ * metax.ai.rag.ingestion.redis-key-prefix=rag:ingestion:run:
  * metax.ai.rag.snapshot.enabled=false
  * metax.ai.rag.snapshot.output-dir=D:/meta-ai/rag-snapshots
  * metax.ai.rag.storage.provider=object
@@ -170,6 +170,24 @@ public class RagProperties {
          */
         private double similarityThreshold = 0.5;
 
+        /**
+         * 空上下文时是否允许模型继续回答
+         *
+         * <p>
+         * true 表示知识库优先，检索不到上下文时允许模型基于通用能力、系统提示词和会话上下文回答
+         * false 表示严格 RAG，检索不到上下文时由 ContextualQueryAugmenter 引导模型拒答
+         */
+        private boolean allowEmptyContext = true;
+
+        /**
+         * 是否启用权限过滤
+         *
+         * <p>
+         * 关闭时只使用 tenantId、knowledgeBaseId、documentId 和 documentType 做范围过滤
+         * 开启后追加 visibility、deptId 和 userId 权限过滤
+         */
+        private boolean permissionFilterEnabled = false;
+
         private final QueryTransformer queryTransformer = new QueryTransformer();
 
         private final PostProcessor postProcessor = new PostProcessor();
@@ -190,6 +208,22 @@ public class RagProperties {
 
         public void setSimilarityThreshold(double similarityThreshold) {
             this.similarityThreshold = similarityThreshold;
+        }
+
+        public boolean isAllowEmptyContext() {
+            return allowEmptyContext;
+        }
+
+        public void setAllowEmptyContext(boolean allowEmptyContext) {
+            this.allowEmptyContext = allowEmptyContext;
+        }
+
+        public boolean isPermissionFilterEnabled() {
+            return permissionFilterEnabled;
+        }
+
+        public void setPermissionFilterEnabled(boolean permissionFilterEnabled) {
+            this.permissionFilterEnabled = permissionFilterEnabled;
         }
 
         public QueryTransformer getQueryTransformer() {
@@ -375,20 +409,20 @@ public class RagProperties {
     public static class Ingestion {
 
         /**
-         * RAG 入库任务 Redis key 前缀
+         * RAG 入库执行 Redis key 前缀
          *
          * <p>
-         * key 示例：rag:ingestion:job:{jobId}
+         * key 示例：rag:ingestion:run:{runId}
          */
-        private String redisKeyPrefix = "rag:ingestion:job:";
+        private String redisKeyPrefix = "rag:ingestion:run:";
 
         /**
-         * job 状态保留时间
+         * run 状态保留时间
          *
          * <p>
-         * 第一版 job 状态放 Redis，适合短期查询进度，长期审计后续应落 JDBC
+         * 第一版 run 状态放 Redis，适合短期查询进度，长期审计后续应落 JDBC
          */
-        private long jobTtlSeconds = 86400;
+        private long runTtlSeconds = 86400;
 
         public String getRedisKeyPrefix() {
             return redisKeyPrefix;
@@ -398,12 +432,12 @@ public class RagProperties {
             this.redisKeyPrefix = redisKeyPrefix;
         }
 
-        public long getJobTtlSeconds() {
-            return jobTtlSeconds;
+        public long getRunTtlSeconds() {
+            return runTtlSeconds;
         }
 
-        public void setJobTtlSeconds(long jobTtlSeconds) {
-            this.jobTtlSeconds = jobTtlSeconds;
+        public void setRunTtlSeconds(long runTtlSeconds) {
+            this.runTtlSeconds = runTtlSeconds;
         }
     }
 
@@ -602,4 +636,5 @@ public class RagProperties {
             this.localRoot = localRoot;
         }
     }
+
 }

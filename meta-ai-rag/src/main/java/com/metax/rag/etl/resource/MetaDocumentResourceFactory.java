@@ -4,19 +4,22 @@ import com.metax.rag.config.RagProperties;
 import com.metax.rag.etl.model.DocumentSourceType;
 import com.metax.rag.indexing.DocumentIndexingRequest;
 import com.metax.rag.storage.DocumentStorageService;
+import com.metax.rag.storage.LegacyDocumentStorageService;
+import com.metax.rag.storage.ObjectDocumentStorageService;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 import java.nio.file.Path;
+import java.util.List;
 
 /**
  * MetaDocumentResourceFactory .
  *
  * <p>
  * MetaAI 文档资源工厂，负责把对象存储文件流和受控本地文件统一转换为 Spring Resource
- * documentType 也在这里完成最终解析，保证 Reader、metadata 和 job 使用同一个类型值
+ * documentType 也在这里完成最终解析，保证 Reader、metadata 和 run 使用同一个类型值
  *
  * @author IBibiChen
  * @version v1.0
@@ -31,11 +34,22 @@ public class MetaDocumentResourceFactory {
 
     private final MetaDocumentTypeResolver documentTypeResolver;
 
+    /**
+     * 创建文档资源工厂
+     *
+     * <p>
+     * storageServices 使用集合注入，避免同时存在 object / legacy 多个 DocumentStorageService Bean 时构造器注入歧义
+     * 实际使用的存储实现由 metax.ai.rag.storage.provider 决定，当前默认 provider 为 object
+     *
+     * @param properties           RAG 配置
+     * @param storageServices      所有文档存储实现
+     * @param documentTypeResolver 文档类型解析器
+     */
     public MetaDocumentResourceFactory(RagProperties properties,
-                                       DocumentStorageService storageService,
+                                       List<DocumentStorageService> storageServices,
                                        MetaDocumentTypeResolver documentTypeResolver) {
         this.properties = properties;
-        this.storageService = storageService;
+        this.storageService = resolveStorageService(properties, storageServices);
         this.documentTypeResolver = documentTypeResolver;
     }
 
@@ -93,6 +107,63 @@ public class MetaDocumentResourceFactory {
     private String resolveSource(String source, String fallback) {
         // source 面向引用展示，未显式传入时使用 objectKey 或 localPath 兜底
         return StringUtils.hasText(source) ? source : fallback;
+    }
+
+    /**
+     * 按 provider 解析唯一文档存储实现
+     *
+     * <p>
+     * 这里不直接注入 ObjectDocumentStorageService，是为了保留 provider=legacy 的扩展入口
+     * 同时把未匹配或重复匹配的配置错误前置暴露，避免异步索引执行运行到读取文件时才失败
+     *
+     * @param properties      RAG 配置
+     * @param storageServices 所有文档存储实现
+     * @return 当前 provider 对应的文档存储实现
+     */
+    private DocumentStorageService resolveStorageService(RagProperties properties,
+                                                         List<DocumentStorageService> storageServices) {
+        String provider = properties.getStorage().getProvider();
+        List<DocumentStorageService> matched = storageServices.stream()
+                .filter(storageService -> matchesProvider(provider, storageService))
+                .toList();
+        if (matched.isEmpty()) {
+            throw new IllegalStateException("No DocumentStorageService found for provider: " + provider);
+        }
+        if (matched.size() > 1) {
+            throw new IllegalStateException("Multiple DocumentStorageService found for provider: " + provider);
+        }
+        return matched.get(0);
+    }
+
+    /**
+     * 判断存储实现是否匹配当前 provider
+     *
+     * @param provider       配置中的存储 provider
+     * @param storageService 候选存储实现
+     * @return 是否匹配
+     */
+    private boolean matchesProvider(String provider, DocumentStorageService storageService) {
+        return provider.equals(storageProvider(storageService));
+    }
+
+    /**
+     * 解析存储实现对应的 provider 名称
+     *
+     * <p>
+     * object 对应对象存储实现，legacy 对应老系统文件服务适配入口
+     * 测试子类可以覆写该方法模拟不同 provider，避免依赖真实存储客户端
+     *
+     * @param storageService 文档存储实现
+     * @return provider 名称
+     */
+    protected String storageProvider(DocumentStorageService storageService) {
+        if (storageService instanceof ObjectDocumentStorageService) {
+            return "object";
+        }
+        if (storageService instanceof LegacyDocumentStorageService) {
+            return "legacy";
+        }
+        return "";
     }
 }
 

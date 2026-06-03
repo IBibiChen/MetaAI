@@ -104,8 +104,16 @@ class MetaEtlPipelineFactoryTest {
     }
 
     private DocumentIndexingRequest request() {
-        return new DocumentIndexingRequest("tenant-1", "kb-1", "doc-1",
-                "txt", DocumentSourceType.LOCAL_FILE,
-                "docs/demo.txt", null, null, "docs/demo.txt");
+        return DocumentIndexingRequest.builder()
+                .tenantId("tenant-1")
+                .knowledgeBaseId("kb-1")
+                .documentId("doc-1")
+                .visibility("PUBLIC")
+                .documentType("txt")
+                .sourceType(DocumentSourceType.LOCAL_FILE)
+                .source("docs/demo.txt")
+                .filename("demo.txt")
+                .localPath("docs/demo.txt")
+                .build();
     }
 }

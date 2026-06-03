@@ -131,7 +131,7 @@ public class RetrievalAdvisorFactory {
                           ChatModel chatModel,
                           RetrievalOptions options,
                           Filter.Expression filterExpression) {
-        return create(vectorStore, options.topK(), options.similarityThreshold(), filterExpression, chatModel);
+        return create(vectorStore, options.getTopK(), options.getSimilarityThreshold(), filterExpression, chatModel);
     }
 
     /**
@@ -191,8 +191,8 @@ public class RetrievalAdvisorFactory {
         RetrievalAugmentationAdvisor.Builder advisorBuilder = RetrievalAugmentationAdvisor.builder()
                 .documentRetriever(retrieverBuilder.build())
                 .queryAugmenter(ContextualQueryAugmenter.builder()
-                        // 没有召回上下文时拒绝继续增强，避免 RAG 接口退化成普通聊天
-                        .allowEmptyContext(false)
+                        // allowEmptyContext=true 表示知识库优先，空上下文时允许模型按通用能力回答
+                        .allowEmptyContext(properties.getRetrieval().isAllowEmptyContext())
                         .build());
 
         // 阶段 4：按配置接入检索前 query transformer
@@ -214,7 +214,7 @@ public class RetrievalAdvisorFactory {
         }
 
         // 阶段 6：返回可直接挂到 ChatClient.advisors 的 RetrievalAugmentationAdvisor
-        // allowEmptyContext=false 表示没有召回上下文时不让模型自由发挥，避免 RAG 场景编造答案
+        // allowEmptyContext 由配置控制，支持知识库优先和严格 RAG 两种模式
         return advisorBuilder.build();
     }
 

@@ -1,6 +1,7 @@
 package com.metax.rag.etl.transformer;
 
 import com.metax.rag.indexing.DocumentIndexingRequest;
+import com.metax.rag.model.DocumentVisibility;
 import com.metax.rag.model.MetadataKeys;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.document.DocumentTransformer;
@@ -71,11 +72,16 @@ public class MetaDocumentMetadataTransformer implements DocumentTransformer {
         // tenantId 和 knowledgeBaseId 是检索强过滤边界，缺失会导致跨租户或跨知识库召回
         metadata.put(MetadataKeys.TENANT_ID, request.tenantId());
         metadata.put(MetadataKeys.KNOWLEDGE_BASE_ID, request.knowledgeBaseId());
+        DocumentVisibility visibility = request.resolvedVisibility();
+        metadata.put(MetadataKeys.VISIBILITY, visibility.name());
+        metadata.put(MetadataKeys.DEPT_ID, blankToEmpty(request.deptId()));
+        metadata.put(MetadataKeys.USER_ID, blankToEmpty(request.userId()));
         // documentId 是幂等覆盖边界，后续 upsert 会按它删除旧 chunk
         metadata.put(MetadataKeys.DOCUMENT_ID, request.documentId());
         // documentType 和 source 用于检索收窄、引用展示和问题排查
         metadata.put(MetadataKeys.DOCUMENT_TYPE, request.documentType());
         metadata.put(MetadataKeys.SOURCE, request.source());
+        metadata.put(MetadataKeys.FILENAME, blankToEmpty(request.filename()));
         // createdAt 使用统一时间戳，保证同一次索引生成的所有原始 Document 时间一致
         metadata.put(MetadataKeys.CREATED_AT, createdAt);
         Document enriched = rebuildDocument(document, metadata, document.getId());
@@ -107,6 +113,10 @@ public class MetaDocumentMetadataTransformer implements DocumentTransformer {
         return builder.media(document.getMedia()).build();
     }
 
+    private String blankToEmpty(String value) {
+        return StringUtils.hasText(value) ? value : "";
+    }
+
     private void validate(DocumentIndexingRequest request) {
         // 这些字段都是检索过滤和幂等覆盖的必要字段，缺失时继续写入会污染知识库
         if (!StringUtils.hasText(request.tenantId())) {
@@ -114,6 +124,13 @@ public class MetaDocumentMetadataTransformer implements DocumentTransformer {
         }
         if (!StringUtils.hasText(request.knowledgeBaseId())) {
             throw new IllegalArgumentException("knowledgeBaseId must not be blank");
+        }
+        DocumentVisibility visibility = request.resolvedVisibility();
+        if (visibility == DocumentVisibility.DEPT && !StringUtils.hasText(request.deptId())) {
+            throw new IllegalArgumentException("deptId must not be blank when visibility is DEPT");
+        }
+        if (visibility == DocumentVisibility.USER && !StringUtils.hasText(request.userId())) {
+            throw new IllegalArgumentException("userId must not be blank when visibility is USER");
         }
         if (!StringUtils.hasText(request.documentId())) {
             throw new IllegalArgumentException("documentId must not be blank");
@@ -126,4 +143,3 @@ public class MetaDocumentMetadataTransformer implements DocumentTransformer {
         }
     }
 }
-

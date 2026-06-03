@@ -6,12 +6,13 @@ import com.metax.rag.indexing.DocumentIndexingRequest;
 import com.metax.rag.storage.DocumentStorageService;
 import org.junit.jupiter.api.Test;
 
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.mock;
 
 /**
  * MetaDocumentResourceFactoryTest .
@@ -87,11 +88,84 @@ class MetaDocumentResourceFactoryTest {
                 .hasMessageContaining("does not exist");
     }
 
+    /**
+     * object provider 应选择对象存储实现
+     */
+    @Test
+    void shouldSelectObjectStorageServiceByProvider() {
+        RagProperties properties = properties(Path.of("D:/meta-ai/knowledge"));
+        properties.getStorage().setProvider("object");
+
+        MetaDocumentResourceFactory factory = factory(properties,
+                List.of(new TestDocumentStorageService("object"),
+                        new UnknownDocumentStorageService()));
+        DocumentIndexingRequest request = request(DocumentSourceType.OBJECT_STORAGE, null,
+                "bucket", "knowledge/demo.md", null);
+
+        MetaDocumentResource resource = factory.create(request);
+
+        assertThat(resource.resource()).isInstanceOf(MetaObjectStorageResource.class);
+    }
+
+    /**
+     * legacy provider 应选择老系统文件服务实现
+     */
+    @Test
+    void shouldSelectLegacyStorageServiceByProvider() {
+        RagProperties properties = properties(Path.of("D:/meta-ai/knowledge"));
+        properties.getStorage().setProvider("legacy");
+
+        MetaDocumentResourceFactory factory = factory(properties,
+                List.of(new TestDocumentStorageService("legacy"),
+                        new UnknownDocumentStorageService()));
+        DocumentIndexingRequest request = request(DocumentSourceType.OBJECT_STORAGE, null,
+                "bucket", "knowledge/demo.md", null);
+
+        MetaDocumentResource resource = factory.create(request);
+
+        assertThat(resource.resource()).isInstanceOf(MetaObjectStorageResource.class);
+    }
+
+    /**
+     * 未匹配 provider 时应直接失败
+     */
+    @Test
+    void shouldRejectUnknownStorageProvider() {
+        RagProperties properties = properties(Path.of("D:/meta-ai/knowledge"));
+        properties.getStorage().setProvider("unknown");
+
+        assertThatThrownBy(() -> factory(properties, List.of(new UnknownDocumentStorageService())))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("No DocumentStorageService found for provider: unknown");
+    }
+
+    /**
+     * 同一 provider 存在多个存储实现时应直接失败
+     */
+    @Test
+    void shouldRejectDuplicateStorageProvider() {
+        RagProperties properties = properties(Path.of("D:/meta-ai/knowledge"));
+        properties.getStorage().setProvider("object");
+
+        assertThatThrownBy(() -> factory(properties, List.of(new TestDocumentStorageService("object"),
+                new TestDocumentStorageService("object"))))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Multiple DocumentStorageService found for provider: object");
+    }
+
     private MetaDocumentResourceFactory factory(Path localRoot) {
+        RagProperties properties = properties(localRoot);
+        return factory(properties, List.of(new TestDocumentStorageService("object")));
+    }
+
+    private MetaDocumentResourceFactory factory(RagProperties properties, List<DocumentStorageService> storageServices) {
+        return new TestMetaDocumentResourceFactory(properties, storageServices, new MetaDocumentTypeResolver());
+    }
+
+    private RagProperties properties(Path localRoot) {
         RagProperties properties = new RagProperties();
         properties.getStorage().setLocalRoot(localRoot.toString());
-        return new MetaDocumentResourceFactory(properties, mock(DocumentStorageService.class),
-                new MetaDocumentTypeResolver());
+        return properties;
     }
 
     private DocumentIndexingRequest request(DocumentSourceType sourceType,
@@ -99,8 +173,70 @@ class MetaDocumentResourceFactoryTest {
                                         String bucket,
                                         String objectKey,
                                         String localPath) {
-        return new DocumentIndexingRequest("tenant-1", "kb-1", "doc-1", documentType, sourceType,
-                null, bucket, objectKey, localPath);
+        return DocumentIndexingRequest.builder()
+                .tenantId("tenant-1")
+                .knowledgeBaseId("kb-1")
+                .documentId("doc-1")
+                .visibility("PUBLIC")
+                .documentType(documentType)
+                .sourceType(sourceType)
+                .filename(filename(objectKey, localPath))
+                .bucket(bucket)
+                .objectKey(objectKey)
+                .localPath(localPath)
+                .build();
+    }
+
+    private String filename(String objectKey, String localPath) {
+        String value = objectKey != null ? objectKey : localPath;
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.replace("\\", "/");
+        return normalized.substring(normalized.lastIndexOf('/') + 1);
+    }
+
+    private static class TestMetaDocumentResourceFactory extends MetaDocumentResourceFactory {
+
+        TestMetaDocumentResourceFactory(RagProperties properties,
+                                        List<DocumentStorageService> storageServices,
+                                        MetaDocumentTypeResolver documentTypeResolver) {
+            super(properties, storageServices, documentTypeResolver);
+        }
+
+        @Override
+        protected String storageProvider(DocumentStorageService storageService) {
+            if (storageService instanceof TestDocumentStorageService testStorageService) {
+                return testStorageService.provider;
+            }
+            return super.storageProvider(storageService);
+        }
+    }
+
+    private static class TestDocumentStorageService implements DocumentStorageService {
+
+        private final String provider;
+
+        TestDocumentStorageService(String provider) {
+            this.provider = provider;
+        }
+
+        @Override
+        public InputStream getObject(String bucket, String objectKey) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public String defaultBucket() {
+            return "test";
+        }
+    }
+
+    private static class UnknownDocumentStorageService extends TestDocumentStorageService {
+
+        UnknownDocumentStorageService() {
+            super("");
+        }
     }
 }
 

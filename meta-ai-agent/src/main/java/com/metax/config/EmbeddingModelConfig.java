@@ -61,17 +61,18 @@ public class EmbeddingModelConfig {
      * spring.ai.vectorstore.type=milvus 时使用 Milvus
      * Redis 使用 MetaRedisVectorStoreConfig 补齐 metadataFields，Qdrant / Milvus 使用官方自动装配
      *
-     * RAG ChatClient 绑定规则
+     * ChatClient 绑定规则
      *
-     * ChatClient 绑定当前唯一 ChatModel 和当前唯一 ChatMemory
-     * RAG 不再创建独立 ChatClient，检索增强能力在请求阶段通过 RetrievalAugmentationAdvisor 动态追加
-     * ChatMemory 只影响对话历史存储位置，不影响知识库检索使用的 VectorStore
+     * 普通 ChatClient 和 RAG ChatClient 绑定当前唯一 ChatModel 和默认 redisChatMemory
+     * 两者按系统提示词边界拆分，RAG 检索增强能力仍在请求阶段通过 RetrievalAugmentationAdvisor 动态追加
+     * ChatMemory 只影响模型上下文窗口，不负责完整用户历史归档
+     * ChatHistory 负责用户可查看的完整历史，不影响知识库检索使用的 VectorStore
      *
      * 当前主链路装配图
      *
      * spring.ai.model.embedding -> EmbeddingModel -> vectorStore
-     * spring.ai.model.chat -> ChatModel -> chatClient
-     * redisChatMemory -> chatClient
+     * spring.ai.model.chat -> ChatModel -> chatClient / ragChatClient
+     * redisChatMemory -> chatClient / ragChatClient
      * spring.ai.vectorstore.type -> VectorStore -> RetrievalAugmentationAdvisor
      *
      * 禁止事项和排查方式

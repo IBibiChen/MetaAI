@@ -1,5 +1,6 @@
 package com.metax.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
@@ -26,6 +27,7 @@ public class RedisConfig {
      * 普通 Redis 数据访问使用 RedisTemplate，Redis 向量库使用 JedisPooled
      * -
      * GenericJackson2JsonRedisSerializer 适合 Java 服务内部通用对象缓存，会携带类型信息
+     * 值序列化器绑定 Spring Boot 管理的 ObjectMapper 副本，继承 JavaTimeModule 等 Jackson 模块
      * 它就是为 RedisTemplate<String, Object> 这种 value 类型不固定的场景设计的
      * 当前不使用固定类型 Jackson2JsonRedisSerializer，避免 Object value 反序列化时类型信息不足
      * 跨语言数据或固定结构数据建议单独定义 typed RedisTemplate 或使用 StringRedisTemplate
@@ -46,13 +48,18 @@ public class RedisConfig {
      * this.redisTemplate.opsForZSet()     // 提供了操作 zset 的所有方法
      *
      * @param redisConnectionFactory RedisConnectionFactory
+     * @param objectMapper           Spring Boot 管理的 ObjectMapper
      * @return RedisTemplate
      */
     @Bean
-    public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory redisConnectionFactory) {
+    public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory redisConnectionFactory,
+                                                       ObjectMapper objectMapper) {
         RedisTemplate<String, Object> redisTemplate = new RedisTemplate<>();
         StringRedisSerializer stringSerializer = new StringRedisSerializer();
-        GenericJackson2JsonRedisSerializer jsonSerializer = new GenericJackson2JsonRedisSerializer();
+        GenericJackson2JsonRedisSerializer jsonSerializer = GenericJackson2JsonRedisSerializer.builder()
+                .objectMapper(objectMapper.copy())
+                .defaultTyping(true)
+                .build();
 
         redisTemplate.setConnectionFactory(redisConnectionFactory);
         // key / hashKey 使用 string 序列化，保证 Redis key 可读
