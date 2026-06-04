@@ -1,0 +1,158 @@
+* {
+    box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+}
+
+body {
+    font-family: Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    "Microsoft YaHei",
+    sans-serif;
+    background: #0d1117;
+}
+
+.app-shell {
+    min-height: 100vh;
+    background: radial-gradient(circle at 15% 10%, rgba(65, 214, 183, 0.11), transparent 28%),
+    linear-gradient(135deg, #0d1117 0%, #101822 56%, #0c1017 100%);
+}
+
+.app-sider {
+    background: rgba(14, 19, 27, 0.92);
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 72px;
+    padding: 0 20px;
+}
+
+.brand-mark {
+    display: grid;
+    width: 34px;
+    height: 34px;
+    place-items: center;
+    border: 1px solid rgba(65, 214, 183, 0.48);
+    border-radius: 8px;
+    color: #41d6b7;
+    font-weight: 800;
+    background: rgba(65, 214, 183, 0.08);
+}
+
+.brand-text {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.2;
+}
+
+.brand-text strong {
+    font-size: 16px;
+    color: #f4f7fb;
+}
+
+.brand-text span {
+    font-size: 12px;
+    color: #8c99aa;
+}
+
+.app-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    height: 72px;
+    padding: 0 24px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(13, 17, 23, 0.78);
+    backdrop-filter: blur(12px);
+}
+
+.page-title {
+    color: #f4f7fb;
+    font-size: 18px;
+    font-weight: 700;
+}
+
+.page-subtitle {
+    max-width: 520px;
+    margin-top: 4px;
+    overflow: hidden;
+    color: #7f8b9b;
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.workspace-bar {
+    display: grid;
+    grid-template-columns: minmax(108px, 1fr) minmax(108px, 1fr) minmax(160px, 1.15fr) minmax(128px, 1fr) auto auto;
+    align-items: center;
+    gap: 10px;
+    width: min(980px, 68vw);
+}
+
+.workspace-bar .n-button {
+    min-width: 82px;
+}
+
+.app-content {
+    height: calc(100vh - 72px);
+    min-height: 0;
+    padding: 18px;
+    overflow: hidden;
+}
+
+.surface {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    background: rgba(21, 26, 33, 0.86);
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.24);
+}
+
+.toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.toolbar-main {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+}
+
+@media (max-width: 980px) {
+    .app-header {
+        align-items: flex-start;
+        height: auto;
+        min-height: 72px;
+        flex-direction: column;
+        padding: 14px 16px;
+    }
+
+    .workspace-bar {
+        width: 100%;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .app-content {
+        height: calc(100vh - 136px);
+        padding: 12px;
+    }
+}
