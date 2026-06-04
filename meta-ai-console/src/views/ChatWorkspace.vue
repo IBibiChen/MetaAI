@@ -26,12 +26,15 @@
         </n-button>
       </div>
       <div class="history-list">
-        <button
+        <div
             v-for="item in chats"
             :key="item.id"
-            :class="['history-item', { active: item.id === activeChatId }]"
-            type="button"
+            :class="['history-item', { active: item.id === activeChatId, pinned: item.pinned }]"
+            role="button"
+            tabindex="0"
             @click="selectChat(item)"
+            @keydown.enter.prevent="selectChat(item)"
+            @keydown.space.prevent="selectChat(item)"
         >
           <span :class="['history-mode', modeClass(item.chatMode)]">{{ formatChatMode(item.chatMode) }}</span>
           <strong>{{ item.title }}</strong>
@@ -39,29 +42,41 @@
           <div class="history-meta">
             <time>{{ formatTime(item.lastMessageAt) }}</time>
             <div class="history-actions" @click.stop>
-              <button type="button" :title="item.pinned ? '取消置顶' : '置顶'" @click="togglePinned(item)">
+              <button
+                  type="button"
+                  :class="['history-action-button', { 'is-active': item.pinned }]"
+                  :aria-pressed="item.pinned"
+                  :title="item.pinned ? '取消置顶' : '置顶'"
+                  @click="togglePinned(item)"
+              >
                 <n-icon>
                   <Pin/>
                 </n-icon>
               </button>
-              <button type="button" :title="item.favorite ? '取消收藏' : '收藏'" @click="toggleFavorite(item)">
+              <button
+                  type="button"
+                  :class="['history-action-button', { 'is-active': item.favorite }]"
+                  :aria-pressed="item.favorite"
+                  :title="item.favorite ? '取消收藏' : '收藏'"
+                  @click="toggleFavorite(item)"
+              >
                 <n-icon>
                   <Star/>
                 </n-icon>
               </button>
-              <button type="button" title="重命名" @click="renameSelectedChat(item)">
+              <button class="history-action-button" type="button" title="重命名" @click="renameSelectedChat(item)">
                 <n-icon>
                   <Pencil/>
                 </n-icon>
               </button>
-              <button type="button" title="删除" @click="deleteSelectedChat(item)">
+              <button class="history-action-button" type="button" title="删除" @click="deleteSelectedChat(item)">
                 <n-icon>
                   <Trash2/>
                 </n-icon>
               </button>
             </div>
           </div>
-        </button>
+        </div>
       </div>
     </aside>
 
@@ -226,6 +241,60 @@
         </n-form>
       </n-drawer-content>
     </n-drawer>
+
+    <n-modal
+        v-model:show="renameModalVisible"
+        preset="card"
+        title="重命名对话"
+        :style="{ width: '420px', maxWidth: 'calc(100vw - 32px)' }"
+        :bordered="false"
+        :segmented="{ content: true, action: true }"
+        @after-leave="resetRenameForm"
+    >
+      <n-form label-placement="top" @submit.prevent="submitRename">
+        <n-form-item label="对话标题">
+          <n-input
+              ref="renameInputRef"
+              v-model:value="renameForm.title"
+              maxlength="80"
+              show-count
+              placeholder="输入新的对话标题"
+              @keydown.enter.prevent="submitRename"
+          />
+        </n-form-item>
+      </n-form>
+      <template #footer>
+        <div class="rename-modal-actions">
+          <n-button tertiary :disabled="renameSubmitting" @click="renameModalVisible = false">
+            取消
+          </n-button>
+          <n-button type="primary" :loading="renameSubmitting" :disabled="!renameForm.title.trim()"
+                    @click="submitRename">
+            保存
+          </n-button>
+        </div>
+      </template>
+    </n-modal>
+
+    <n-modal
+        v-model:show="deleteModalVisible"
+        preset="dialog"
+        type="warning"
+        title="删除对话"
+        positive-text="删除"
+        negative-text="取消"
+        :style="{ width: '380px', maxWidth: 'calc(100vw - 32px)' }"
+        :positive-button-props="{ loading: deleteSubmitting, type: 'error' }"
+        :negative-button-props="{ disabled: deleteSubmitting }"
+        @positive-click="submitDelete"
+        @negative-click="deleteModalVisible = false"
+        @after-leave="resetDeleteForm"
+    >
+      <div class="delete-dialog-content">
+        <p>删除后该对话会从历史列表中移除</p>
+        <strong>{{ deleteForm.chat?.title }}</strong>
+      </div>
+    </n-modal>
   </div>
 </template>
 
@@ -285,6 +354,18 @@ const messageTransitioning = ref(false)
 const chatListLoading = ref(false)
 const advancedVisible = ref(false)
 const chatMode = ref<'plain' | 'rag'>('rag')
+const renameModalVisible = ref(false)
+const renameSubmitting = ref(false)
+const renameInputRef = ref<{ focus: () => void } | null>(null)
+const renameForm = reactive({
+  chat: null as MetaChat | null,
+  title: '',
+})
+const deleteModalVisible = ref(false)
+const deleteSubmitting = ref(false)
+const deleteForm = reactive({
+  chat: null as MetaChat | null,
+})
 
 const modeOptions = [
   {label: '知识问答', value: 'rag'},
@@ -497,6 +578,7 @@ async function loadChats() {
   try {
     const page = await fetchChats(workspace.tenantId, workspace.userId)
     chats.value = page.records
+    sortChats()
     const current = chats.value.find((item) => item.conversationId === workspace.conversationId)
     if (current) {
       activeChatId.value = current.id
@@ -516,36 +598,87 @@ async function selectChat(chat: MetaChat) {
 }
 
 async function togglePinned(chat: MetaChat) {
+  const nextPinned = !chat.pinned
   try {
-    await updateChatFlags(chat.id, {pinned: !chat.pinned})
-    await loadChats()
+    const updatedChat = await updateChatFlags(chat.id, {pinned: nextPinned})
+    patchChatInList(updatedChat)
+    sortChats()
   } catch (error) {
     message.error(error instanceof Error ? error.message : '更新置顶失败')
   }
 }
 
 async function toggleFavorite(chat: MetaChat) {
+  const nextFavorite = !chat.favorite
   try {
-    await updateChatFlags(chat.id, {favorite: !chat.favorite})
-    await loadChats()
+    const updatedChat = await updateChatFlags(chat.id, {favorite: nextFavorite})
+    patchChatInList(updatedChat)
   } catch (error) {
     message.error(error instanceof Error ? error.message : '更新收藏失败')
   }
 }
 
-async function renameSelectedChat(chat: MetaChat) {
-  const title = window.prompt('对话标题', chat.title)
-  if (!title?.trim()) return
-  try {
-    await renameChat(chat.id, title.trim())
-    await loadChats()
-  } catch (error) {
-    message.error(error instanceof Error ? error.message : '重命名失败')
+function patchChatInList(updatedChat: MetaChat) {
+  const index = chats.value.findIndex((item) => item.id === updatedChat.id)
+  if (index >= 0) {
+    chats.value[index] = updatedChat
   }
 }
 
-async function deleteSelectedChat(chat: MetaChat) {
-  if (!window.confirm(`删除对话「${chat.title}」？`)) return
+function sortChats() {
+  chats.value = [...chats.value].sort((left, right) => {
+    if (left.pinned !== right.pinned) {
+      return left.pinned ? -1 : 1
+    }
+    return toTime(right.lastMessageAt || right.updatedAt || right.createdAt) - toTime(left.lastMessageAt || left.updatedAt || left.createdAt)
+  })
+}
+
+async function renameSelectedChat(chat: MetaChat) {
+  renameForm.chat = chat
+  renameForm.title = chat.title
+  renameModalVisible.value = true
+  await nextTick()
+  renameInputRef.value?.focus()
+}
+
+async function submitRename() {
+  const chat = renameForm.chat
+  const title = renameForm.title.trim()
+  if (!chat || !title || renameSubmitting.value) return
+
+  if (title === chat.title) {
+    renameModalVisible.value = false
+    return
+  }
+
+  renameSubmitting.value = true
+  try {
+    const updatedChat = await renameChat(chat.id, title)
+    patchChatInList(updatedChat)
+    renameModalVisible.value = false
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '重命名失败')
+  } finally {
+    renameSubmitting.value = false
+  }
+}
+
+function resetRenameForm() {
+  renameForm.chat = null
+  renameForm.title = ''
+}
+
+function deleteSelectedChat(chat: MetaChat) {
+  deleteForm.chat = chat
+  deleteModalVisible.value = true
+}
+
+async function submitDelete() {
+  const chat = deleteForm.chat
+  if (!chat || deleteSubmitting.value) return false
+
+  deleteSubmitting.value = true
   try {
     await deleteChat(chat.id)
     if (activeChatId.value === chat.id) {
@@ -554,9 +687,18 @@ async function deleteSelectedChat(chat: MetaChat) {
       workspace.resetSession()
     }
     await loadChats()
+    deleteModalVisible.value = false
+    return true
   } catch (error) {
     message.error(error instanceof Error ? error.message : '删除失败')
+    return false
+  } finally {
+    deleteSubmitting.value = false
   }
+}
+
+function resetDeleteForm() {
+  deleteForm.chat = null
 }
 
 function clearMessages() {
@@ -748,6 +890,12 @@ function formatTime(value?: string) {
   return value ? new Date(value).toLocaleString() : ''
 }
 
+function toTime(value?: string) {
+  if (!value) return 0
+  const time = new Date(value).getTime()
+  return Number.isNaN(time) ? 0 : time
+}
+
 function formatChatMode(value?: string) {
   const normalized = value?.toLowerCase()
   if (normalized === 'rag' || normalized === 'rag_details') {
@@ -862,9 +1010,24 @@ async function downloadReference(reference: RetrievalCitation) {
   cursor: pointer;
 }
 
+.history-item:focus-visible {
+  outline: 2px solid rgba(65, 214, 183, 0.55);
+  outline-offset: 2px;
+}
+
 .history-item.active {
   border-color: rgba(65, 214, 183, 0.45);
   background: rgba(65, 214, 183, 0.1);
+}
+
+.history-item.pinned {
+  border-color: rgba(247, 201, 72, 0.42);
+  background: linear-gradient(135deg, rgba(247, 201, 72, 0.12), rgba(255, 255, 255, 0.03));
+}
+
+.history-item.active.pinned {
+  border-color: rgba(65, 214, 183, 0.5);
+  background: linear-gradient(135deg, rgba(247, 201, 72, 0.14), rgba(65, 214, 183, 0.12));
 }
 
 .history-mode {
@@ -933,7 +1096,7 @@ async function downloadReference(reference: RetrievalCitation) {
   gap: 4px;
 }
 
-.history-actions button {
+.history-action-button {
   display: grid;
   width: 22px;
   height: 22px;
@@ -945,9 +1108,49 @@ async function downloadReference(reference: RetrievalCitation) {
   cursor: pointer;
 }
 
-.history-actions button:hover {
+.history-action-button:hover {
   color: #41d6b7;
   background: rgba(65, 214, 183, 0.12);
+}
+
+.history-action-button.is-active {
+  color: #f7c948;
+  background: rgba(247, 201, 72, 0.16);
+}
+
+.history-action-button.is-active:hover {
+  color: #ffe082;
+  background: rgba(247, 201, 72, 0.22);
+}
+
+.history-action-button:focus-visible {
+  outline: 2px solid rgba(247, 201, 72, 0.5);
+  outline-offset: 2px;
+}
+
+.rename-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.delete-dialog-content {
+  display: grid;
+  gap: 8px;
+}
+
+.delete-dialog-content p {
+  margin: 0;
+  color: #aeb9c8;
+  font-size: 13px;
+}
+
+.delete-dialog-content strong {
+  overflow: hidden;
+  color: #f4f7fb;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .chat-surface {

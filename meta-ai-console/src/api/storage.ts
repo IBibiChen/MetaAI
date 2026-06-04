@@ -126,10 +126,64 @@ export async function downloadDocument(tenantId: string, knowledgeBaseId: string
         },
     )
 
+    await assertDownloadBlob(response.data)
+
+    const filename = filenameFromDisposition(response.headers['content-disposition']) ||
+        document.originalFilename ||
+        document.documentId
     const url = URL.createObjectURL(response.data)
     const link = window.document.createElement('a')
     link.href = url
-    link.download = document.originalFilename || document.documentId
+    link.download = filename
     link.click()
     URL.revokeObjectURL(url)
+}
+
+async function assertDownloadBlob(blob: Blob) {
+    if (!blob.size) {
+        throw new Error('下载文件为空')
+    }
+
+    if (isJsonBlob(blob)) {
+        const text = await blob.text()
+        throw new Error(errorMessageFromJson(text) || '下载失败')
+    }
+}
+
+function isJsonBlob(blob: Blob) {
+    const type = blob.type.toLowerCase()
+    return type.includes('application/json') || type.includes('text/json')
+}
+
+function errorMessageFromJson(text: string) {
+    try {
+        const payload = JSON.parse(text) as Partial<CommonResult<unknown>> & { message?: string }
+        return payload.message
+    } catch {
+        return undefined
+    }
+}
+
+function filenameFromDisposition(disposition?: string) {
+    if (!disposition) return undefined
+
+    const encodedMatch = disposition.match(/filename\*=UTF-8''([^;]+)/i)
+    if (encodedMatch?.[1]) {
+        return decodeDispositionValue(encodedMatch[1])
+    }
+
+    const plainMatch = disposition.match(/filename="?([^";]+)"?/i)
+    if (plainMatch?.[1]) {
+        return decodeDispositionValue(plainMatch[1])
+    }
+
+    return undefined
+}
+
+function decodeDispositionValue(value: string) {
+    try {
+        return decodeURIComponent(value)
+    } catch {
+        return value
+    }
 }

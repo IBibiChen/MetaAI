@@ -1,5 +1,5 @@
 <template>
-  <n-config-provider :theme="darkTheme" :theme-overrides="themeOverrides">
+  <n-config-provider :theme="darkTheme" :theme-overrides="themeOverrides" :locale="zhCN" :date-locale="dateZhCN">
     <n-message-provider>
       <n-dialog-provider>
         <n-layout class="app-shell" has-sider>
@@ -79,7 +79,9 @@ import {RouterLink, useRoute, useRouter} from 'vue-router'
 import {Bot, Database} from 'lucide-vue-next'
 import {
   darkTheme,
+  dateZhCN,
   NIcon,
+  zhCN,
   type MenuOption,
   type GlobalThemeOverrides,
 } from 'naive-ui'

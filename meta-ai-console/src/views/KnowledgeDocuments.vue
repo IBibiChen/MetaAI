@@ -26,24 +26,20 @@
         <n-button type="primary" :loading="loading" @click="loadDocuments">
           查询
         </n-button>
+        <n-button secondary @click="resetQuery">
+          重置
+        </n-button>
       </div>
       <div class="upload-actions">
-        <n-button secondary @click="uploadPanelVisible = true">
+        <n-button class="upload-toolbar-button" secondary @click="uploadPanelVisible = true">
           上传设置
         </n-button>
-        <n-upload
-            :show-file-list="false"
-            :custom-request="handleUpload"
-        >
-          <n-button type="primary">
-            <template #icon>
-              <n-icon>
-                <UploadCloud/>
-              </n-icon>
-            </template>
-            上传文件
-          </n-button>
-        </n-upload>
+        <n-button class="upload-toolbar-button" type="primary" @click="openUploadDialog">
+          <template #icon>
+            <FileUp/>
+          </template>
+          上传文件
+        </n-button>
       </div>
     </div>
 
@@ -61,28 +57,120 @@
 
     <n-drawer v-model:show="uploadPanelVisible" :width="420">
       <n-drawer-content title="上传设置">
-        <n-form label-placement="top">
-          <n-form-item label="可见性">
-            <n-select v-model:value="uploadForm.visibility" :options="visibilityOptions"/>
-          </n-form-item>
-          <n-form-item label="部门 ID">
-            <n-input v-model:value="uploadForm.deptId" placeholder="visibility = DEPT 时填写"/>
-          </n-form-item>
-          <n-form-item label="用户 ID">
-            <n-input v-model:value="uploadForm.userId" placeholder="visibility = USER 时填写"/>
-          </n-form-item>
-          <n-form-item label="文档类型">
-            <n-input v-model:value="uploadForm.documentType" placeholder="为空时由后端按文件名识别"/>
-          </n-form-item>
-          <n-form-item>
-            <n-checkbox v-model:checked="uploadForm.autoIndex">上传后自动索引</n-checkbox>
-          </n-form-item>
+        <n-form class="upload-form" label-placement="top">
+          <div class="upload-form-grid upload-settings-grid">
+            <n-form-item label="租户 ID">
+              <n-input v-model:value="uploadDefaults.tenantId" placeholder="上传默认租户 ID"/>
+            </n-form-item>
+            <n-form-item label="知识库 ID">
+              <n-input v-model:value="uploadDefaults.knowledgeBaseId" placeholder="上传默认知识库 ID"/>
+            </n-form-item>
+            <n-form-item label="可见性">
+              <n-select v-model:value="uploadDefaults.visibility" :options="visibilityOptions"/>
+            </n-form-item>
+            <n-form-item label="部门 ID">
+              <n-input v-model:value="uploadDefaults.deptId" placeholder="DEPT 时填写"/>
+            </n-form-item>
+            <n-form-item label="用户 ID">
+              <n-input v-model:value="uploadDefaults.userId" placeholder="USER 时填写"/>
+            </n-form-item>
+            <n-form-item label="文档类型">
+              <n-input v-model:value="uploadDefaults.documentType" placeholder="自动识别"/>
+            </n-form-item>
+          </div>
+          <label class="upload-index-card">
+            <span>
+              <strong>上传后自动索引</strong>
+              <small>上传成功后立即提交索引任务</small>
+            </span>
+            <n-switch v-model:value="uploadDefaults.autoIndex"/>
+          </label>
         </n-form>
         <template #footer>
           <n-button @click="uploadPanelVisible = false">关闭</n-button>
         </template>
       </n-drawer-content>
     </n-drawer>
+
+    <n-modal
+        v-model:show="uploadDialogVisible"
+        preset="card"
+        title="上传文件"
+        :bordered="false"
+        :segmented="{ content: true, action: true }"
+        :style="{ width: '520px', maxWidth: 'calc(100vw - 32px)' }"
+        @after-leave="resetUploadDialog"
+    >
+      <n-form class="upload-form" label-placement="top">
+        <div class="upload-form-grid">
+          <n-form-item label="租户 ID">
+            <n-input v-model:value="uploadDraft.tenantId" :disabled="uploading" placeholder="上传租户 ID"/>
+          </n-form-item>
+          <n-form-item label="知识库 ID">
+            <n-input v-model:value="uploadDraft.knowledgeBaseId" :disabled="uploading" placeholder="上传知识库 ID"/>
+          </n-form-item>
+          <n-form-item label="可见性">
+            <n-select v-model:value="uploadDraft.visibility" :disabled="uploading" :options="visibilityOptions"/>
+          </n-form-item>
+          <n-form-item label="部门 ID">
+            <n-input v-model:value="uploadDraft.deptId" :disabled="uploading" placeholder="DEPT 时填写"/>
+          </n-form-item>
+          <n-form-item label="用户 ID">
+            <n-input v-model:value="uploadDraft.userId" :disabled="uploading" placeholder="USER 时填写"/>
+          </n-form-item>
+          <n-form-item label="文档类型">
+            <n-input v-model:value="uploadDraft.documentType" :disabled="uploading" placeholder="自动识别"/>
+          </n-form-item>
+        </div>
+        <label class="upload-index-card">
+          <span>
+            <strong>上传后自动索引</strong>
+            <small>上传成功后立即提交索引任务</small>
+          </span>
+          <n-switch v-model:value="uploadDraft.autoIndex" :disabled="uploading"/>
+        </label>
+        <div class="upload-file-card">
+          <div class="upload-file-head">
+            <strong>文件</strong>
+            <span>单次上传 1 个文件</span>
+          </div>
+          <input
+              ref="uploadFileInput"
+              class="upload-native-input"
+              type="file"
+              :accept="uploadAccept"
+              :disabled="uploading"
+              @change="handleUploadFileChange"
+          >
+          <div class="upload-file-body">
+            <n-button secondary :disabled="uploading" @click="openUploadFilePicker">
+              <template #icon>
+                <FileUp/>
+              </template>
+              选择文件
+            </n-button>
+            <div v-if="selectedUploadFile" class="upload-file-selected">
+              <span>{{ selectedUploadFile.name }}</span>
+              <small>{{ formatBytes(selectedUploadFile.size) }}</small>
+              <n-button quaternary size="tiny" :disabled="uploading" @click="clearSelectedUploadFile">
+                移除
+              </n-button>
+            </div>
+            <div v-else class="upload-file-empty">尚未选择文件</div>
+          </div>
+        </div>
+      </n-form>
+      <template #footer>
+        <div class="upload-dialog-actions">
+          <n-button tertiary :disabled="uploading" @click="uploadDialogVisible = false">
+            取消
+          </n-button>
+          <n-button type="primary" :loading="uploading" :disabled="!canUpload" @click="submitUpload">
+            上传
+          </n-button>
+        </div>
+      </template>
+    </n-modal>
   </div>
 </template>
 
@@ -90,15 +178,12 @@
 import {computed, h, onMounted, reactive, ref} from 'vue'
 import {
   NButton,
-  NIcon,
   NTag,
   NSpace,
-  NTooltip,
   type DataTableColumns,
-  type UploadCustomRequestOptions,
   useMessage,
 } from 'naive-ui'
-import {Download, Play, Trash2, UploadCloud} from 'lucide-vue-next'
+import {FileUp} from 'lucide-vue-next'
 
 import {
   downloadDocument,
@@ -115,6 +200,11 @@ const loading = ref(false)
 const documents = ref<StorageDocument[]>([])
 const total = ref(0)
 const uploadPanelVisible = ref(false)
+const uploadDialogVisible = ref(false)
+const uploading = ref(false)
+const uploadFileInput = ref<HTMLInputElement | null>(null)
+const selectedUploadFile = ref<File | null>(null)
+const uploadAccept = '.doc,.docx,.pdf,.txt,.md,.json,.csv,.xlsx,.xls'
 
 const query = reactive({
   keyword: '',
@@ -124,7 +214,19 @@ const query = reactive({
   size: 20,
 })
 
-const uploadForm = reactive({
+const uploadDefaults = reactive({
+  tenantId: workspace.tenantId,
+  knowledgeBaseId: workspace.knowledgeBaseId,
+  visibility: 'PUBLIC',
+  deptId: '',
+  userId: '',
+  documentType: '',
+  autoIndex: false,
+})
+
+const uploadDraft = reactive({
+  tenantId: workspace.tenantId,
+  knowledgeBaseId: workspace.knowledgeBaseId,
   visibility: 'PUBLIC',
   deptId: '',
   userId: '',
@@ -133,10 +235,10 @@ const uploadForm = reactive({
 })
 
 const indexStatusOptions = [
-  {label: '未索引', value: 'PENDING'},
+  {label: '已上传', value: 'UPLOADED'},
   {label: '索引中', value: 'INDEXING'},
   {label: '已索引', value: 'INDEXED'},
-  {label: '失败', value: 'FAILED'},
+  {label: '索引失败', value: 'INDEX_FAILED'},
 ]
 
 const visibilityOptions = [
@@ -157,8 +259,22 @@ const pagination = computed(() => ({
   pageSize: query.size,
   itemCount: total.value,
   showSizePicker: true,
-  pageSizes: [10, 20, 50, 100],
+  pageSizes: [
+    {label: '10 条/页', value: 10},
+    {label: '20 条/页', value: 20},
+    {label: '50 条/页', value: 50},
+    {label: '100 条/页', value: 100},
+  ],
+  prev: () => '上一页',
+  next: () => '下一页',
 }))
+
+const canUpload = computed(() => Boolean(
+    selectedUploadFile.value &&
+    uploadDraft.tenantId.trim() &&
+    uploadDraft.knowledgeBaseId.trim() &&
+    !uploading.value,
+))
 
 /**
  * 文件表格列定义
@@ -180,24 +296,28 @@ const columns: DataTableColumns<StorageDocument> = [
     title: '类型',
     key: 'documentType',
     width: 96,
+    align: 'center',
     render: (row) => row.documentType || '-',
   },
   {
     title: '大小',
     key: 'fileSize',
     width: 110,
+    align: 'center',
     render: (row) => formatBytes(row.fileSize),
   },
   {
     title: '可见性',
     key: 'visibility',
     width: 100,
-    render: (row) => h(NTag, {size: 'small', bordered: false}, {default: () => row.visibility}),
+    align: 'center',
+    render: (row) => h(NTag, {size: 'small', bordered: false}, {default: () => formatVisibility(row.visibility)}),
   },
   {
     title: '索引状态',
     key: 'indexStatus',
     width: 130,
+    align: 'center',
     render: (row) =>
         h(
             NTag,
@@ -205,30 +325,33 @@ const columns: DataTableColumns<StorageDocument> = [
               size: 'small',
               color: statusColor(row.indexStatus),
             },
-            {default: () => row.indexStatus},
+            {default: () => formatIndexStatus(row.indexStatus)},
         ),
   },
   {
-    title: 'Chunks',
+    title: '分片数',
     key: 'chunkCount',
     width: 90,
+    align: 'center',
   },
   {
     title: '更新时间',
     key: 'updatedAt',
     width: 180,
+    align: 'center',
     render: (row) => formatDate(row.updatedAt),
   },
   {
     title: '操作',
     key: 'actions',
-    width: 180,
+    width: 220,
     fixed: 'right',
+    align: 'center',
     render: (row) =>
-        h(NSpace, {size: 6}, () => [
-          iconButton(Download, '下载', () => handleDownload(row)),
-          iconButton(Play, '触发索引', () => handleIndex(row)),
-          iconButton(Trash2, '后端删除接口未接入', undefined, true),
+        h(NSpace, {size: 8, wrap: false, justify: 'center'}, () => [
+          actionButton('下载', 'download', () => handleDownload(row)),
+          actionButton('索引', 'index', () => handleIndex(row)),
+          actionButton('删除', 'delete', undefined, true),
         ]),
   },
 ]
@@ -244,6 +367,12 @@ onMounted(loadDocuments)
 async function loadDocuments() {
   loading.value = true
   workspace.persist()
+  if (!uploadDefaults.tenantId) {
+    uploadDefaults.tenantId = workspace.tenantId
+  }
+  if (!uploadDefaults.knowledgeBaseId) {
+    uploadDefaults.knowledgeBaseId = workspace.knowledgeBaseId
+  }
   try {
     const page = await fetchStorageDocuments({
       tenantId: workspace.tenantId,
@@ -264,38 +393,98 @@ async function loadDocuments() {
 }
 
 /**
- * 自定义上传处理
+ * 重置查询条件
  *
  * <p>
- * Naive UI 的 n-upload 默认只负责选择文件
- * 后端需要 tenantId、knowledgeBaseId 等额外字段，所以这里手动调用 uploadDocument
+ * 只重置当前页面筛选项
+ * 顶部工作区上下文保持不变
  */
-async function handleUpload(options: UploadCustomRequestOptions) {
-  const file = options.file.file
+function resetQuery() {
+  query.keyword = ''
+  query.indexStatus = undefined
+  query.visibility = undefined
+  query.current = 1
+  loadDocuments()
+}
+
+/**
+ * 打开上传弹窗
+ *
+ * <p>
+ * 弹窗默认值来自上传设置
+ * 本次上传可以临时修改，不反写上传设置
+ */
+function openUploadDialog() {
+  uploadDraft.tenantId = uploadDefaults.tenantId || workspace.tenantId
+  uploadDraft.knowledgeBaseId = uploadDefaults.knowledgeBaseId || workspace.knowledgeBaseId
+  uploadDraft.visibility = uploadDefaults.visibility
+  uploadDraft.deptId = uploadDefaults.deptId
+  uploadDraft.userId = uploadDefaults.userId
+  uploadDraft.documentType = uploadDefaults.documentType
+  uploadDraft.autoIndex = uploadDefaults.autoIndex
+  clearSelectedUploadFile()
+  uploadDialogVisible.value = true
+}
+
+function openUploadFilePicker() {
+  uploadFileInput.value?.click()
+}
+
+function handleUploadFileChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  selectedUploadFile.value = input.files?.[0] || null
+}
+
+function clearSelectedUploadFile() {
+  selectedUploadFile.value = null
+  if (uploadFileInput.value) {
+    uploadFileInput.value.value = ''
+  }
+}
+
+/**
+ * 提交上传文件
+ *
+ * <p>
+ * 当前版本按单文件上传设计
+ * 选择文件和上传参数都来自弹窗内状态
+ */
+async function submitUpload() {
+  const file = selectedUploadFile.value
   if (!file) {
-    options.onError()
+    message.error('请选择上传文件')
     return
   }
 
+  uploading.value = true
   try {
     await uploadDocument({
-      tenantId: workspace.tenantId,
-      knowledgeBaseId: workspace.knowledgeBaseId,
-      visibility: uploadForm.visibility,
-      deptId: uploadForm.deptId || undefined,
-      userId: uploadForm.userId || undefined,
-      documentType: uploadForm.documentType || undefined,
-      autoIndex: uploadForm.autoIndex,
+      tenantId: uploadDraft.tenantId.trim(),
+      knowledgeBaseId: uploadDraft.knowledgeBaseId.trim(),
+      visibility: uploadDraft.visibility,
+      deptId: uploadDraft.deptId.trim() || undefined,
+      userId: uploadDraft.userId.trim() || undefined,
+      documentType: uploadDraft.documentType.trim() || undefined,
+      autoIndex: uploadDraft.autoIndex,
       file,
     })
-    options.onFinish()
     message.success('上传成功')
+    uploadDialogVisible.value = false
     query.current = 1
     await loadDocuments()
   } catch (error) {
-    options.onError()
     message.error(error instanceof Error ? error.message : '上传失败')
+  } finally {
+    uploading.value = false
   }
+}
+
+/**
+ * 重置上传弹窗
+ */
+function resetUploadDialog() {
+  if (uploading.value) return
+  clearSelectedUploadFile()
 }
 
 /**
@@ -348,37 +537,50 @@ function handlePageSizeChange(pageSize: number) {
 }
 
 /**
- * 构造表格操作区的图标按钮
+ * 构造表格操作区的文字按钮
  *
  * @example
- * iconButton(Download, '下载', () => handleDownload(row))
+ * actionButton('下载', 'download', () => handleDownload(row))
  */
-function iconButton(
-    icon: typeof Download,
-    tooltip: string,
+function actionButton(
+    label: string,
+    variant: 'download' | 'index' | 'delete',
     onClick?: () => void,
     disabled = false,
 ) {
   return h(
-      NTooltip,
-      null,
+      NButton,
       {
-        trigger: () =>
-            h(
-                NButton,
-                {
-                  size: 'small',
-                  quaternary: true,
-                  disabled,
-                  onClick,
-                },
-                {
-                  icon: () => h(NIcon, null, {default: () => h(icon)}),
-                },
-            ),
-        default: () => tooltip,
+        size: 'small',
+        secondary: true,
+        type: actionButtonType(variant),
+        class: ['document-action-button', `document-action-button--${variant}`],
+        disabled,
+        onClick,
       },
+      {default: () => label},
   )
+}
+
+function actionButtonType(variant: 'download' | 'index' | 'delete') {
+  if (variant === 'download') return 'primary'
+  if (variant === 'index') return 'info'
+  return 'error'
+}
+
+function formatVisibility(value: string) {
+  if (value === 'PUBLIC') return '公开'
+  if (value === 'DEPT') return '部门可见'
+  if (value === 'USER') return '用户可见'
+  return value || '-'
+}
+
+function formatIndexStatus(value: string) {
+  if (value === 'UPLOADED') return '已上传'
+  if (value === 'INDEXING') return '索引中'
+  if (value === 'INDEXED') return '已索引'
+  if (value === 'INDEX_FAILED') return '索引失败'
+  return value || '-'
 }
 
 /**
@@ -387,11 +589,11 @@ function iconButton(
  * <p>
  * INDEXED 绿色
  * INDEXING 黄色
- * FAILED 红色
+ * INDEX_FAILED 红色
  */
 function statusColor(status: string) {
   if (status === 'INDEXED') return {color: '#143c35', textColor: '#72f1d4'}
-  if (status === 'FAILED') return {color: '#4a1d24', textColor: '#ff8f9c'}
+  if (status === 'INDEX_FAILED') return {color: '#4a1d24', textColor: '#ff8f9c'}
   if (status === 'INDEXING') return {color: '#3c3214', textColor: '#ffd36a'}
   return {color: '#243142', textColor: '#a9bad0'}
 }
@@ -431,5 +633,143 @@ function formatDate(value: string) {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.upload-toolbar-button {
+  min-width: 120px;
+  height: 40px;
+}
+
+.document-action-button {
+  min-width: 52px;
+}
+
+.document-action-button--delete {
+  opacity: 0.68;
+}
+
+.upload-form {
+  display: grid;
+  gap: 14px;
+}
+
+.upload-form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  column-gap: 12px;
+  row-gap: 2px;
+}
+
+.upload-settings-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.upload-index-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 48px;
+  border: 1px solid rgba(65, 214, 183, 0.18);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: rgba(65, 214, 183, 0.06);
+  cursor: pointer;
+}
+
+.upload-index-card span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.upload-index-card strong {
+  color: #f4f7fb;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.upload-index-card small {
+  color: #7f8b9b;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.upload-file-card {
+  display: grid;
+  gap: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.upload-file-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.upload-file-head strong {
+  color: #f4f7fb;
+  font-size: 14px;
+}
+
+.upload-file-head span {
+  color: #7f8b9b;
+  font-size: 12px;
+}
+
+.upload-native-input {
+  display: none;
+}
+
+.upload-file-body {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.upload-file-selected {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  border-radius: 7px;
+  padding: 6px 8px;
+  background: rgba(65, 214, 183, 0.08);
+}
+
+.upload-file-selected span {
+  overflow: hidden;
+  color: #f4f7fb;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.upload-file-selected small,
+.upload-file-empty {
+  color: #7f8b9b;
+  font-size: 12px;
+}
+
+.upload-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.upload-dialog-actions :deep(.n-button) {
+  min-width: 84px;
+}
+
+@media (max-width: 720px) {
+  .upload-form-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
