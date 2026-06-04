@@ -8,12 +8,11 @@ import java.util.List;
  * RetrievalChatResponse .
  *
  * <p>
- * RAG 详情响应，保留最终回答和检索引用，便于调试命中质量和前端展示来源
+ * 普通 RAG 对话响应，保留最终回答、会话 ID 和前端展示用文件引用
  *
  * <p>
- * 字段说明：普通 RAG 接口返回 answer 和 references，details 接口额外返回 trace
- * references 可以用于判断是否召回到了正确文档、chunk 是否过大或过碎、filter 是否生效
- * trace 用于排查 query 转换、检索过滤、召回数量和后处理数量
+ * references 只包含原始文件名和 documentId
+ * chunk 文本、score、metadata 等排查字段只在 details / search 接口返回
  *
  * <p>
  * 示例
@@ -21,15 +20,12 @@ import java.util.List;
  * {
  *   "answer": "RAG 由检索和生成两部分组成",
  *   "conversationId": "tenantId:userId:sessionId",
- *   "references": [],
- *   "trace": {
- *     "query": "Spring AI 的 RAG 是什么",
- *     "queryTransformerMode": "none",
- *     "topK": 5,
- *     "similarityThreshold": 0.5,
- *     "retrievedCount": 5,
- *     "usedCount": 3
- *   }
+ *   "references": [
+ *     {
+ *       "filename": "demo.docx",
+ *       "documentId": "1938200000000000001"
+ *     }
+ *   ]
  * }
  * }</pre>
  *
@@ -37,7 +33,7 @@ import java.util.List;
  * @version v1.0
  * @since 2026/5/31
  */
-@Schema(description = "RAG 对话响应")
+@Schema(description = "RAG 普通对话响应")
 public record RetrievalChatResponse(
         /**
          * 模型最终回答
@@ -50,18 +46,9 @@ public record RetrievalChatResponse(
         @Schema(description = "会话 ID", example = "t1:u1:s1")
         String conversationId,
         /**
-         * 本次 RAG 检索命中的引用来源
+         * 本次 RAG 检索引用的文件列表
          */
-        @Schema(description = "本次 RAG 检索命中的引用来源")
-        List<RetrievalReference> references,
-        /**
-         * 本次 RAG 检索链路 trace，普通接口不返回
-         */
-        @Schema(description = "本次 RAG 检索链路 trace，普通接口不返回")
-        RetrievalTrace trace
+        @Schema(description = "本次 RAG 检索引用的文件列表")
+        List<RetrievalCitation> references
 ) {
-
-    public RetrievalChatResponse(String answer, String conversationId, List<RetrievalReference> references) {
-        this(answer, conversationId, references, null);
-    }
 }

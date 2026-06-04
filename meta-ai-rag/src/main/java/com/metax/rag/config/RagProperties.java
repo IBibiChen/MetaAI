@@ -188,6 +188,8 @@ public class RagProperties {
          */
         private boolean permissionFilterEnabled = false;
 
+        private final Decision decision = new Decision();
+
         private final QueryTransformer queryTransformer = new QueryTransformer();
 
         private final PostProcessor postProcessor = new PostProcessor();
@@ -226,6 +228,10 @@ public class RagProperties {
             this.permissionFilterEnabled = permissionFilterEnabled;
         }
 
+        public Decision getDecision() {
+            return decision;
+        }
+
         public QueryTransformer getQueryTransformer() {
             return queryTransformer;
         }
@@ -236,6 +242,54 @@ public class RagProperties {
 
         public Observability getObservability() {
             return observability;
+        }
+    }
+
+    public static class Decision {
+
+        /**
+         * 检索决策模式
+         *
+         * <p>
+         * rule 表示只使用规则判断，hybrid 表示规则未知时调用 ChatModel 判断，llm 表示全部交给 ChatModel 判断
+         */
+        private String mode = "hybrid";
+
+        /**
+         * 检索决策模型温度
+         *
+         * <p>
+         * 意图分类需要稳定输出，默认使用 0.0
+         */
+        private double temperature = 0.0;
+
+        /**
+         * 检索决策模型最大输出 token 数
+         */
+        private int maxTokens = 16;
+
+        public String getMode() {
+            return mode;
+        }
+
+        public void setMode(String mode) {
+            this.mode = mode;
+        }
+
+        public double getTemperature() {
+            return temperature;
+        }
+
+        public void setTemperature(double temperature) {
+            this.temperature = temperature;
+        }
+
+        public int getMaxTokens() {
+            return maxTokens;
+        }
+
+        public void setMaxTokens(int maxTokens) {
+            this.maxTokens = maxTokens;
         }
     }
 

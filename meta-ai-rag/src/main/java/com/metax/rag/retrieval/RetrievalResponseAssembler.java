@@ -1,11 +1,16 @@
 package com.metax.rag.retrieval;
 
+import com.metax.rag.model.MetadataKeys;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.rag.advisor.RetrievalAugmentationAdvisor;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 
 /**
  * RetrievalResponseAssembler .
@@ -15,9 +20,9 @@ import java.util.List;
  *
  * <p>
  * 设计说明：为什么 details 接口需要 ChatClientResponse
- * 普通 content() 只能拿到模型回答文本，拿不到检索命中的 Document
+ * ChatClient.content() 只能拿到模型回答文本，拿不到检索命中的 Document
  * RetrievalAugmentationAdvisor 会把命中文档放入 ChatResponse metadata，key 是 rag_document_context
- * 所以 details 接口必须使用 chatClientResponse() 才能同时返回 answer 和 references
+ * 所以 RAG 响应组装必须使用 chatClientResponse() 才能同时返回 answer 和 references
  *
  * <p>
  * 返回结构示例
@@ -56,27 +61,42 @@ public class RetrievalResponseAssembler {
      * @param conversationId 会话 ID
      * @return RAG 详情响应
      */
-    public RetrievalChatResponse details(ChatClientResponse response, String conversationId) {
+    public RetrievalChatDetailsResponse details(ChatClientResponse response, String conversationId) {
         // 阶段 1：读取模型最终回答，answer 是 ChatModel 生成后的文本
         // ChatResponse 可能为空，details 接口要优先保证响应结构稳定
         String answer = answer(response);
 
         // 阶段 2：组装 answer、references 和 trace，供 details 接口排查完整检索链路
-        return new RetrievalChatResponse(answer, conversationId, references(response), trace(response));
+        return new RetrievalChatDetailsResponse(answer, conversationId, references(response), trace(response));
     }
 
     /**
      * 组装 RAG 普通响应
      *
      * <p>
-     * 普通接口返回 answer 和 references，避免把调试 trace 暴露给前端常规调用
+     * 普通接口返回 answer 和轻量 references，避免把 chunk 文本、score 和 metadata 暴露给前端常规调用
      *
      * @param response       ChatClientResponse
      * @param conversationId 会话 ID
      * @return RAG 普通响应
      */
     public RetrievalChatResponse chat(ChatClientResponse response, String conversationId) {
-        return new RetrievalChatResponse(answer(response), conversationId, references(response));
+        return new RetrievalChatResponse(answer(response), conversationId, citations(response));
+    }
+
+    /**
+     * 组装不带引用的 RAG 普通响应
+     *
+     * <p>
+     * 当前轮被检索决策判定为无需知识库时使用
+     * 该响应仍保留 RAG ChatClient 的系统提示词和 ChatMemory，但不会暴露任何历史或检索引用
+     *
+     * @param response       ChatClientResponse
+     * @param conversationId 会话 ID
+     * @return RAG 普通响应
+     */
+    public RetrievalChatResponse chatWithoutReferences(ChatClientResponse response, String conversationId) {
+        return new RetrievalChatResponse(answer(response), conversationId, List.of());
     }
 
     private String answer(ChatClientResponse response) {
@@ -97,7 +117,83 @@ public class RetrievalResponseAssembler {
     private List<RetrievalReference> references(ChatClientResponse response) {
         // references 来自 RetrievalAugmentationAdvisor 保存的最终上下文 Document
         // 它不是 VectorStore 原始候选全集，而是后处理后实际参与 prompt 增强的文档
-        // 没有 ChatResponse 时直接返回空引用，避免 details 接口因为模型异常产生空指针
+        // 只保留真正的 Document，避免 metadata 中出现非预期对象时影响接口稳定性
+        // RetrievalReference 保留文本、分数和 metadata，供前端展示来源和排查召回质量
+        return documents(response).stream()
+                .map(document -> new RetrievalReference(document.getText(), document.getScore(), document.getMetadata()))
+                .toList();
+    }
+
+    /**
+     * 组装普通 RAG 对话的轻量文件引用
+     *
+     * <p>
+     * 普通 /v1/rag 只面向前端聊天窗口展示文件来源，不暴露 chunk 文本、score 和完整 metadata
+     * 多个 chunk 命中同一个文件时按 documentId 去重，保留首次出现顺序
+     *
+     * @param response ChatClientResponse
+     * @return 轻量文件引用列表
+     */
+    private List<RetrievalCitation> citations(ChatClientResponse response) {
+        Map<String, RetrievalCitation> citations = new LinkedHashMap<>();
+        for (Document document : documents(response)) {
+            RetrievalCitation citation = citation(document.getMetadata());
+            if (citation != null) {
+                citations.putIfAbsent(citation.documentId(), citation);
+            }
+        }
+        return List.copyOf(citations.values());
+    }
+
+    /**
+     * 从 Document metadata 组装单个轻量文件引用
+     *
+     * <p>
+     * filename 用于前端展示，documentId 用于前端调用业务下载接口
+     * 缺少任一关键字段时跳过该引用，避免前端拿到不可展示或不可下载的来源
+     *
+     * @param metadata Document metadata
+     * @return 轻量文件引用
+     */
+    private RetrievalCitation citation(Map<String, Object> metadata) {
+        String filename = metadataValue(metadata, MetadataKeys.FILENAME);
+        String documentId = metadataValue(metadata, MetadataKeys.DOCUMENT_ID);
+        if (!StringUtils.hasText(filename) || !StringUtils.hasText(documentId)) {
+            return null;
+        }
+        return new RetrievalCitation(filename, documentId);
+    }
+
+    /**
+     * 安全读取 metadata 字段
+     *
+     * <p>
+     * 向量库返回的 metadata value 可能是 String、Number 或其他对象，这里统一转成字符串供响应组装使用
+     *
+     * @param metadata Document metadata
+     * @param key      metadata key
+     * @return 字符串字段值
+     */
+    private String metadataValue(Map<String, Object> metadata, String key) {
+        if (metadata == null) {
+            return null;
+        }
+        Object value = metadata.get(key);
+        return value == null ? null : String.valueOf(value);
+    }
+
+    /**
+     * 提取 RetrievalAugmentationAdvisor 保存的最终上下文 Document
+     *
+     * <p>
+     * 没有 ChatResponse 时直接返回空引用，避免 details 接口因为模型异常产生空指针
+     * RetrievalAugmentationAdvisor.after 会把检索到的 Document 写入 ChatResponse metadata
+     * 这里读取的是最终参与 prompt 增强的 Document，不是向量库中的全部候选结果
+     *
+     * @param response ChatClientResponse
+     * @return 最终上下文 Document 列表
+     */
+    private List<Document> documents(ChatClientResponse response) {
         if (response.chatResponse() == null) {
             return List.of();
         }
@@ -110,9 +206,9 @@ public class RetrievalResponseAssembler {
         // 只保留真正的 Document，避免 metadata 中出现非预期对象时影响接口稳定性
         // RetrievalReference 保留文本、分数和 metadata，供前端展示来源和排查召回质量
         return list.stream()
+                .filter(Objects::nonNull)
                 .filter(Document.class::isInstance)
                 .map(Document.class::cast)
-                .map(document -> new RetrievalReference(document.getText(), document.getScore(), document.getMetadata()))
                 .toList();
     }
 }

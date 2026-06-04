@@ -110,7 +110,7 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
 
         String originalFilename = resolveOriginalFilename(file);
         String resolvedDocumentType = documentTypeResolver.resolve(documentType, originalFilename);
-        String documentId = IdWorker.getIdStr();
+        String documentId = newDocumentId();
         String fileSha256 = fileSha256(file);
         String objectKey = objectKey(tenantId, knowledgeBaseId, documentId, fileSha256, originalFilename);
         String bucket = objectStorageClient.defaultBucket();
@@ -204,8 +204,22 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
     @Override
     public StorageDocumentDownload download(String tenantId, String knowledgeBaseId, String documentId) {
         StorageDocumentDO entity = getByDocumentId(tenantId, knowledgeBaseId, documentId);
-        return new StorageDocumentDownload(entity.getOriginalFilename(), entity.getContentType(), entity.getFileSize(),
-                objectStorageClient.getObject(entity.getBucket(), entity.getObjectKey()));
+        return download(entity);
+    }
+
+    /**
+     * 按全局 documentId 下载对象存储文档
+     *
+     * <p>
+     * 普通 RAG 响应只返回 documentId，下载接口在业务层通过唯一约束定位真实对象存储文件
+     *
+     * @param documentId 文档 ID
+     * @return 下载结果
+     */
+    @Override
+    public StorageDocumentDownload download(String documentId) {
+        StorageDocumentDO entity = getByDocumentId(documentId);
+        return download(entity);
     }
 
     /**
@@ -277,12 +291,50 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
         }
     }
 
+    /**
+     * 构造对象存储下载结果
+     *
+     * <p>
+     * 文件名、内容类型和大小来自元数据表，文件流按 bucket 与 objectKey 从对象存储读取
+     *
+     * @param entity 文档元数据
+     * @return 下载结果
+     */
+    private StorageDocumentDownload download(StorageDocumentDO entity) {
+        return new StorageDocumentDownload(entity.getOriginalFilename(), entity.getContentType(), entity.getFileSize(),
+                objectStorageClient.getObject(entity.getBucket(), entity.getObjectKey()));
+    }
+
+    /**
+     * 生成全局文档 ID
+     *
+     * <p>
+     * IdWorker.getIdStr() 是 MyBatis Plus 提供的雪花 ID 字符串生成工具
+     * 数据库 uk_storage_document_document 唯一约束作为最终兜底，避免极端部署配置错误导致重复 documentId
+     *
+     * @return 全局文档 ID
+     */
+    private String newDocumentId() {
+        return IdWorker.getIdStr();
+    }
+
     private StorageDocumentDO getByDocumentId(String tenantId, String knowledgeBaseId, String documentId) {
         validateScope(tenantId, knowledgeBaseId);
         Assert.hasText(documentId, "documentId must not be blank");
         StorageDocumentDO entity = getOne(new LambdaQueryWrapper<StorageDocumentDO>()
                 .eq(StorageDocumentDO::getTenantId, tenantId)
                 .eq(StorageDocumentDO::getKnowledgeBaseId, knowledgeBaseId)
+                .eq(StorageDocumentDO::getDocumentId, documentId)
+                .eq(StorageDocumentDO::getDeleted, Boolean.FALSE));
+        if (entity == null) {
+            throw new IllegalArgumentException("storage document not found: " + documentId);
+        }
+        return entity;
+    }
+
+    private StorageDocumentDO getByDocumentId(String documentId) {
+        Assert.hasText(documentId, "documentId must not be blank");
+        StorageDocumentDO entity = getOne(new LambdaQueryWrapper<StorageDocumentDO>()
                 .eq(StorageDocumentDO::getDocumentId, documentId)
                 .eq(StorageDocumentDO::getDeleted, Boolean.FALSE));
         if (entity == null) {

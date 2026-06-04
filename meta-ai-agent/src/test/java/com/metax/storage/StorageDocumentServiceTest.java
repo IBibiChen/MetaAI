@@ -15,10 +15,12 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
 
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -106,6 +108,45 @@ class StorageDocumentServiceTest {
         assertThat(response.indexStatus()).isEqualTo(StorageDocumentIndexStatus.INDEXING.name());
         assertThat(response.chunkCount()).isZero();
         assertThat(response.latestIndexingRunId()).isNotBlank();
+    }
+
+    @Test
+    void downloadShouldFindDocumentByGlobalDocumentId() {
+        StorageDocumentDO entity = document("doc-1");
+        service.savedEntity = entity;
+        when(objectStorageClient.getObject("meta-ai-knowledge", "storage/t1/kb1/demo.txt"))
+                .thenReturn(new ByteArrayInputStream("hello".getBytes()));
+
+        StorageDocumentDownload download = service.download("doc-1");
+
+        assertThat(download.filename()).isEqualTo("demo.txt");
+        assertThat(download.contentType()).isEqualTo("text/plain");
+        assertThat(download.fileSize()).isEqualTo(5L);
+        assertThat(download.inputStream()).isNotNull();
+        verify(objectStorageClient).getObject("meta-ai-knowledge", "storage/t1/kb1/demo.txt");
+    }
+
+    @Test
+    void downloadShouldFailWhenGlobalDocumentIdNotFound() {
+        service.savedEntity = null;
+
+        assertThatThrownBy(() -> service.download("doc-1"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("storage document not found: doc-1");
+    }
+
+    private StorageDocumentDO document(String documentId) {
+        StorageDocumentDO entity = new StorageDocumentDO();
+        entity.setTenantId("t1");
+        entity.setKnowledgeBaseId("kb1");
+        entity.setDocumentId(documentId);
+        entity.setOriginalFilename("demo.txt");
+        entity.setBucket("meta-ai-knowledge");
+        entity.setObjectKey("storage/t1/kb1/demo.txt");
+        entity.setContentType("text/plain");
+        entity.setFileSize(5L);
+        entity.setDeleted(Boolean.FALSE);
+        return entity;
     }
 
     private static final class FakeStorageDocumentService extends StorageDocumentServiceImpl {

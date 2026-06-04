@@ -19,6 +19,7 @@ import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.util.StringUtils;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -120,12 +121,51 @@ public class StorageDocumentController {
             @NotBlank(message = "documentId 不能为空") @PathVariable String documentId) {
         StorageDocumentDownload download = storageDocumentService.download(request.getTenantId(),
                 request.getKnowledgeBaseId(), documentId);
+        return downloadResponse(download);
+    }
+
+    /**
+     * 按全局 documentId 下载对象存储文档
+     *
+     * <p>
+     * 普通 RAG 响应 references 只返回 documentId，前端点击文件名时调用该接口下载原始文件
+     *
+     * @param documentId 文档 ID
+     * @return 文件流响应
+     */
+    @GetMapping(value = "/v1/storage/documents/download/{documentId}")
+    @Operation(summary = "按 documentId 下载对象存储文档", description = "根据全局 documentId 从 RustFS 下载对象存储文档",
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "文件流响应",
+                            content = @Content(mediaType = MediaType.APPLICATION_OCTET_STREAM_VALUE,
+                                    schema = @Schema(type = "string", format = "binary")))
+            })
+    public ResponseEntity<InputStreamResource> downloadByDocumentId(
+            @Parameter(description = "文档 ID", example = "1938200000000000001", required = true,
+                    in = ParameterIn.PATH)
+            @NotBlank(message = "documentId 不能为空") @PathVariable String documentId) {
+        return downloadResponse(storageDocumentService.download(documentId));
+    }
+
+    /**
+     * 构造文件流响应
+     *
+     * <p>
+     * Content-Disposition 使用 UTF-8 文件名，避免中文文件名下载时乱码
+     *
+     * @param download 下载结果
+     * @return 文件流响应
+     */
+    private ResponseEntity<InputStreamResource> downloadResponse(StorageDocumentDownload download) {
         ContentDisposition disposition = ContentDisposition.attachment()
                 .filename(download.filename(), StandardCharsets.UTF_8)
                 .build();
+        MediaType contentType = StringUtils.hasText(download.contentType())
+                ? MediaType.parseMediaType(download.contentType())
+                : MediaType.APPLICATION_OCTET_STREAM;
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
-                .contentType(MediaType.parseMediaType(download.contentType()))
+                .contentType(contentType)
                 .contentLength(download.fileSize())
                 .body(new InputStreamResource(download.inputStream()));
     }

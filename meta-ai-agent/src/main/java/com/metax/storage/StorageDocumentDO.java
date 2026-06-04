@@ -32,8 +32,7 @@ import java.time.Instant;
         @Index(name = "idx_storage_document_sha256", columnList = "tenant_id, knowledge_base_id, file_sha256"),
         @Index(name = "idx_storage_document_index_status", columnList = "index_status")
 }, uniqueConstraints = {
-        @UniqueConstraint(name = "uk_storage_document_scope_document",
-                columnNames = {"tenant_id", "knowledge_base_id", "document_id"})
+        @UniqueConstraint(name = "uk_storage_document_document", columnNames = {"document_id"})
 })
 @TableName("meta_storage_document")
 @Comment("对象存储文档元数据表")

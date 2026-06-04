@@ -6,9 +6,14 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.io.ByteArrayInputStream;
+
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -72,5 +77,21 @@ class StorageDocumentControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value(400))
                 .andExpect(jsonPath("$.message").value("knowledgeBaseId 不能为空"));
+    }
+
+    /**
+     * 裸 documentId 下载应返回文件流
+     *
+     * @throws Exception MVC 调用异常
+     */
+    @Test
+    void shouldDownloadByGlobalDocumentId() throws Exception {
+        when(storageDocumentService.download("doc-1")).thenReturn(new StorageDocumentDownload("demo.txt",
+                "text/plain", 5L, new ByteArrayInputStream("hello".getBytes())));
+
+        mockMvc.perform(get("/v1/storage/documents/download/doc-1"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith("text/plain"))
+                .andExpect(header().string("Content-Length", "5"));
     }
 }

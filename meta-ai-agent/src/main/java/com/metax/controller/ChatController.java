@@ -7,7 +7,11 @@ import com.metax.rag.indexing.DocumentIndexingRequest;
 import com.metax.rag.indexing.DocumentIndexingRun;
 import com.metax.rag.indexing.DocumentIndexingService;
 import com.metax.rag.retrieval.RetrievalAdvisorFactory;
+import com.metax.rag.retrieval.RetrievalChatDetailsResponse;
 import com.metax.rag.retrieval.RetrievalChatResponse;
+import com.metax.rag.retrieval.RetrievalDecision;
+import com.metax.rag.retrieval.RetrievalDecisionResult;
+import com.metax.rag.retrieval.RetrievalDecisionService;
 import com.metax.rag.retrieval.RetrievalFilterExpressionFactory;
 import com.metax.rag.retrieval.RetrievalOptions;
 import com.metax.rag.retrieval.RetrievalResponseAssembler;
@@ -18,6 +22,8 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
@@ -45,6 +51,8 @@ import java.util.Objects;
 @Tag(name = "智能问答与 RAG", description = "模型直连、记忆对话、RAG 检索增强和文档索引调试接口")
 public class ChatController {
 
+    private static final Logger log = LoggerFactory.getLogger(ChatController.class);
+
     private static final String DEFAULT_CONVERSATION_ID = "tenantId:userId:sessionId";
 
     private final ChatClient chatClient;
@@ -65,6 +73,8 @@ public class ChatController {
 
     private final RetrievalSearchService retrievalSearchService;
 
+    private final RetrievalDecisionService retrievalDecisionService;
+
     private final ChatHistoryService chatHistoryService;
 
     public ChatController(@Qualifier("chatClient") ChatClient chatClient,
@@ -76,6 +86,7 @@ public class ChatController {
                           RetrievalFilterExpressionFactory retrievalFilterExpressionFactory,
                           RetrievalResponseAssembler retrievalResponseAssembler,
                           RetrievalSearchService retrievalSearchService,
+                          RetrievalDecisionService retrievalDecisionService,
                           ChatHistoryService chatHistoryService) {
         this.chatClient = chatClient;
         this.ragChatClient = ragChatClient;
@@ -86,6 +97,7 @@ public class ChatController {
         this.retrievalFilterExpressionFactory = retrievalFilterExpressionFactory;
         this.retrievalResponseAssembler = retrievalResponseAssembler;
         this.retrievalSearchService = retrievalSearchService;
+        this.retrievalDecisionService = retrievalDecisionService;
         this.chatHistoryService = chatHistoryService;
     }
 
@@ -180,7 +192,7 @@ public class ChatController {
      */
     @PostMapping(value = "/v1/rag/details")
     @Operation(summary = "RAG 检索增强详情对话", description = "返回 answer、references 和 trace，用于调试召回质量、过滤条件和后处理效果")
-    public RetrievalChatResponse ragDetails(
+    public RetrievalChatDetailsResponse ragDetails(
             @Parameter(description = "会话 ID，建议格式：tenantId:userId:sessionId", example = "t1:u1:s1")
             @RequestParam(name = "conversationId", required = false) String conversationId,
             @Parameter(description = "用户消息", example = "Spring AI 的 ETL 是什么", required = true)
@@ -233,7 +245,7 @@ public class ChatController {
                 .user(msg);
 
         chatHistoryService.saveUserMessage(resolvedConversationId, ChatHistoryType.RAG_DETAILS, msg);
-        RetrievalChatResponse response = retrievalResponseAssembler.details(requestSpec.call().chatClientResponse(),
+        RetrievalChatDetailsResponse response = retrievalResponseAssembler.details(requestSpec.call().chatClientResponse(),
                 resolvedConversationId);
         chatHistoryService.saveAssistantMessage(resolvedConversationId, ChatHistoryType.RAG_DETAILS, response.answer());
         return response;
@@ -449,15 +461,27 @@ public class ChatController {
         RetrievalOptions resolvedOptions = Objects.requireNonNull(options, "RetrievalOptions must not be null");
 
         chatHistoryService.saveUserMessage(resolvedConversationId, historyType, msg);
-        RetrievalChatResponse response = retrievalResponseAssembler.chat(ragChatClient.prompt()
-                .advisors(spec -> {
-                    spec.param(ChatMemory.CONVERSATION_ID, resolvedConversationId);
-                    spec.advisors(retrievalAdvisorFactory.create(vectorStore, chatModel, resolvedOptions,
-                            retrievalFilterExpressionFactory.create(resolvedOptions)));
-                })
-                .user(msg)
-                .call()
-                .chatClientResponse(), resolvedConversationId);
+        RetrievalDecisionResult decision = retrievalDecisionService.decide(resolvedOptions);
+        log.info("RAG 检索决策：conversationId = {}，decision = {}，reason = {}，query = {}",
+                resolvedConversationId, decision.decision(), decision.reason(), resolvedOptions.getQuery());
+        RetrievalChatResponse response;
+        if (decision.decision() == RetrievalDecision.SKIP) {
+            response = retrievalResponseAssembler.chatWithoutReferences(ragChatClient.prompt()
+                    .advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, resolvedConversationId))
+                    .user(msg)
+                    .call()
+                    .chatClientResponse(), resolvedConversationId);
+        } else {
+            response = retrievalResponseAssembler.chat(ragChatClient.prompt()
+                    .advisors(spec -> {
+                        spec.param(ChatMemory.CONVERSATION_ID, resolvedConversationId);
+                        spec.advisors(retrievalAdvisorFactory.create(vectorStore, chatModel, resolvedOptions,
+                                retrievalFilterExpressionFactory.create(resolvedOptions)));
+                    })
+                    .user(msg)
+                    .call()
+                    .chatClientResponse(), resolvedConversationId);
+        }
         chatHistoryService.saveAssistantMessage(resolvedConversationId, historyType, response.answer());
         return response;
     }
