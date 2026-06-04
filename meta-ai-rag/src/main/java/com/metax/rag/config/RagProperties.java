@@ -580,6 +580,14 @@ public class RagProperties {
          */
         private String localRoot = "D:/meta-ai/knowledge";
 
+        /**
+         * 是否在对象存储服务启动时初始化默认 bucket
+         *
+         * <p>
+         * 本地开发可开启，生产环境建议由部署脚本或运维流程创建 bucket
+         */
+        private boolean initializeBucket = false;
+
         public String getProvider() {
             return provider;
         }
@@ -634,6 +642,14 @@ public class RagProperties {
 
         public void setLocalRoot(String localRoot) {
             this.localRoot = localRoot;
+        }
+
+        public boolean isInitializeBucket() {
+            return initializeBucket;
+        }
+
+        public void setInitializeBucket(boolean initializeBucket) {
+            this.initializeBucket = initializeBucket;
         }
     }
 

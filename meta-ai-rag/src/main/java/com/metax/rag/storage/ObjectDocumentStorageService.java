@@ -10,13 +10,17 @@ import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
+import software.amazon.awssdk.services.s3.model.HeadBucketRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
+import software.amazon.awssdk.services.s3.model.NoSuchBucketException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectResponse;
+import software.amazon.awssdk.services.s3.model.S3Exception;
 
 import java.io.InputStream;
 import java.net.URI;
@@ -60,19 +64,80 @@ public class ObjectDocumentStorageService implements DocumentStorageService, Obj
      * <p>
      * 根据 metax.ai.rag.storage 配置创建 AWS SDK S3Client
      * forcePathStyle=true 适配 RustFS / MinIO 这类私有化 S3 兼容对象存储
+     * 按 initializeBucket 开关决定是否在服务启动时检查并创建默认 bucket
      *
      * @param properties RAG 配置属性
      */
     public ObjectDocumentStorageService(RagProperties properties) {
         this.properties = properties;
         // S3Client 是线程安全客户端，作为服务字段复用，避免每次下载都重新创建连接资源
-        this.s3Client = S3Client.builder()
+        this.s3Client = buildS3Client(properties);
+        initializeBucketIfNecessary(properties, s3Client);
+    }
+
+    /**
+     * 根据对象存储配置构建 S3Client
+     *
+     * <p>
+     * RustFS / MinIO 等私有化 S3 兼容存储使用 path-style 访问，避免依赖虚拟主机风格域名
+     *
+     * @param properties RAG 配置属性
+     * @return S3 兼容对象存储客户端
+     */
+    private static S3Client buildS3Client(RagProperties properties) {
+        return S3Client.builder()
                 .endpointOverride(URI.create(properties.getStorage().getEndpoint()))
                 .region(Region.of(properties.getStorage().getRegion()))
                 .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create(
                         properties.getStorage().getAccessKey(), properties.getStorage().getSecretKey())))
                 .forcePathStyle(true)
                 .build();
+    }
+
+    /**
+     * 按配置开关初始化默认 bucket
+     *
+     * <p>
+     * initializeBucket=false 时不触碰 bucket 管理接口，适合生产环境保持最小权限
+     * initializeBucket=true 时只检查并创建 metax.ai.rag.storage.bucket 指定的默认 bucket
+     *
+     * <p>
+     * S3 兼容存储返回 404 或 NoSuchBucketException 时创建 bucket
+     * 其他 S3Exception 代表认证、权限、endpoint 等配置问题，直接抛出避免静默启动
+     *
+     * @param properties RAG 配置属性
+     * @param s3Client   S3 兼容对象存储客户端
+     */
+    static void initializeBucketIfNecessary(RagProperties properties, S3Client s3Client) {
+        if (!properties.getStorage().isInitializeBucket()) {
+            return;
+        }
+        String bucket = properties.getStorage().getBucket();
+        try {
+            s3Client.headBucket(HeadBucketRequest.builder()
+                    .bucket(bucket)
+                    .build());
+        } catch (NoSuchBucketException e) {
+            createBucket(bucket, s3Client);
+        } catch (S3Exception e) {
+            if (e.statusCode() == 404) {
+                createBucket(bucket, s3Client);
+                return;
+            }
+            throw e;
+        }
+    }
+
+    /**
+     * 创建默认对象存储 bucket
+     *
+     * @param bucket   bucket 名称
+     * @param s3Client S3 兼容对象存储客户端
+     */
+    private static void createBucket(String bucket, S3Client s3Client) {
+        s3Client.createBucket(CreateBucketRequest.builder()
+                .bucket(bucket)
+                .build());
     }
 
     /**
