@@ -99,6 +99,21 @@ public class RetrievalResponseAssembler {
         return new RetrievalChatResponse(answer(response), conversationId, List.of());
     }
 
+    /**
+     * 组装 RAG 流式完成响应
+     *
+     * <p>
+     * 流式输出的完整 answer 由调用方聚合，references 仍从 RetrievalAugmentationAdvisor 保存的上下文读取
+     *
+     * @param answer         完整回答
+     * @param response       最后一个流式 ChatClientResponse
+     * @param conversationId 会话 ID
+     * @return RAG 普通响应
+     */
+    public RetrievalChatResponse streamChat(String answer, ChatClientResponse response, String conversationId) {
+        return new RetrievalChatResponse(answer, conversationId, citations(response));
+    }
+
     private String answer(ChatClientResponse response) {
         return response.chatResponse() == null ? null : response.chatResponse().getResult().getOutput().getText();
     }
@@ -195,16 +210,38 @@ public class RetrievalResponseAssembler {
      */
     private List<Document> documents(ChatClientResponse response) {
         if (response.chatResponse() == null) {
-            return List.of();
+            return contextDocuments(response);
         }
         // RetrievalAugmentationAdvisor.after 会把检索到的 Document 写入 ChatResponse metadata
         // 这里读取的是最终参与 prompt 增强的 Document，不是向量库中的全部候选结果
         Object documents = response.chatResponse().getMetadata().get(RetrievalAugmentationAdvisor.DOCUMENT_CONTEXT);
         if (!(documents instanceof List<?> list)) {
-            return List.of();
+            return contextDocuments(response);
         }
         // 只保留真正的 Document，避免 metadata 中出现非预期对象时影响接口稳定性
         // RetrievalReference 保留文本、分数和 metadata，供前端展示来源和排查召回质量
+        return list.stream()
+                .filter(Objects::nonNull)
+                .filter(Document.class::isInstance)
+                .map(Document.class::cast)
+                .toList();
+    }
+
+    /**
+     * 从 ChatClientResponse context 提取最终上下文 Document
+     *
+     * <p>
+     * 流式场景下业务代码拿到的最后一个 chunk 不一定带完整 ChatResponse metadata
+     * RetrievalAugmentationAdvisor.before 会先把检索文档写入 context，这里作为流式 references 的兜底来源
+     *
+     * @param response ChatClientResponse
+     * @return 最终上下文 Document 列表
+     */
+    private List<Document> contextDocuments(ChatClientResponse response) {
+        Object documents = response.context().get(RetrievalAugmentationAdvisor.DOCUMENT_CONTEXT);
+        if (!(documents instanceof List<?> list)) {
+            return List.of();
+        }
         return list.stream()
                 .filter(Objects::nonNull)
                 .filter(Document.class::isInstance)

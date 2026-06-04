@@ -2,6 +2,10 @@ package com.metax.controller;
 
 import com.metax.history.ChatHistoryService;
 import com.metax.history.ChatHistoryType;
+import com.metax.rag.retrieval.ChatStreamDelta;
+import com.metax.rag.retrieval.ChatStreamDone;
+import com.metax.rag.retrieval.ChatStreamError;
+import com.metax.rag.retrieval.ChatStreamMeta;
 import com.metax.rag.etl.model.DocumentSourceType;
 import com.metax.rag.indexing.DocumentIndexingRequest;
 import com.metax.rag.indexing.DocumentIndexingRun;
@@ -25,20 +29,28 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.ChatClientResponse;
+import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.vectorstore.filter.Filter;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.http.MediaType;
+import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * ChatController .
@@ -123,6 +135,32 @@ public class ChatController {
     }
 
     /**
+     * 默认记忆对话流式返回
+     *
+     * <p>
+     * 使用 SSE 返回 meta、delta、done 和 error 事件
+     * 模型完整回答会在流结束后写入完整聊天历史
+     *
+     * @param conversationId 会话 ID
+     * @param msg            消息
+     * @return SSE 流式事件
+     */
+    @GetMapping(value = "/v1/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @Operation(summary = "默认记忆对话流式返回", description = "使用当前配置选中的 ChatModel 和 ChatMemory 进行多轮流式对话")
+    public Flux<ServerSentEvent<Object>> chatStream(
+            @Parameter(description = "会话 ID，建议格式：tenantId:userId:sessionId", example = "t1:u1:s1")
+            @RequestParam(name = "conversationId", required = false) String conversationId,
+            @Parameter(description = "用户消息", example = "你是谁")
+            @RequestParam(name = "msg", defaultValue = "你是谁") String msg) {
+        String resolvedConversationId = resolveConversationId(conversationId);
+        chatHistoryService.saveUserMessage(resolvedConversationId, ChatHistoryType.CHAT, msg);
+        ChatClient.ChatClientRequestSpec requestSpec = chatClient.prompt()
+                .advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, resolvedConversationId))
+                .user(msg);
+        return contentStream(requestSpec, resolvedConversationId, ChatHistoryType.CHAT);
+    }
+
+    /**
      * RAG 检索增强对话
      *
      * <p>
@@ -169,6 +207,55 @@ public class ChatController {
                 .query(msg)
                 .build();
         return ragChat(conversationId, msg, options, ChatHistoryType.RAG);
+    }
+
+    /**
+     * RAG 检索增强对话流式返回
+     *
+     * <p>
+     * 使用 SSE 返回 meta、delta、done 和 error 事件
+     * done 事件中返回完整 answer、conversationId 和轻量 references
+     *
+     * @param conversationId  会话 ID
+     * @param msg             消息
+     * @param tenantId        租户 ID
+     * @param knowledgeBaseId 知识库 ID
+     * @param documentId      文档 ID
+     * @param documentType    文档类型
+     * @param userId          用户 ID
+     * @param deptIds         可访问部门 ID 列表
+     * @return SSE 流式事件
+     */
+    @GetMapping(value = "/v1/rag/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @Operation(summary = "RAG 检索增强对话流式返回", description = "使用当前配置选中的模型、记忆和向量库进行检索增强流式对话")
+    public Flux<ServerSentEvent<Object>> ragStream(
+            @Parameter(description = "会话 ID，建议格式：tenantId:userId:sessionId", example = "t1:u1:s1")
+            @RequestParam(name = "conversationId", required = false) String conversationId,
+            @Parameter(description = "用户消息", example = "Spring AI 的 RAG 是什么")
+            @RequestParam(name = "msg", defaultValue = "你是谁") String msg,
+            @Parameter(description = "租户 ID，RAG 查询强制过滤字段", example = "t1")
+            @RequestParam(name = "tenantId", required = false) String tenantId,
+            @Parameter(description = "知识库 ID，RAG 查询强制过滤字段", example = "kb1")
+            @RequestParam(name = "knowledgeBaseId", required = false) String knowledgeBaseId,
+            @Parameter(description = "文档 ID，可选收窄条件", example = "doc-001")
+            @RequestParam(name = "documentId", required = false) String documentId,
+            @Parameter(description = "文档类型，可选收窄条件，例如 txt、md、json、tika", example = "md")
+            @RequestParam(name = "documentType", required = false) String documentType,
+            @Parameter(description = "当前用户 ID，用于用户私有文档过滤", example = "u1")
+            @RequestParam(name = "userId", required = false) String userId,
+            @Parameter(description = "当前用户可访问部门 ID 列表，多个用英文逗号分隔", example = "d1,d2")
+            @RequestParam(name = "deptIds", required = false) String deptIds) {
+        validateRetrievalScope(tenantId, knowledgeBaseId);
+        RetrievalOptions options = RetrievalOptions.builder()
+                .tenantId(tenantId)
+                .knowledgeBaseId(knowledgeBaseId)
+                .documentId(documentId)
+                .documentType(documentType)
+                .userId(userId)
+                .deptIds(parseCsv(deptIds))
+                .query(msg)
+                .build();
+        return ragStreamChat(conversationId, msg, options, ChatHistoryType.RAG);
     }
 
     /**
@@ -484,6 +571,129 @@ public class ChatController {
         }
         chatHistoryService.saveAssistantMessage(resolvedConversationId, historyType, response.answer());
         return response;
+    }
+
+    private Flux<ServerSentEvent<Object>> ragStreamChat(String conversationId,
+                                                        String msg,
+                                                        RetrievalOptions options,
+                                                        ChatHistoryType historyType) {
+        String resolvedConversationId = resolveConversationId(conversationId);
+        RetrievalOptions resolvedOptions = Objects.requireNonNull(options, "RetrievalOptions must not be null");
+
+        chatHistoryService.saveUserMessage(resolvedConversationId, historyType, msg);
+        RetrievalDecisionResult decision = retrievalDecisionService.decide(resolvedOptions);
+        log.info("RAG 检索决策：conversationId = {}，decision = {}，reason = {}，query = {}",
+                resolvedConversationId, decision.decision(), decision.reason(), resolvedOptions.getQuery());
+        ChatClient.ChatClientRequestSpec requestSpec = ragChatClient.prompt();
+        if (decision.decision() == RetrievalDecision.SKIP) {
+            requestSpec.advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, resolvedConversationId));
+        } else {
+            requestSpec.advisors(spec -> {
+                spec.param(ChatMemory.CONVERSATION_ID, resolvedConversationId);
+                spec.advisors(retrievalAdvisorFactory.create(vectorStore, chatModel, resolvedOptions,
+                        retrievalFilterExpressionFactory.create(resolvedOptions)));
+            });
+        }
+        requestSpec.user(msg);
+        return chatClientResponseStream(requestSpec, resolvedConversationId, historyType,
+                decision.decision() == RetrievalDecision.RETRIEVE);
+    }
+
+    /**
+     * 普通聊天文本流
+     *
+     * <p>
+     * 普通聊天只需要模型增量文本，不需要读取 ChatClientResponse context 或 metadata
+     * 这里使用 stream().content() 展示最轻量的 Spring AI 流式用法
+     *
+     * @param requestSpec    ChatClient 请求
+     * @param conversationId 会话 ID
+     * @param historyType    历史类型
+     * @return SSE 流式事件
+     */
+    private Flux<ServerSentEvent<Object>> contentStream(ChatClient.ChatClientRequestSpec requestSpec,
+                                                        String conversationId,
+                                                        ChatHistoryType historyType) {
+        StringBuilder answer = new StringBuilder();
+        Flux<ServerSentEvent<Object>> meta = Flux.just(event("meta", new ChatStreamMeta(conversationId)));
+        Flux<ServerSentEvent<Object>> body = requestSpec.stream()
+                .content()
+                .filter(content -> content != null && !content.isEmpty())
+                .doOnNext(answer::append)
+                .map(content -> event("delta", new ChatStreamDelta(content)));
+        Mono<ServerSentEvent<Object>> done = Mono.fromSupplier(() -> {
+            String fullAnswer = answer.toString();
+            chatHistoryService.saveAssistantMessage(conversationId, historyType, fullAnswer);
+            return event("done", new ChatStreamDone(fullAnswer, conversationId, List.of()));
+        });
+        return meta.concatWith(body).concatWith(done)
+                .onErrorResume(ex -> {
+                    log.error("流式对话发生异常：conversationId = {}", conversationId, ex);
+                    return Flux.just(event("error", new ChatStreamError("系统异常")));
+                });
+    }
+
+    /**
+     * RAG 深层响应流
+     *
+     * <p>
+     * RAG 流式完成事件需要读取 RetrievalAugmentationAdvisor 写入的 context / metadata
+     * 这里必须使用 stream().chatClientResponse()，不能退化成只返回文本的 content()
+     *
+     * @param requestSpec       ChatClient 请求
+     * @param conversationId    会话 ID
+     * @param historyType       历史类型
+     * @param includeReferences 是否组装 RAG 引用
+     * @return SSE 流式事件
+     */
+    private Flux<ServerSentEvent<Object>> chatClientResponseStream(ChatClient.ChatClientRequestSpec requestSpec,
+                                                                   String conversationId,
+                                                                   ChatHistoryType historyType,
+                                                                   boolean includeReferences) {
+        StringBuilder answer = new StringBuilder();
+        AtomicReference<ChatClientResponse> lastResponse = new AtomicReference<>(ChatClientResponse.builder().build());
+        Flux<ServerSentEvent<Object>> meta = Flux.just(event("meta", new ChatStreamMeta(conversationId)));
+        Flux<ServerSentEvent<Object>> body = requestSpec.stream()
+                .chatClientResponse()
+                .doOnNext(lastResponse::set)
+                .map(this::content)
+                .filter(content -> content != null && !content.isEmpty())
+                .doOnNext(answer::append)
+                .map(content -> event("delta", new ChatStreamDelta(content)));
+        Mono<ServerSentEvent<Object>> done = Mono.fromSupplier(() -> {
+            String fullAnswer = answer.toString();
+            chatHistoryService.saveAssistantMessage(conversationId, historyType, fullAnswer);
+            ChatStreamDone data;
+            if (includeReferences) {
+                RetrievalChatResponse response = retrievalResponseAssembler.streamChat(fullAnswer, lastResponse.get(),
+                        conversationId);
+                data = new ChatStreamDone(response.answer(), response.conversationId(), response.references());
+            } else {
+                data = new ChatStreamDone(fullAnswer, conversationId, List.of());
+            }
+            return event("done", data);
+        });
+        return meta.concatWith(body).concatWith(done)
+                .onErrorResume(ex -> {
+                    log.error("流式对话发生异常：conversationId = {}", conversationId, ex);
+                    return Flux.just(event("error", new ChatStreamError("系统异常")));
+                });
+    }
+
+    private String content(ChatClientResponse response) {
+        ChatResponse chatResponse = response.chatResponse();
+        if (chatResponse == null || chatResponse.getResult() == null) {
+            return null;
+        }
+        AssistantMessage output = chatResponse.getResult().getOutput();
+        return output == null ? null : output.getText();
+    }
+
+    private ServerSentEvent<Object> event(String event, Object data) {
+        return ServerSentEvent.builder()
+                .event(event)
+                .data(data)
+                .build();
     }
 
     private void validateRetrievalScope(String tenantId, String knowledgeBaseId) {

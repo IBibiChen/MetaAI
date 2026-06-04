@@ -85,6 +85,23 @@ class RetrievalResponseAssemblerTest {
         assertThat(chatResponse.references()).isEmpty();
     }
 
+    @Test
+    void streamChatShouldReadCitationsFromContextWhenChatResponseMetadataMissing() {
+        ChatClientResponse response = ChatClientResponse.builder()
+                .chatResponse(ChatResponse.builder()
+                        .generations(List.of(new Generation(new AssistantMessage("chunk"))))
+                        .build())
+                .context(RetrievalAugmentationAdvisor.DOCUMENT_CONTEXT,
+                        List.of(document("chunk-1", "doc1", "demo.docx"),
+                                document("chunk-2", "doc1", "demo.docx")))
+                .build();
+
+        RetrievalChatResponse chatResponse = assembler.streamChat("answer", response, "c1");
+
+        assertThat(chatResponse.answer()).isEqualTo("answer");
+        assertThat(chatResponse.references()).containsExactly(new RetrievalCitation("demo.docx", "doc1"));
+    }
+
     private ChatClientResponse response(Document... documents) {
         return responseWithContext(Map.of(), documents);
     }
