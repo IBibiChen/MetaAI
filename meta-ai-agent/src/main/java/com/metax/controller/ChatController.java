@@ -1,7 +1,11 @@
 package com.metax.controller;
 
 import com.metax.history.ChatHistoryService;
+import com.metax.history.ChatHistoryRole;
 import com.metax.history.ChatHistoryType;
+import com.metax.history.MetaChatDO;
+import com.metax.history.MetaChatService;
+import com.metax.history.MetaChatUpsertRequest;
 import com.metax.rag.retrieval.ChatStreamDelta;
 import com.metax.rag.retrieval.ChatStreamDone;
 import com.metax.rag.retrieval.ChatStreamError;
@@ -22,6 +26,7 @@ import com.metax.rag.retrieval.RetrievalResponseAssembler;
 import com.metax.rag.retrieval.RetrievalSearchResponse;
 import com.metax.rag.retrieval.RetrievalSearchService;
 import com.metax.rag.retrieval.RetrievalTrace;
+import com.metax.rag.retrieval.RetrievalCitation;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
@@ -89,6 +94,8 @@ public class ChatController {
 
     private final ChatHistoryService chatHistoryService;
 
+    private final MetaChatService metaChatService;
+
     public ChatController(@Qualifier("chatClient") ChatClient chatClient,
                           @Qualifier("ragChatClient") ChatClient ragChatClient,
                           ChatModel chatModel,
@@ -99,7 +106,8 @@ public class ChatController {
                           RetrievalResponseAssembler retrievalResponseAssembler,
                           RetrievalSearchService retrievalSearchService,
                           RetrievalDecisionService retrievalDecisionService,
-                          ChatHistoryService chatHistoryService) {
+                          ChatHistoryService chatHistoryService,
+                          MetaChatService metaChatService) {
         this.chatClient = chatClient;
         this.ragChatClient = ragChatClient;
         this.chatModel = chatModel;
@@ -111,6 +119,7 @@ public class ChatController {
         this.retrievalSearchService = retrievalSearchService;
         this.retrievalDecisionService = retrievalDecisionService;
         this.chatHistoryService = chatHistoryService;
+        this.metaChatService = metaChatService;
     }
 
     /**
@@ -129,9 +138,13 @@ public class ChatController {
     public String chat(
             @Parameter(description = "会话 ID，建议格式：tenantId:userId:sessionId", example = "t1:u1:s1")
             @RequestParam(name = "conversationId", required = false) String conversationId,
+            @Parameter(description = "租户 ID", example = "t1")
+            @RequestParam(name = "tenantId", required = false) String tenantId,
+            @Parameter(description = "用户 ID", example = "u1")
+            @RequestParam(name = "userId", required = false) String userId,
             @Parameter(description = "用户消息", example = "你是谁")
             @RequestParam(name = "msg", defaultValue = "你是谁") String msg) {
-        return memoryChat(conversationId, msg, ChatHistoryType.CHAT);
+        return memoryChat(conversationId, tenantId, userId, msg, ChatHistoryType.CHAT);
     }
 
     /**
@@ -150,14 +163,20 @@ public class ChatController {
     public Flux<ServerSentEvent<Object>> chatStream(
             @Parameter(description = "会话 ID，建议格式：tenantId:userId:sessionId", example = "t1:u1:s1")
             @RequestParam(name = "conversationId", required = false) String conversationId,
+            @Parameter(description = "租户 ID", example = "t1")
+            @RequestParam(name = "tenantId", required = false) String tenantId,
+            @Parameter(description = "用户 ID", example = "u1")
+            @RequestParam(name = "userId", required = false) String userId,
             @Parameter(description = "用户消息", example = "你是谁")
             @RequestParam(name = "msg", defaultValue = "你是谁") String msg) {
         String resolvedConversationId = resolveConversationId(conversationId);
-        chatHistoryService.saveUserMessage(resolvedConversationId, ChatHistoryType.CHAT, msg);
+        MetaChatDO chat = getOrCreateChat(resolvedConversationId, tenantId, userId, ChatHistoryType.CHAT, msg, null);
+        chatHistoryService.saveUserMessage(chat.getId(), resolvedConversationId, ChatHistoryType.CHAT, msg);
+        metaChatService.updateLastMessage(chat.getId(), ChatHistoryRole.USER, msg);
         ChatClient.ChatClientRequestSpec requestSpec = chatClient.prompt()
                 .advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, resolvedConversationId))
                 .user(msg);
-        return contentStream(requestSpec, resolvedConversationId, ChatHistoryType.CHAT);
+        return contentStream(requestSpec, chat.getId(), resolvedConversationId, ChatHistoryType.CHAT);
     }
 
     /**
@@ -331,10 +350,15 @@ public class ChatController {
                 })
                 .user(msg);
 
-        chatHistoryService.saveUserMessage(resolvedConversationId, ChatHistoryType.RAG_DETAILS, msg);
+        MetaChatDO chat = getOrCreateChat(resolvedConversationId, tenantId, userId, ChatHistoryType.RAG_DETAILS, msg,
+                knowledgeBaseId);
+        chatHistoryService.saveUserMessage(chat.getId(), resolvedConversationId, ChatHistoryType.RAG_DETAILS, msg);
+        metaChatService.updateLastMessage(chat.getId(), ChatHistoryRole.USER, msg);
         RetrievalChatDetailsResponse response = retrievalResponseAssembler.details(requestSpec.call().chatClientResponse(),
                 resolvedConversationId);
-        chatHistoryService.saveAssistantMessage(resolvedConversationId, ChatHistoryType.RAG_DETAILS, response.answer());
+        chatHistoryService.saveAssistantMessage(chat.getId(), resolvedConversationId, ChatHistoryType.RAG_DETAILS,
+                response.answer(), List.of());
+        metaChatService.updateLastMessage(chat.getId(), ChatHistoryRole.ASSISTANT, response.answer());
         return response;
     }
 
@@ -527,16 +551,23 @@ public class ChatController {
      * @param msg            消息
      * @return 模型响应内容
      */
-    private String memoryChat(String conversationId, String msg, ChatHistoryType historyType) {
+    private String memoryChat(String conversationId,
+                              String tenantId,
+                              String userId,
+                              String msg,
+                              ChatHistoryType historyType) {
         String resolvedConversationId = resolveConversationId(conversationId);
+        MetaChatDO chat = getOrCreateChat(resolvedConversationId, tenantId, userId, historyType, msg, null);
 
-        chatHistoryService.saveUserMessage(resolvedConversationId, historyType, msg);
+        chatHistoryService.saveUserMessage(chat.getId(), resolvedConversationId, historyType, msg);
+        metaChatService.updateLastMessage(chat.getId(), ChatHistoryRole.USER, msg);
         String answer = chatClient.prompt()
                 .advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, resolvedConversationId))
                 .user(msg)
                 .call()
                 .content();
-        chatHistoryService.saveAssistantMessage(resolvedConversationId, historyType, answer);
+        chatHistoryService.saveAssistantMessage(chat.getId(), resolvedConversationId, historyType, answer);
+        metaChatService.updateLastMessage(chat.getId(), ChatHistoryRole.ASSISTANT, answer);
         return answer;
     }
 
@@ -546,8 +577,11 @@ public class ChatController {
                                           ChatHistoryType historyType) {
         String resolvedConversationId = resolveConversationId(conversationId);
         RetrievalOptions resolvedOptions = Objects.requireNonNull(options, "RetrievalOptions must not be null");
+        MetaChatDO chat = getOrCreateChat(resolvedConversationId, resolvedOptions.getTenantId(),
+                resolvedOptions.getUserId(), historyType, msg, resolvedOptions.getKnowledgeBaseId());
 
-        chatHistoryService.saveUserMessage(resolvedConversationId, historyType, msg);
+        chatHistoryService.saveUserMessage(chat.getId(), resolvedConversationId, historyType, msg);
+        metaChatService.updateLastMessage(chat.getId(), ChatHistoryRole.USER, msg);
         RetrievalDecisionResult decision = retrievalDecisionService.decide(resolvedOptions);
         log.info("RAG 检索决策：conversationId = {}，decision = {}，reason = {}，query = {}",
                 resolvedConversationId, decision.decision(), decision.reason(), resolvedOptions.getQuery());
@@ -569,7 +603,9 @@ public class ChatController {
                     .call()
                     .chatClientResponse(), resolvedConversationId);
         }
-        chatHistoryService.saveAssistantMessage(resolvedConversationId, historyType, response.answer());
+        chatHistoryService.saveAssistantMessage(chat.getId(), resolvedConversationId, historyType, response.answer(),
+                response.references());
+        metaChatService.updateLastMessage(chat.getId(), ChatHistoryRole.ASSISTANT, response.answer());
         return response;
     }
 
@@ -579,8 +615,11 @@ public class ChatController {
                                                         ChatHistoryType historyType) {
         String resolvedConversationId = resolveConversationId(conversationId);
         RetrievalOptions resolvedOptions = Objects.requireNonNull(options, "RetrievalOptions must not be null");
+        MetaChatDO chat = getOrCreateChat(resolvedConversationId, resolvedOptions.getTenantId(),
+                resolvedOptions.getUserId(), historyType, msg, resolvedOptions.getKnowledgeBaseId());
 
-        chatHistoryService.saveUserMessage(resolvedConversationId, historyType, msg);
+        chatHistoryService.saveUserMessage(chat.getId(), resolvedConversationId, historyType, msg);
+        metaChatService.updateLastMessage(chat.getId(), ChatHistoryRole.USER, msg);
         RetrievalDecisionResult decision = retrievalDecisionService.decide(resolvedOptions);
         log.info("RAG 检索决策：conversationId = {}，decision = {}，reason = {}，query = {}",
                 resolvedConversationId, decision.decision(), decision.reason(), resolvedOptions.getQuery());
@@ -595,7 +634,7 @@ public class ChatController {
             });
         }
         requestSpec.user(msg);
-        return chatClientResponseStream(requestSpec, resolvedConversationId, historyType,
+        return chatClientResponseStream(requestSpec, chat.getId(), resolvedConversationId, historyType,
                 decision.decision() == RetrievalDecision.RETRIEVE);
     }
 
@@ -612,6 +651,7 @@ public class ChatController {
      * @return SSE 流式事件
      */
     private Flux<ServerSentEvent<Object>> contentStream(ChatClient.ChatClientRequestSpec requestSpec,
+                                                        Long chatId,
                                                         String conversationId,
                                                         ChatHistoryType historyType) {
         StringBuilder answer = new StringBuilder();
@@ -623,7 +663,8 @@ public class ChatController {
                 .map(content -> event("delta", new ChatStreamDelta(content)));
         Mono<ServerSentEvent<Object>> done = Mono.fromSupplier(() -> {
             String fullAnswer = answer.toString();
-            chatHistoryService.saveAssistantMessage(conversationId, historyType, fullAnswer);
+            chatHistoryService.saveAssistantMessage(chatId, conversationId, historyType, fullAnswer);
+            metaChatService.updateLastMessage(chatId, ChatHistoryRole.ASSISTANT, fullAnswer);
             return event("done", new ChatStreamDone(fullAnswer, conversationId, List.of()));
         });
         return meta.concatWith(body).concatWith(done)
@@ -647,6 +688,7 @@ public class ChatController {
      * @return SSE 流式事件
      */
     private Flux<ServerSentEvent<Object>> chatClientResponseStream(ChatClient.ChatClientRequestSpec requestSpec,
+                                                                   Long chatId,
                                                                    String conversationId,
                                                                    ChatHistoryType historyType,
                                                                    boolean includeReferences) {
@@ -662,15 +704,18 @@ public class ChatController {
                 .map(content -> event("delta", new ChatStreamDelta(content)));
         Mono<ServerSentEvent<Object>> done = Mono.fromSupplier(() -> {
             String fullAnswer = answer.toString();
-            chatHistoryService.saveAssistantMessage(conversationId, historyType, fullAnswer);
             ChatStreamDone data;
+            List<RetrievalCitation> references = List.of();
             if (includeReferences) {
                 RetrievalChatResponse response = retrievalResponseAssembler.streamChat(fullAnswer, lastResponse.get(),
                         conversationId);
+                references = response.references();
                 data = new ChatStreamDone(response.answer(), response.conversationId(), response.references());
             } else {
                 data = new ChatStreamDone(fullAnswer, conversationId, List.of());
             }
+            chatHistoryService.saveAssistantMessage(chatId, conversationId, historyType, fullAnswer, references);
+            metaChatService.updateLastMessage(chatId, ChatHistoryRole.ASSISTANT, fullAnswer);
             return event("done", data);
         });
         return meta.concatWith(body).concatWith(done)
@@ -709,6 +754,39 @@ public class ChatController {
         return conversationId == null || conversationId.isBlank() ? DEFAULT_CONVERSATION_ID : conversationId;
     }
 
+    private MetaChatDO getOrCreateChat(String conversationId,
+                                       String tenantId,
+                                       String userId,
+                                       ChatHistoryType chatMode,
+                                       String firstMessage,
+                                       String knowledgeBaseId) {
+        ConversationScope scope = resolveScope(conversationId, tenantId, userId);
+        return metaChatService.getOrCreate(new MetaChatUpsertRequest(scope.tenantId(), scope.userId(), conversationId,
+                chatMode, firstMessage, knowledgeBaseId, null, null, "console"));
+    }
+
+    private ConversationScope resolveScope(String conversationId, String tenantId, String userId) {
+        String resolvedTenantId = tenantId;
+        String resolvedUserId = userId;
+        if ((resolvedTenantId == null || resolvedTenantId.isBlank())
+                || (resolvedUserId == null || resolvedUserId.isBlank())) {
+            String[] parts = conversationId == null ? new String[0] : conversationId.split(":");
+            if ((resolvedTenantId == null || resolvedTenantId.isBlank()) && parts.length > 0) {
+                resolvedTenantId = parts[0];
+            }
+            if ((resolvedUserId == null || resolvedUserId.isBlank()) && parts.length > 1) {
+                resolvedUserId = parts[1];
+            }
+        }
+        if (resolvedTenantId == null || resolvedTenantId.isBlank()) {
+            resolvedTenantId = "tenantId";
+        }
+        if (resolvedUserId == null || resolvedUserId.isBlank()) {
+            resolvedUserId = "userId";
+        }
+        return new ConversationScope(resolvedTenantId, resolvedUserId);
+    }
+
     private String filenameFromPath(String path) {
         if (path == null || path.isBlank()) {
             return null;
@@ -725,5 +803,11 @@ public class ChatController {
                 .map(String::trim)
                 .filter(candidate -> !candidate.isBlank())
                 .toList();
+    }
+
+    private record ConversationScope(
+            String tenantId,
+            String userId
+    ) {
     }
 }

@@ -2,6 +2,9 @@ package com.metax.history;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
+import com.metax.rag.retrieval.RetrievalCitation;
+
+import java.util.List;
 
 /**
  * ChatHistoryService .
@@ -27,6 +30,16 @@ public interface ChatHistoryService extends IService<ChatHistoryDO> {
     void saveUserMessage(String conversationId, ChatHistoryType type, String content);
 
     /**
+     * 保存用户消息
+     *
+     * @param chatId         会话主键
+     * @param conversationId 会话 ID
+     * @param type           对话类型
+     * @param content        消息内容
+     */
+    void saveUserMessage(Long chatId, String conversationId, ChatHistoryType type, String content);
+
+    /**
      * 保存模型回答
      *
      * @param conversationId 会话 ID
@@ -34,6 +47,28 @@ public interface ChatHistoryService extends IService<ChatHistoryDO> {
      * @param content        消息内容
      */
     void saveAssistantMessage(String conversationId, ChatHistoryType type, String content);
+
+    /**
+     * 保存模型回答
+     *
+     * @param chatId         会话主键
+     * @param conversationId 会话 ID
+     * @param type           对话类型
+     * @param content        消息内容
+     */
+    void saveAssistantMessage(Long chatId, String conversationId, ChatHistoryType type, String content);
+
+    /**
+     * 保存模型回答
+     *
+     * @param chatId         会话主键
+     * @param conversationId 会话 ID
+     * @param type           对话类型
+     * @param content        消息内容
+     * @param references     RAG 引用文件列表
+     */
+    void saveAssistantMessage(Long chatId, String conversationId, ChatHistoryType type, String content,
+                              List<RetrievalCitation> references);
 
     /**
      * 分页查询完整历史
@@ -44,4 +79,14 @@ public interface ChatHistoryService extends IService<ChatHistoryDO> {
      * @return 历史消息分页
      */
     Page<ChatHistoryDO> pageByConversationId(String conversationId, Long current, Long size);
+
+    /**
+     * 分页查询完整历史
+     *
+     * @param chatId  会话主键
+     * @param current 页码，从 1 开始
+     * @param size    每页数量
+     * @return 历史消息分页
+     */
+    Page<ChatHistoryDO> pageByChatId(Long chatId, Long current, Long size);
 }

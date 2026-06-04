@@ -2,6 +2,7 @@ package com.metax.history;
 
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -80,13 +81,13 @@ class ChatHistoryServiceTest {
     }
 
     private ChatHistoryServiceImpl service(ChatHistoryMapper mapper) {
-        ChatHistoryServiceImpl service = new ChatHistoryServiceImpl();
+        ChatHistoryServiceImpl service = new ChatHistoryServiceImpl(new ObjectMapper());
         ReflectionTestUtils.setField(service, "baseMapper", mapper);
         return service;
     }
 
     private ChatHistoryDO entity(String conversationId, ChatHistoryRole role) {
-        return new ChatHistoryDO(1L, conversationId, ChatHistoryType.CHAT.value(),
-                role.value(), "content", Instant.now());
+        return new ChatHistoryDO(1L, null, conversationId, ChatHistoryType.CHAT.value(),
+                role.value(), "content", null, Instant.now());
     }
 }

@@ -3,6 +3,8 @@ package com.metax.history;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -44,7 +46,17 @@ public class ChatHistoryDO {
     @Column(name = "id")
     @Comment("历史消息 ID")
     @Schema(description = "历史消息 ID", example = "1938200000000000001")
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long id;
+
+    /**
+     * 会话主键
+     */
+    @Column(name = "chat_id")
+    @Comment("会话主键")
+    @Schema(description = "会话主键", example = "1938200000000000001")
+    @JsonSerialize(using = ToStringSerializer.class)
+    private Long chatId;
 
     /**
      * 会话 ID
@@ -77,6 +89,14 @@ public class ChatHistoryDO {
     @Comment("消息内容")
     @Schema(description = "消息内容", example = "请总结这份知识库文档")
     private String content;
+
+    /**
+     * RAG 引用来源 JSON
+     */
+    @Column(name = "references_json", columnDefinition = "text")
+    @Comment("RAG 引用来源 JSON")
+    @Schema(description = "RAG 引用来源 JSON")
+    private String referencesJson;
 
     /**
      * 创建时间

@@ -57,6 +57,12 @@ public class RetrievalDecisionService {
             "上传内容", "原文", "材料", "报告", "合同", "方案", "手册"
     );
 
+    private static final List<String> SKIP_RETRIEVAL_PATTERNS = List.of(
+            "不使用知识库", "不要使用知识库", "不用知识库", "不要查知识库", "不查知识库",
+            "不要检索", "不用检索", "不要查询知识库", "不查询知识库", "基于你自己的知识",
+            "基于你自己学习的", "基于你的训练数据", "基于模型自身知识", "直接回答"
+    );
+
     private static final List<String> SKIP_PATTERNS = List.of(
             "你是谁", "你是什么", "你叫什么", "你好", "您好", "谢谢", "感谢", "thanks", "thank you",
             "hi", "hello", "你能做什么", "你可以做什么", "介绍一下你自己", "帮我做什么"
@@ -114,6 +120,9 @@ public class RetrievalDecisionService {
         String query = normalizedQuery(options.getQuery());
         if (!StringUtils.hasText(query)) {
             return new RuleDecision(RetrievalDecision.SKIP, "blank_query");
+        }
+        if (containsAny(query, SKIP_RETRIEVAL_PATTERNS)) {
+            return new RuleDecision(RetrievalDecision.SKIP, "skip_retrieval_pattern");
         }
         if (containsAny(query, RETRIEVE_KEYWORDS)) {
             return new RuleDecision(RetrievalDecision.RETRIEVE, "retrieve_keyword");

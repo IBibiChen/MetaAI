@@ -49,6 +49,42 @@ class RetrievalDecisionServiceTest {
     }
 
     @Test
+    void shouldSkipWhenQueryExplicitlyDisablesKnowledgeBase() {
+        TestChatModel chatModel = new TestChatModel("RETRIEVE");
+        RetrievalDecisionService service = new RetrievalDecisionService(properties("hybrid"), chatModel);
+
+        RetrievalDecisionResult result = service.decide(options("请不使用知识库，直接回答巡察的主要工作内容"));
+
+        assertThat(result.decision()).isEqualTo(RetrievalDecision.SKIP);
+        assertThat(result.reason()).isEqualTo("skip_retrieval_pattern");
+        assertThat(chatModel.called).isFalse();
+    }
+
+    @Test
+    void shouldSkipWhenQueryAsksForModelKnowledgeOnly() {
+        TestChatModel chatModel = new TestChatModel("RETRIEVE");
+        RetrievalDecisionService service = new RetrievalDecisionService(properties("hybrid"), chatModel);
+
+        RetrievalDecisionResult result = service.decide(options("基于你自己学习的模型数据知识回答我"));
+
+        assertThat(result.decision()).isEqualTo(RetrievalDecision.SKIP);
+        assertThat(result.reason()).isEqualTo("skip_retrieval_pattern");
+        assertThat(chatModel.called).isFalse();
+    }
+
+    @Test
+    void shouldSkipWhenQueryExplicitlyDisablesRetrieval() {
+        TestChatModel chatModel = new TestChatModel("RETRIEVE");
+        RetrievalDecisionService service = new RetrievalDecisionService(properties("hybrid"), chatModel);
+
+        RetrievalDecisionResult result = service.decide(options("不要检索，直接回答"));
+
+        assertThat(result.decision()).isEqualTo(RetrievalDecision.SKIP);
+        assertThat(result.reason()).isEqualTo("skip_retrieval_pattern");
+        assertThat(chatModel.called).isFalse();
+    }
+
+    @Test
     void shouldRetrieveWhenDocumentScopePresent() {
         TestChatModel chatModel = new TestChatModel("SKIP");
         RetrievalDecisionService service = new RetrievalDecisionService(properties("hybrid"), chatModel);
@@ -58,6 +94,23 @@ class RetrievalDecisionServiceTest {
                 .knowledgeBaseId("kb1")
                 .documentId("doc1")
                 .query("这个怎么处理")
+                .build());
+
+        assertThat(result.decision()).isEqualTo(RetrievalDecision.RETRIEVE);
+        assertThat(result.reason()).isEqualTo("document_id_present");
+        assertThat(chatModel.called).isFalse();
+    }
+
+    @Test
+    void shouldRetrieveWhenDocumentScopePresentEvenIfQueryDisablesKnowledgeBase() {
+        TestChatModel chatModel = new TestChatModel("SKIP");
+        RetrievalDecisionService service = new RetrievalDecisionService(properties("hybrid"), chatModel);
+
+        RetrievalDecisionResult result = service.decide(RetrievalOptions.builder()
+                .tenantId("t1")
+                .knowledgeBaseId("kb1")
+                .documentId("doc1")
+                .query("不使用知识库，直接回答")
                 .build());
 
         assertThat(result.decision()).isEqualTo(RetrievalDecision.RETRIEVE);
