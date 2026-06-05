@@ -98,10 +98,10 @@
             </template>
             新建对话
           </n-button>
-          <n-button size="small" tertiary @click="advancedVisible = true">
+          <n-button size="small" tertiary @click="openRetrievalScope">
             <template #icon>
               <n-icon>
-                <SlidersHorizontal/>
+                <ListFilter/>
               </n-icon>
             </template>
             检索范围
@@ -117,112 +117,152 @@
         </div>
       </div>
 
-      <section
-          ref="messageViewport"
-          :class="['message-viewport', { transitioning: messageTransitioning }]"
-      >
-        <div v-if="historyLoading" class="history-loading">加载对话中...</div>
-        <div v-if="messages.length === 0" class="empty-state">
-          <div class="empty-mark">
-            <n-icon>
-              <Bot/>
-            </n-icon>
-          </div>
-          <h2>MetaAI 知识工作台</h2>
-          <p>选择普通聊天或知识问答，回答会保存到当前对话</p>
-        </div>
-
-        <article
-            v-for="messageItem in messages"
-            :key="messageItem.id"
-            :class="['message-row', messageItem.role]"
+      <div class="message-scroll-shell" @mouseenter="revealMessageScrollbar">
+        <section
+            ref="messageViewport"
+            :class="['message-viewport', { transitioning: messageTransitioning }]"
+            @scroll="handleMessageScroll"
         >
-          <div v-if="messageItem.role === 'user'" class="message-actions">
-            <button
-                class="message-action-button"
-                type="button"
-                title="复制消息"
-                aria-label="复制消息"
-                :disabled="!messageItem.content"
-                @click.stop="copyMessage(messageItem)"
-            >
+          <div v-if="historyLoading" class="history-loading">加载对话中...</div>
+          <div v-if="messages.length === 0" class="empty-state">
+            <div class="empty-mark">
               <n-icon>
-                <Copy/>
+                <Bot/>
               </n-icon>
-            </button>
-            <button
-                class="message-action-button"
-                type="button"
-                title="重新发送"
-                aria-label="重新发送"
-                :disabled="sending || !messageItem.content"
-                @click.stop="resendUserMessage(messageItem)"
-            >
-              <n-icon>
-                <RotateCcw/>
-              </n-icon>
-            </button>
+            </div>
+            <h2>MetaAI 知识工作台</h2>
+            <p>选择普通聊天或知识问答，回答会保存到当前对话</p>
           </div>
-          <div class="message-bubble" @click="handleMessageBubbleClick">
-            <div class="message-meta">
-              <span :class="['message-avatar', messageItem.role]">
-                <n-icon>
-                  <CircleUserRound v-if="messageItem.role === 'user'"/>
-                  <Sparkles v-else/>
-                </n-icon>
-              </span>
-              <time>{{ messageItem.time }}</time>
-            </div>
-            <div
-                v-if="messageItem.role === 'assistant' && messageItem.content"
-                class="message-content markdown-body"
-                v-html="renderMarkdown(messageItem.content, messageItem.typing)"
-            />
-            <div v-else
-                 :class="['message-content', { typing: messageItem.typing, waiting: messageItem.typing && !messageItem.content }]">
-              {{ messageItem.content || (messageItem.typing ? '思考中...' : '') }}
-            </div>
 
-            <div v-if="messageItem.references?.length" class="references">
-              <div class="section-label">引用来源</div>
-              <div class="citation-list">
-                <button
-                    v-for="reference in messageItem.references"
-                    :key="reference.documentId"
-                    class="citation-item"
-                    type="button"
-                    @click="downloadReference(reference)"
-                >
-                  {{ reference.filename }}
-                </button>
+          <article
+              v-for="messageItem in messages"
+              :key="messageItem.id"
+              :class="['message-row', messageItem.role]"
+          >
+            <div v-if="messageItem.role === 'user'" class="message-actions">
+              <button
+                  class="message-action-button"
+                  type="button"
+                  title="复制消息"
+                  aria-label="复制消息"
+                  :disabled="!messageItem.content"
+                  @click.stop="copyMessage(messageItem)"
+              >
+                <n-icon>
+                  <Copy/>
+                </n-icon>
+              </button>
+              <button
+                  class="message-action-button"
+                  type="button"
+                  title="重新发送"
+                  aria-label="重新发送"
+                  :disabled="sending || !messageItem.content"
+                  @click.stop="resendUserMessage(messageItem)"
+              >
+                <n-icon>
+                  <RotateCcw/>
+                </n-icon>
+              </button>
+            </div>
+            <div class="message-bubble" @click="handleMessageBubbleClick">
+              <div class="message-meta">
+                <span :class="['message-avatar', messageItem.role]">
+                  <n-icon>
+                    <CircleUserRound v-if="messageItem.role === 'user'"/>
+                    <Sparkles v-else/>
+                  </n-icon>
+                </span>
+                <time>{{ messageItem.time }}</time>
+              </div>
+              <div
+                  v-if="messageItem.role === 'assistant' && messageItem.content"
+                  class="message-content markdown-body"
+                  v-html="renderMarkdown(messageItem.content, messageItem.typing)"
+              />
+              <div v-else
+                   :class="['message-content', { typing: messageItem.typing, waiting: messageItem.typing && !messageItem.content }]">
+                {{ messageItem.content || (messageItem.typing ? '思考中...' : '') }}
+              </div>
+
+              <div v-if="messageItem.references?.length" class="references">
+                <div class="section-label">引用来源</div>
+                <div class="citation-list">
+                  <button
+                      v-for="reference in messageItem.references"
+                      :key="reference.documentId"
+                      class="citation-item"
+                      type="button"
+                      @click="downloadReference(reference)"
+                  >
+                    {{ reference.filename }}
+                  </button>
+                </div>
+              </div>
+
+              <div v-if="messageItem.trace" class="trace-block">
+                <div class="section-label">检索 Trace</div>
+                <n-code
+                    :code="JSON.stringify(messageItem.trace, null, 2)"
+                    language="json"
+                    word-wrap
+                />
               </div>
             </div>
-
-            <div v-if="messageItem.trace" class="trace-block">
-              <div class="section-label">检索 Trace</div>
-              <n-code
-                  :code="JSON.stringify(messageItem.trace, null, 2)"
-                  language="json"
-                  word-wrap
-              />
+            <div v-if="messageItem.role === 'assistant'" class="message-actions">
+              <button
+                  class="message-action-button"
+                  type="button"
+                  title="复制消息"
+                  aria-label="复制消息"
+                  :disabled="!messageItem.content"
+                  @click.stop="copyMessage(messageItem)"
+              >
+                <n-icon>
+                  <Copy/>
+                </n-icon>
+              </button>
             </div>
-          </div>
-          <div v-if="messageItem.role === 'assistant'" class="message-actions">
+          </article>
+        </section>
+
+        <div
+            v-if="messageScrollbarVisible"
+            :class="['message-scrollbar', { active: messageScrollbarActive }]"
+            aria-hidden="true"
+            @mouseenter="revealMessageScrollbar"
+        >
+          <button
+              class="message-scrollbar-button"
+              type="button"
+              tabindex="-1"
+              @mousedown.prevent="startArrowScroll(-1)"
+              @mouseup="stopArrowScroll"
+              @mouseleave="stopArrowScroll"
+          >
+            <span class="message-scrollbar-arrow up"></span>
+          </button>
+          <div ref="messageScrollbarTrack" class="message-scrollbar-track" @mousedown.prevent="handleTrackMouseDown">
             <button
-                class="message-action-button"
+                class="message-scrollbar-thumb"
                 type="button"
-                title="复制消息"
-                aria-label="复制消息"
-                :disabled="!messageItem.content"
-                @click.stop="copyMessage(messageItem)"
-            >
-              <n-icon>
-                <Copy/>
-              </n-icon>
-            </button>
+                tabindex="-1"
+                :style="{ height: `${messageScrollbarThumbHeight}px`, transform: `translateY(${messageScrollbarThumbTop}px)` }"
+                @mousedown.prevent.stop="startThumbDrag"
+            ></button>
           </div>
-        </article>
-      </section>
+          <button
+              class="message-scrollbar-button"
+              type="button"
+              tabindex="-1"
+              @mousedown.prevent="startArrowScroll(1)"
+              @mouseup="stopArrowScroll"
+              @mouseleave="stopArrowScroll"
+          >
+            <span class="message-scrollbar-arrow down"></span>
+          </button>
+        </div>
+      </div>
 
       <footer class="composer">
         <n-input
@@ -265,13 +305,33 @@
     <n-drawer v-model:show="advancedVisible" :width="420">
       <n-drawer-content title="检索范围">
         <n-form label-placement="top">
-          <n-form-item label="documentId">
-            <n-input v-model:value="ragForm.documentId" placeholder="可选，限定单个文档"/>
+          <n-form-item label="指定文件">
+            <n-select
+                v-model:value="ragForm.documentId"
+                :options="scopeDocumentOptions"
+                :loading="scopeDocumentsLoading"
+                clearable
+                filterable
+                placeholder="全部文件，不限定"
+                @focus="loadScopeDocuments"
+            />
           </n-form-item>
-          <n-form-item label="documentType">
-            <n-input v-model:value="ragForm.documentType" placeholder="md、pdf、txt、json 等"/>
+          <n-form-item label="文档类型">
+            <n-select
+                v-model:value="ragForm.documentType"
+                :options="documentTypeOptions"
+                clearable
+                placeholder="全部类型，不限定"
+            />
           </n-form-item>
         </n-form>
+        <template #footer>
+          <div class="scope-drawer-actions">
+            <n-button tertiary @click="clearRetrievalScope">
+              清除范围
+            </n-button>
+          </div>
+        </template>
       </n-drawer-content>
     </n-drawer>
 
@@ -341,12 +401,12 @@ import {
   CircleUserRound,
   Copy,
   Eraser,
+  ListFilter,
   Pencil,
   Pin,
   RefreshCw,
   RotateCcw,
   Send,
-  SlidersHorizontal,
   Sparkles,
   SquarePen,
   Star,
@@ -362,8 +422,9 @@ import {
   streamRagChat,
   updateChatFlags,
 } from '@/api/chat'
+import {fetchStorageDocuments} from '@/api/storage'
 import {useWorkspaceStore} from '@/stores/workspace'
-import type {MetaChat, RetrievalCitation, RetrievalTrace} from '@/types/api'
+import type {MetaChat, RetrievalCitation, RetrievalTrace, StorageDocument} from '@/types/api'
 
 interface ChatMessage {
   id: string
@@ -386,6 +447,7 @@ interface TypingRenderer {
 const workspace = useWorkspaceStore()
 const message = useMessage()
 const messageViewport = ref<HTMLElement | null>(null)
+const messageScrollbarTrack = ref<HTMLElement | null>(null)
 const messages = ref<ChatMessage[]>([])
 const chats = ref<MetaChat[]>([])
 const activeChatId = ref<string | null>(null)
@@ -393,8 +455,15 @@ const draft = ref('')
 const sending = ref(false)
 const historyLoading = ref(false)
 const messageTransitioning = ref(false)
+const messageScrollbarVisible = ref(false)
+const messageScrollbarActive = ref(false)
+const messageScrollbarThumbHeight = ref(36)
+const messageScrollbarThumbTop = ref(0)
+const shouldFollowLatest = ref(true)
 const chatListLoading = ref(false)
 const advancedVisible = ref(false)
+const scopeDocumentsLoading = ref(false)
+const scopeDocuments = ref<StorageDocument[]>([])
 const chatMode = ref<'plain' | 'rag'>('rag')
 const renameModalVisible = ref(false)
 const renameSubmitting = ref(false)
@@ -414,12 +483,46 @@ const modeOptions = [
   {label: '普通聊天', value: 'plain'},
 ]
 
+const documentTypeOptions = [
+  {label: 'Markdown', value: 'markdown'},
+  {label: 'PDF', value: 'pdf'},
+  {label: '文本', value: 'txt'},
+  {label: 'JSON', value: 'json'},
+  {label: 'Word', value: 'docx'},
+  {label: 'Excel', value: 'xlsx'},
+  {label: 'CSV', value: 'csv'},
+  {label: '通用解析', value: 'tika'},
+]
+
+const scopeDocumentOptions = computed(() => {
+  if (!scopeDocuments.value.length) {
+    return [
+      {
+        label: '当前知识库暂无已索引文件',
+        value: '__empty__',
+        disabled: true,
+      },
+    ]
+  }
+  return scopeDocuments.value.map((item) => ({
+    label: scopeDocumentLabel(item),
+    value: item.documentId,
+  }))
+})
+
 const TYPE_STREAM_INTERVAL_MS = 34
 const TYPE_CATCHUP_INTERVAL_MS = 20
 const TYPE_DONE_MAX_ANIMATION_MS = 1200
 const TYPE_LARGE_BACKLOG_THRESHOLD = 1800
 const TYPE_FLUSH_BACKLOG_THRESHOLD = 4000
 const TYPE_SCROLL_INTERVAL_MS = 180
+const MESSAGE_ARROW_SCROLL_STEP = 160
+const MESSAGE_PAGE_SCROLL_RATIO = 0.5
+const MESSAGE_BOTTOM_THRESHOLD = 96
+const MESSAGE_SCROLLBAR_MIN_THUMB_HEIGHT = 38
+const MESSAGE_SCROLLBAR_HIDE_DELAY_MS = 1200
+const MESSAGE_ARROW_REPEAT_DELAY_MS = 240
+const MESSAGE_ARROW_REPEAT_INTERVAL_MS = 80
 
 const markdown = new MarkdownIt({
   breaks: true,
@@ -455,8 +558,8 @@ markdown.renderer.rules.fence = (tokens, idx, options, env, self) => {
 }
 
 const ragForm = reactive({
-  documentId: '',
-  documentType: '',
+  documentId: null as string | null,
+  documentType: null as string | null,
 })
 
 const activeChat = computed(() => chats.value.find((item) => item.id === activeChatId.value) || null)
@@ -464,8 +567,17 @@ let stopActiveTyping: (() => void) | null = null
 let activeTypingRenderer: TypingRenderer | null = null
 let activeStream: EventSource | null = null
 let streamStoppedByUser = false
+let messageResizeObserver: ResizeObserver | null = null
+let messageScrollbarHideTimer: number | null = null
+let arrowScrollDelayTimer: number | null = null
+let arrowScrollIntervalTimer: number | null = null
+let draggingThumb = false
+let thumbDragStartY = 0
+let thumbDragStartTop = 0
 
 onMounted(async () => {
+  await nextTick()
+  setupMessageScrollbar()
   await loadChats()
   if (activeChatId.value && messages.value.length === 0) {
     await loadHistory()
@@ -474,14 +586,22 @@ onMounted(async () => {
 
 onUnmounted(() => {
   stopStreaming()
+  teardownMessageScrollbar()
 })
 
 watch(() => workspace.contextVersion, async () => {
   stopStreaming()
   activeChatId.value = null
   messages.value = []
+  scopeDocuments.value = []
+  clearRetrievalScope()
   await loadChats()
 })
+
+watch(messages, async () => {
+  await nextTick()
+  updateMessageScrollbar()
+}, {deep: true})
 
 /**
  * 发送消息
@@ -515,7 +635,7 @@ async function sendMessageContent(content: string) {
     if (streamStoppedByUser) return
     activeStream = null
     sending.value = false
-    await scrollToLatest()
+    await followLatestIfNeeded()
     await loadChats()
   }
   const failSend = (errorMessage: string) => {
@@ -572,6 +692,55 @@ async function sendMessageContent(content: string) {
         handlers,
     )
   }
+}
+
+function openRetrievalScope() {
+  advancedVisible.value = true
+  loadScopeDocuments()
+}
+
+async function loadScopeDocuments() {
+  if (scopeDocumentsLoading.value) return
+
+  workspace.persist()
+  if (!workspace.tenantId || !workspace.knowledgeBaseId) {
+    scopeDocuments.value = []
+    return
+  }
+
+  scopeDocumentsLoading.value = true
+  try {
+    const page = await fetchStorageDocuments({
+      tenantId: workspace.tenantId,
+      knowledgeBaseId: workspace.knowledgeBaseId,
+      indexStatus: 'INDEXED',
+      current: 1,
+      size: 100,
+    })
+    scopeDocuments.value = page.records
+    if (ragForm.documentId && !page.records.some((item) => item.documentId === ragForm.documentId)) {
+      ragForm.documentId = null
+    }
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '加载可选文件失败')
+  } finally {
+    scopeDocumentsLoading.value = false
+  }
+}
+
+function scopeDocumentLabel(document: StorageDocument) {
+  const type = document.documentType ? ` · ${formatDocumentType(document.documentType)}` : ''
+  return `${document.originalFilename}${type}`
+}
+
+function formatDocumentType(type: string) {
+  const option = documentTypeOptions.find((item) => item.value === type)
+  return option?.label || type
+}
+
+function clearRetrievalScope() {
+  ragForm.documentId = null
+  ragForm.documentType = null
 }
 
 function stopStreaming() {
@@ -863,6 +1032,161 @@ function formatMessageTime(value?: string | Date) {
   return formatDateTime(value ? new Date(value) : new Date())
 }
 
+function setupMessageScrollbar() {
+  updateMessageScrollbar()
+  messageResizeObserver = new ResizeObserver(updateMessageScrollbar)
+  if (messageViewport.value) {
+    messageResizeObserver.observe(messageViewport.value)
+  }
+  window.addEventListener('resize', updateMessageScrollbar)
+  window.addEventListener('mousemove', handleThumbDrag)
+  window.addEventListener('mouseup', stopThumbDrag)
+  window.addEventListener('mouseup', stopArrowScroll)
+}
+
+function teardownMessageScrollbar() {
+  messageResizeObserver?.disconnect()
+  messageResizeObserver = null
+  window.removeEventListener('resize', updateMessageScrollbar)
+  window.removeEventListener('mousemove', handleThumbDrag)
+  window.removeEventListener('mouseup', stopThumbDrag)
+  window.removeEventListener('mouseup', stopArrowScroll)
+  clearMessageScrollbarHideTimer()
+  stopArrowScroll()
+  stopThumbDrag()
+}
+
+function handleMessageScroll() {
+  updateFollowLatestState()
+  updateMessageScrollbar()
+  revealMessageScrollbar()
+}
+
+function updateFollowLatestState() {
+  const viewport = messageViewport.value
+  if (!viewport) return
+  shouldFollowLatest.value = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <= MESSAGE_BOTTOM_THRESHOLD
+}
+
+function updateMessageScrollbar() {
+  const viewport = messageViewport.value
+  const track = messageScrollbarTrack.value
+  if (!viewport) return
+
+  const scrollable = viewport.scrollHeight - viewport.clientHeight > 1
+  messageScrollbarVisible.value = scrollable
+  if (!scrollable) {
+    messageScrollbarThumbTop.value = 0
+    return
+  }
+  if (!track) {
+    nextTick(updateMessageScrollbar)
+  }
+
+  const trackHeight = track?.clientHeight || Math.max(viewport.clientHeight - 60, 1)
+  const thumbHeight = Math.max(
+      MESSAGE_SCROLLBAR_MIN_THUMB_HEIGHT,
+      Math.round((viewport.clientHeight / viewport.scrollHeight) * trackHeight),
+  )
+  const maxThumbTop = Math.max(trackHeight - thumbHeight, 0)
+  const maxScrollTop = Math.max(viewport.scrollHeight - viewport.clientHeight, 1)
+
+  messageScrollbarThumbHeight.value = Math.min(thumbHeight, trackHeight)
+  messageScrollbarThumbTop.value = Math.round((viewport.scrollTop / maxScrollTop) * maxThumbTop)
+}
+
+function revealMessageScrollbar() {
+  if (!messageScrollbarVisible.value) return
+  messageScrollbarActive.value = true
+  clearMessageScrollbarHideTimer()
+  messageScrollbarHideTimer = window.setTimeout(() => {
+    if (!draggingThumb) {
+      messageScrollbarActive.value = false
+    }
+  }, MESSAGE_SCROLLBAR_HIDE_DELAY_MS)
+}
+
+function clearMessageScrollbarHideTimer() {
+  if (messageScrollbarHideTimer !== null) {
+    window.clearTimeout(messageScrollbarHideTimer)
+    messageScrollbarHideTimer = null
+  }
+}
+
+function scrollMessageBy(delta: number, behavior: ScrollBehavior = 'smooth') {
+  const viewport = messageViewport.value
+  if (!viewport) return
+  viewport.scrollBy({top: delta, behavior})
+}
+
+function startArrowScroll(direction: -1 | 1) {
+  stopArrowScroll()
+  scrollMessageBy(direction * MESSAGE_ARROW_SCROLL_STEP)
+  arrowScrollDelayTimer = window.setTimeout(() => {
+    arrowScrollIntervalTimer = window.setInterval(() => {
+      scrollMessageBy(direction * MESSAGE_ARROW_SCROLL_STEP, 'auto')
+    }, MESSAGE_ARROW_REPEAT_INTERVAL_MS)
+  }, MESSAGE_ARROW_REPEAT_DELAY_MS)
+}
+
+function stopArrowScroll() {
+  if (arrowScrollDelayTimer !== null) {
+    window.clearTimeout(arrowScrollDelayTimer)
+    arrowScrollDelayTimer = null
+  }
+  if (arrowScrollIntervalTimer !== null) {
+    window.clearInterval(arrowScrollIntervalTimer)
+    arrowScrollIntervalTimer = null
+  }
+}
+
+function handleTrackMouseDown(event: MouseEvent) {
+  const viewport = messageViewport.value
+  const track = messageScrollbarTrack.value
+  if (!viewport || !track) return
+
+  const rect = track.getBoundingClientRect()
+  const clickedTop = event.clientY - rect.top
+  if (clickedTop < messageScrollbarThumbTop.value) {
+    scrollMessageBy(-Math.round(viewport.clientHeight * MESSAGE_PAGE_SCROLL_RATIO))
+    return
+  }
+  if (clickedTop > messageScrollbarThumbTop.value + messageScrollbarThumbHeight.value) {
+    scrollMessageBy(Math.round(viewport.clientHeight * MESSAGE_PAGE_SCROLL_RATIO))
+  }
+}
+
+function startThumbDrag(event: MouseEvent) {
+  draggingThumb = true
+  thumbDragStartY = event.clientY
+  thumbDragStartTop = messageScrollbarThumbTop.value
+  messageScrollbarActive.value = true
+  document.body.classList.add('message-scrollbar-dragging')
+}
+
+function handleThumbDrag(event: MouseEvent) {
+  if (!draggingThumb) return
+  const viewport = messageViewport.value
+  const track = messageScrollbarTrack.value
+  if (!viewport || !track) return
+
+  const maxThumbTop = Math.max(track.clientHeight - messageScrollbarThumbHeight.value, 1)
+  const nextThumbTop = clamp(thumbDragStartTop + event.clientY - thumbDragStartY, 0, maxThumbTop)
+  const maxScrollTop = Math.max(viewport.scrollHeight - viewport.clientHeight, 1)
+  viewport.scrollTop = (nextThumbTop / maxThumbTop) * maxScrollTop
+}
+
+function stopThumbDrag() {
+  if (!draggingThumb) return
+  draggingThumb = false
+  document.body.classList.remove('message-scrollbar-dragging')
+  revealMessageScrollbar()
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max)
+}
+
 /**
  * 滚动到最新消息
  */
@@ -870,7 +1194,18 @@ async function scrollToLatest() {
   await nextTick()
   if (messageViewport.value) {
     messageViewport.value.scrollTop = messageViewport.value.scrollHeight
+    shouldFollowLatest.value = true
+    updateMessageScrollbar()
   }
+}
+
+async function followLatestIfNeeded() {
+  if (!shouldFollowLatest.value) {
+    await nextTick()
+    updateMessageScrollbar()
+    return
+  }
+  await scrollToLatest()
 }
 
 function waitForMessageTransition() {
@@ -917,7 +1252,7 @@ function createTypingRenderer(assistantMessage: ChatMessage, onComplete: () => P
       messages.value = [...messages.value]
     }
     stop()
-    scrollToLatest()
+    followLatestIfNeeded()
     void onComplete()
   }
 
@@ -962,7 +1297,7 @@ function createTypingRenderer(assistantMessage: ChatMessage, onComplete: () => P
     const now = window.performance.now()
     if (now - lastScrollAt >= TYPE_SCROLL_INTERVAL_MS) {
       lastScrollAt = now
-      scrollToLatest()
+      followLatestIfNeeded()
     }
   }
 
@@ -1376,6 +1711,11 @@ async function downloadReference(reference: RetrievalCitation) {
   white-space: nowrap;
 }
 
+.scope-drawer-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .chat-surface {
   display: grid;
   min-width: 0;
@@ -1402,10 +1742,17 @@ async function downloadReference(reference: RetrievalCitation) {
   display: none;
 }
 
-.message-viewport {
+.message-scroll-shell {
   position: relative;
   min-height: 0;
-  padding: 20px;
+  overflow: hidden;
+}
+
+.message-viewport {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+  padding: 20px 34px 20px 20px;
   overflow: auto;
   scrollbar-width: none;
   opacity: 1;
@@ -1418,6 +1765,103 @@ async function downloadReference(reference: RetrievalCitation) {
 
 .message-viewport.transitioning {
   opacity: 0.55;
+}
+
+.message-scrollbar {
+  position: absolute;
+  top: 18px;
+  right: 10px;
+  bottom: 18px;
+  z-index: 4;
+  display: grid;
+  width: 18px;
+  grid-template-rows: 18px minmax(0, 1fr) 18px;
+  gap: 0;
+  border: 0;
+  border-radius: 999px;
+  padding: 2px 0;
+  opacity: 0.7;
+  background: rgba(244, 248, 252, 0.78);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+  transition: opacity 160ms ease;
+  pointer-events: auto;
+}
+
+.message-scroll-shell:hover .message-scrollbar,
+.message-scrollbar.active {
+  opacity: 1;
+}
+
+.message-scrollbar-button {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.message-scrollbar-arrow {
+  display: block;
+  width: 9px;
+  height: 7px;
+  background: #8f969d;
+}
+
+.message-scrollbar-arrow.up {
+  clip-path: polygon(50% 8%, 94% 70%, 78% 90%, 50% 52%, 22% 90%, 6% 70%);
+}
+
+.message-scrollbar-arrow.down {
+  clip-path: polygon(6% 30%, 22% 10%, 50% 48%, 78% 10%, 94% 30%, 50% 92%);
+}
+
+.message-scrollbar-button:hover .message-scrollbar-arrow.up {
+  background: #7e8790;
+}
+
+.message-scrollbar-button:hover .message-scrollbar-arrow.down {
+  background: #7e8790;
+}
+
+.message-scrollbar-track {
+  position: relative;
+  justify-self: center;
+  width: 12px;
+  min-height: 0;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.message-scrollbar-thumb {
+  position: absolute;
+  top: 0;
+  left: 2px;
+  width: 8px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0;
+  background: #8f969d;
+  box-shadow: none;
+  cursor: grab;
+}
+
+.message-scrollbar-thumb:hover,
+.message-scrollbar-thumb:active {
+  background: #7e8790;
+}
+
+.message-scrollbar-thumb:active {
+  cursor: grabbing;
+}
+
+:global(.message-scrollbar-dragging) {
+  user-select: none;
 }
 
 .history-loading {
@@ -1834,6 +2278,7 @@ async function downloadReference(reference: RetrievalCitation) {
 .streaming-stop-button {
   position: relative;
   overflow: hidden;
+  --stop-pulse-duration: 1.8s;
   --n-color: rgba(82, 60, 27, 0.82) !important;
   --n-color-hover: rgba(95, 69, 30, 0.9) !important;
   --n-color-pressed: rgba(76, 54, 24, 0.92) !important;
@@ -1844,7 +2289,7 @@ async function downloadReference(reference: RetrievalCitation) {
   --n-text-color-hover: #fff0c7 !important;
   --n-text-color-pressed: #ffe7ad !important;
   box-shadow: 0 0 0 1px rgba(255, 203, 104, 0.08), 0 10px 22px rgba(255, 173, 52, 0.08);
-  animation: stop-button-pulse 1.8s ease-in-out infinite;
+  animation: stop-button-pulse var(--stop-pulse-duration) ease-in-out infinite;
 }
 
 .streaming-stop-button::before {
@@ -1885,7 +2330,7 @@ async function downloadReference(reference: RetrievalCitation) {
   background: #ffd985;
   box-shadow: 0 0 0 1px rgba(255, 236, 187, 0.28), 0 0 8px rgba(255, 189, 76, 0.18);
   content: '';
-  animation: stop-square-pulse 1.25s ease-in-out infinite;
+  animation: stop-square-pulse var(--stop-pulse-duration) ease-in-out infinite;
 }
 
 @keyframes stop-button-pulse {
@@ -1923,6 +2368,10 @@ async function downloadReference(reference: RetrievalCitation) {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .message-scrollbar {
+    transition: none;
+  }
+
   .streaming-stop-button,
   .streaming-stop-button::before,
   .stop-indicator::after {
@@ -1941,6 +2390,14 @@ async function downloadReference(reference: RetrievalCitation) {
 
   .mobile-new-session {
     display: inline-flex;
+  }
+
+  .message-viewport {
+    padding-right: 20px;
+  }
+
+  .message-scrollbar {
+    display: none;
   }
 }
 </style>
