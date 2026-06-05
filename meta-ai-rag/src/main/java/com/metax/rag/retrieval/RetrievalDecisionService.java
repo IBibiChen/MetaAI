@@ -8,6 +8,8 @@ import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.ollama.OllamaChatModel;
+import org.springframework.ai.ollama.api.OllamaChatOptions;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -46,6 +48,7 @@ public class RetrievalDecisionService {
             
             返回规则：
             - 只返回 RETRIEVE 或 SKIP
+            - 不要思考，不要解释，不要输出 JSON，只输出一个单词
             - 如果问题需要基于知识库、文档、资料、文件、上传内容回答，返回 RETRIEVE
             - 如果问题是问候、感谢、助手身份、闲聊、通用能力说明，返回 SKIP
             - 如果问题是“继续说”“它有什么风险”“这个怎么处理”等依赖上一轮知识库内容的追问，返回 RETRIEVE
@@ -145,14 +148,11 @@ public class RetrievalDecisionService {
      */
     private RetrievalDecisionResult decideByLlm(String query) {
         try {
-            ChatOptions options = ChatOptions.builder()
-                    .temperature(properties.getRetrieval().getDecision().getTemperature())
-                    .maxTokens(properties.getRetrieval().getDecision().getMaxTokens())
-                    .build();
+            ChatOptions options = classifierOptions();
             Prompt prompt = new Prompt(List.of(new SystemMessage(CLASSIFIER_SYSTEM),
                     new UserMessage("用户问题：\n" + nullToEmpty(query))), options);
             String answer = chatModel.call(prompt).getResult().getOutput().getText();
-            String normalizedAnswer = normalizedQuery(answer);
+            String normalizedAnswer = normalizedAnswer(answer);
             if (normalizedAnswer.startsWith(RetrievalDecision.SKIP.name().toLowerCase(Locale.ROOT))) {
                 return RetrievalDecisionResult.skip("llm_skip");
             }
@@ -165,6 +165,31 @@ public class RetrievalDecisionService {
             log.warn("检索决策模型调用失败，默认执行检索：message = {}", e.getMessage());
             return RetrievalDecisionResult.retrieve("llm_error_default_retrieve");
         }
+    }
+
+    /**
+     * 构建检索决策模型参数
+     *
+     * <p>
+     * 检索决策复用当前主 ChatModel，不额外引入路由模型
+     * Ollama / Qwen3 做短分类时必须显式关闭 thinking，否则模型可能只返回思考字段，导致 answer 为空
+     *
+     * @return 检索决策模型参数
+     */
+    private ChatOptions classifierOptions() {
+        double temperature = properties.getRetrieval().getDecision().getTemperature();
+        int maxTokens = properties.getRetrieval().getDecision().getMaxTokens();
+        if (chatModel instanceof OllamaChatModel) {
+            return OllamaChatOptions.builder()
+                    .temperature(temperature)
+                    .numPredict(maxTokens)
+                    .disableThinking()
+                    .build();
+        }
+        return ChatOptions.builder()
+                .temperature(temperature)
+                .maxTokens(maxTokens)
+                .build();
     }
 
     /**
@@ -196,6 +221,24 @@ public class RetrievalDecisionService {
      */
     private String normalizedQuery(String value) {
         return nullToEmpty(value).trim().toLowerCase(Locale.ROOT);
+    }
+
+    /**
+     * 归一化检索决策模型输出
+     *
+     * <p>
+     * 本地 thinking 模型可能返回 <think>...</think> 后再给最终分类，这里只保留最终可解析内容
+     *
+     * @param value 模型原始输出
+     * @return 可用于判断的归一化输出
+     */
+    private String normalizedAnswer(String value) {
+        String normalized = normalizedQuery(value);
+        int thinkEnd = normalized.lastIndexOf("</think>");
+        if (thinkEnd >= 0) {
+            normalized = normalized.substring(thinkEnd + "</think>".length()).trim();
+        }
+        return normalized;
     }
 
     /**

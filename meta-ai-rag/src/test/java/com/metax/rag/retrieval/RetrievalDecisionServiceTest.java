@@ -142,6 +142,28 @@ class RetrievalDecisionServiceTest {
     }
 
     @Test
+    void shouldDefaultRetrieveWhenLlmReturnsBlankAnswer() {
+        TestChatModel chatModel = new TestChatModel("");
+        RetrievalDecisionService service = new RetrievalDecisionService(properties("hybrid"), chatModel);
+
+        RetrievalDecisionResult result = service.decide(options("继续说"));
+
+        assertThat(result.decision()).isEqualTo(RetrievalDecision.RETRIEVE);
+        assertThat(result.reason()).isEqualTo("llm_invalid_default_retrieve");
+    }
+
+    @Test
+    void shouldParseDecisionAfterThinkBlock() {
+        TestChatModel chatModel = new TestChatModel("<think>判断是否需要检索</think>\nSKIP");
+        RetrievalDecisionService service = new RetrievalDecisionService(properties("hybrid"), chatModel);
+
+        RetrievalDecisionResult result = service.decide(options("java 语言有什么优点"));
+
+        assertThat(result.decision()).isEqualTo(RetrievalDecision.SKIP);
+        assertThat(result.reason()).isEqualTo("llm_skip");
+    }
+
+    @Test
     void shouldDefaultRetrieveWhenLlmFails() {
         TestChatModel chatModel = new TestChatModel("RETRIEVE");
         chatModel.throwError = true;
