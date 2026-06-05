@@ -22,7 +22,8 @@
  * 2、txt 使用 TextReader，并固定 UTF-8
  * 3、md / markdown 使用 MarkdownDocumentReader
  * 4、json 使用 JsonReader
- * 5、复杂或未知类型使用 TikaDocumentReader 兜底
+ * 5、pdf 优先使用 PaddleOCR Reader，适合扫描件 PDF
+ * 6、复杂或未知类型使用 TikaDocumentReader 兜底
  *
  * <p>
  * 注意：Spring AI 1.1.7 MarkdownDocumentReader 内部使用 JVM 默认字符集读取 Resource

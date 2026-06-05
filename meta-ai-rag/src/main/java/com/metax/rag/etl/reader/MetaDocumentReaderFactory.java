@@ -1,6 +1,8 @@
 package com.metax.rag.etl.reader;
 
 import com.metax.rag.etl.resource.MetaDocumentResource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.document.DocumentReader;
 import org.springframework.stereotype.Component;
 
@@ -25,6 +27,8 @@ import java.util.List;
  */
 @Component
 public class MetaDocumentReaderFactory {
+
+    private static final Logger log = LoggerFactory.getLogger(MetaDocumentReaderFactory.class);
 
     private final List<MetaDocumentReaderStrategy> strategies;
 
@@ -51,6 +55,8 @@ public class MetaDocumentReaderFactory {
                 .filter(candidate -> candidate.supports(documentResource.documentType()))
                 .findFirst()
                 .orElse(fallbackStrategy);
+        log.info("选择文档 Reader 策略：documentType = {}，source = {}，strategy = {}",
+                documentResource.documentType(), documentResource.source(), strategy.getClass().getSimpleName());
         return new MetaDocumentReader(documentResource, strategy.create(documentResource));
     }
 }

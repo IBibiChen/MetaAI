@@ -1,10 +1,12 @@
 package com.metax.rag.etl.reader;
 
+import com.metax.rag.config.RagProperties;
 import com.metax.rag.etl.resource.MetaDocumentResource;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.document.DocumentReader;
 import org.springframework.core.io.ByteArrayResource;
+import org.springframework.core.io.Resource;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -79,6 +81,27 @@ class MetaDocumentReaderTest {
         assertThat(documents.get(0).getMetadata()).containsEntry("source", "demo.txt");
     }
 
+    /**
+     * pdf 文档应优先委托 PaddleOCR Reader 解析扫描件
+     *
+     * <p>
+     * 该用例验证 ReaderFactory 对 pdf documentType 的策略选择和 OCR Reader 页级 metadata
+     */
+    @Test
+    void shouldReadPdfByPaddleOcrReader() {
+        MetaDocumentReaderFactory factory = pdfOcrFactory();
+        DocumentReader reader = factory.create(resource("pdf-bytes", "demo.pdf", "pdf"));
+
+        List<Document> documents = reader.read();
+
+        assertThat(documents).hasSize(1);
+        assertThat(documents.get(0).getText()).isEqualTo("第一页 OCR 文本");
+        assertThat(documents.get(0).getMetadata())
+                .containsEntry("source", "demo.pdf")
+                .containsEntry("pageNumber", 1)
+                .containsEntry("ocrProvider", "paddleocr");
+    }
+
     private MetaDocumentReaderFactory factory() {
         TikaDocumentReaderStrategy tika = new TikaDocumentReaderStrategy();
         return new MetaDocumentReaderFactory(List.of(
@@ -87,6 +110,36 @@ class MetaDocumentReaderTest {
                 new MarkdownDocumentReaderStrategy(),
                 tika
         ), tika);
+    }
+
+    /**
+     * 创建带 PaddleOCR PDF 策略的 ReaderFactory
+     *
+     * <p>
+     * 测试中通过覆盖 PaddleOcrClient 避免真实调用 OCR HTTP 服务
+     *
+     * @return MetaDocumentReaderFactory
+     */
+    private MetaDocumentReaderFactory pdfOcrFactory() {
+        TikaDocumentReaderStrategy tika = new TikaDocumentReaderStrategy();
+        return new MetaDocumentReaderFactory(List.of(
+                new PaddleOcrPdfDocumentReaderStrategy(ocrProperties(), new PaddleOcrClient(ocrProperties()) {
+                    @Override
+                    public List<String> recognizePdf(Resource resource) {
+                        return List.of("第一页 OCR 文本");
+                    }
+                }),
+                tika
+        ), tika);
+    }
+
+    /**
+     * 创建默认 OCR 配置
+     *
+     * @return RagProperties
+     */
+    private RagProperties ocrProperties() {
+        return new RagProperties();
     }
 
     private MetaDocumentResource resource(String text, String filename, String documentType) {

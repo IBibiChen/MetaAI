@@ -3,6 +3,8 @@ package com.metax.rag.config;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.ai.document.MetadataMode;
 
+import java.time.Duration;
+
 /**
  * RagProperties .
  *
@@ -49,6 +51,8 @@ public class RagProperties {
 
     private final Storage storage = new Storage();
 
+    private final Ocr ocr = new Ocr();
+
     public Chunk getChunk() {
         return chunk;
     }
@@ -67,6 +71,10 @@ public class RagProperties {
 
     public Storage getStorage() {
         return storage;
+    }
+
+    public Ocr getOcr() {
+        return ocr;
     }
 
     public static class Chunk {
@@ -705,6 +713,103 @@ public class RagProperties {
         public void setInitializeBucket(boolean initializeBucket) {
             this.initializeBucket = initializeBucket;
         }
+    }
+
+    public static class Ocr {
+
+        /**
+         * 是否启用 OCR Reader
+         *
+         * <p>
+         * 开启后 pdf 文档会优先交给 PaddleOCR 解析，适合扫描件 PDF
+         */
+        private boolean enabled = true;
+
+        /**
+         * OCR provider
+         *
+         * <p>
+         * 当前只支持 paddle，后续可扩展其他 OCR 服务
+         */
+        private String provider = "paddle";
+
+        /**
+         * PaddleOCR 服务基础地址
+         *
+         * <p>
+         * 本地 Docker Basic Serving 常见值为 http://localhost:8080
+         */
+        private String baseUrl = "http://localhost:8080";
+
+        /**
+         * PaddleOCR OCR 接口路径
+         */
+        private String endpoint = "/ocr";
+
+        /**
+         * OCR 请求超时时间
+         *
+         * <p>
+         * 扫描 PDF 识别通常比普通 Reader 慢，默认给本地 OCR 服务更长等待时间
+         */
+        private Duration timeout = Duration.ofSeconds(300);
+
+        /**
+         * 是否要求 OCR 服务返回可视化结果
+         *
+         * <p>
+         * RAG 入库只需要文本，默认关闭可视化以减少响应体大小
+         */
+        private boolean visualize = false;
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public String getProvider() {
+            return provider;
+        }
+
+        public void setProvider(String provider) {
+            this.provider = provider;
+        }
+
+        public String getBaseUrl() {
+            return baseUrl;
+        }
+
+        public void setBaseUrl(String baseUrl) {
+            this.baseUrl = baseUrl;
+        }
+
+        public String getEndpoint() {
+            return endpoint;
+        }
+
+        public void setEndpoint(String endpoint) {
+            this.endpoint = endpoint;
+        }
+
+        public Duration getTimeout() {
+            return timeout;
+        }
+
+        public void setTimeout(Duration timeout) {
+            this.timeout = timeout;
+        }
+
+        public boolean isVisualize() {
+            return visualize;
+        }
+
+        public void setVisualize(boolean visualize) {
+            this.visualize = visualize;
+        }
+
     }
 
 }
