@@ -1,6 +1,6 @@
 <template>
   <n-config-provider :theme="darkTheme" :theme-overrides="themeOverrides" :locale="zhCN" :date-locale="dateZhCN">
-    <n-message-provider>
+    <n-message-provider container-class="center-message-container">
       <n-dialog-provider>
         <n-layout class="app-shell" has-sider>
           <n-layout-sider
@@ -129,3 +129,16 @@ const themeOverrides: GlobalThemeOverrides = {
   },
 }
 </script>
+
+<style>
+.center-message-container.n-message-container {
+  top: 50%;
+  right: 0;
+  left: 0;
+  transform: translateY(-50%);
+}
+
+.center-message-container .n-message-wrapper {
+  justify-content: center;
+}
+</style>

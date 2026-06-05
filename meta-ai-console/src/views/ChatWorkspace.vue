@@ -1,22 +1,17 @@
 <template>
   <div class="chat-page">
     <aside class="history-panel surface">
+      <div class="history-controls">
+        <n-button class="history-new-button" size="small" secondary @click="handleNewSession">
+          新建对话
+        </n-button>
+      </div>
       <div class="panel-head">
         <div>
           <strong>历史对话</strong>
           <span>{{ activeChat?.title || workspace.conversationId }}</span>
         </div>
-      </div>
-      <div class="history-controls">
-        <n-button size="small" secondary @click="handleNewSession">
-          <template #icon>
-            <n-icon>
-              <SquarePen/>
-            </n-icon>
-          </template>
-          新建对话
-        </n-button>
-        <n-button size="small" tertiary :loading="chatListLoading" @click="loadChats">
+        <n-button class="history-refresh-button" size="tiny" tertiary :loading="chatListLoading" @click="loadChats">
           <template #icon>
             <n-icon>
               <RefreshCw/>
@@ -142,7 +137,33 @@
             :key="messageItem.id"
             :class="['message-row', messageItem.role]"
         >
-          <div class="message-bubble">
+          <div v-if="messageItem.role === 'user'" class="message-actions">
+            <button
+                class="message-action-button"
+                type="button"
+                title="复制消息"
+                aria-label="复制消息"
+                :disabled="!messageItem.content"
+                @click.stop="copyMessage(messageItem)"
+            >
+              <n-icon>
+                <Copy/>
+              </n-icon>
+            </button>
+            <button
+                class="message-action-button"
+                type="button"
+                title="重新发送"
+                aria-label="重新发送"
+                :disabled="sending || !messageItem.content"
+                @click.stop="resendUserMessage(messageItem)"
+            >
+              <n-icon>
+                <RotateCcw/>
+              </n-icon>
+            </button>
+          </div>
+          <div class="message-bubble" @click="handleMessageBubbleClick">
             <div class="message-meta">
               <span :class="['message-avatar', messageItem.role]">
                 <n-icon>
@@ -186,6 +207,20 @@
               />
             </div>
           </div>
+          <div v-if="messageItem.role === 'assistant'" class="message-actions">
+            <button
+                class="message-action-button"
+                type="button"
+                title="复制消息"
+                aria-label="复制消息"
+                :disabled="!messageItem.content"
+                @click.stop="copyMessage(messageItem)"
+            >
+              <n-icon>
+                <Copy/>
+              </n-icon>
+            </button>
+          </div>
         </article>
       </section>
 
@@ -206,9 +241,7 @@
             @click="stopStreaming"
         >
           <template #icon>
-            <span class="stop-indicator" aria-hidden="true">
-              <n-icon><Square/></n-icon>
-            </span>
+            <span class="stop-indicator" aria-hidden="true"></span>
           </template>
           停止
         </n-button>
@@ -306,14 +339,15 @@ import {useMessage} from 'naive-ui'
 import {
   Bot,
   CircleUserRound,
+  Copy,
   Eraser,
   Pencil,
   Pin,
   RefreshCw,
+  RotateCcw,
   Send,
   SlidersHorizontal,
   Sparkles,
-  Square,
   SquarePen,
   Star,
   Trash2
@@ -339,6 +373,14 @@ interface ChatMessage {
   typing?: boolean
   references?: RetrievalCitation[]
   trace?: RetrievalTrace
+}
+
+interface TypingRenderer {
+  enqueue: (text: string) => void
+  complete: (answer?: string) => void
+  stop: () => void
+  flush: () => void
+  isDone: () => boolean
 }
 
 const workspace = useWorkspaceStore()
@@ -372,14 +414,12 @@ const modeOptions = [
   {label: '普通聊天', value: 'plain'},
 ]
 
-const TYPE_BASE_INTERVAL_MS = 42
-const TYPE_FAST_INTERVAL_MS = 32
-const TYPE_ACCELERATE_THRESHOLD = 420
+const TYPE_STREAM_INTERVAL_MS = 34
+const TYPE_CATCHUP_INTERVAL_MS = 20
+const TYPE_DONE_MAX_ANIMATION_MS = 1200
+const TYPE_LARGE_BACKLOG_THRESHOLD = 1800
+const TYPE_FLUSH_BACKLOG_THRESHOLD = 4000
 const TYPE_SCROLL_INTERVAL_MS = 180
-const TYPE_SOFT_PAUSE_MS = 90
-const TYPE_HARD_PAUSE_MS = 180
-const TYPE_SOFT_PAUSE_CHARS = new Set(['，', '、', '：', '；', ',', ':', ';'])
-const TYPE_HARD_PAUSE_CHARS = new Set(['。', '！', '？', '!', '?'])
 
 const markdown = new MarkdownIt({
   breaks: true,
@@ -388,6 +428,7 @@ const markdown = new MarkdownIt({
   typographer: true,
 })
 const defaultLinkOpenRenderer = markdown.renderer.rules.link_open
+const defaultFenceRenderer = markdown.renderer.rules.fence
 markdown.renderer.rules.link_open = (tokens, idx, options, env, self) => {
   const token = tokens[idx]
   const targetIndex = token.attrIndex('target')
@@ -404,6 +445,14 @@ markdown.renderer.rules.link_open = (tokens, idx, options, env, self) => {
   }
   return defaultLinkOpenRenderer ? defaultLinkOpenRenderer(tokens, idx, options, env, self) : self.renderToken(tokens, idx, options)
 }
+markdown.renderer.rules.fence = (tokens, idx, options, env, self) => {
+  const token = tokens[idx]
+  const language = token.info.trim().split(/\s+/)[0] || 'code'
+  const renderedCode = defaultFenceRenderer
+      ? defaultFenceRenderer(tokens, idx, options, env, self)
+      : `<pre><code>${markdown.utils.escapeHtml(token.content)}</code></pre>`
+  return `<div class="code-block"><div class="code-block-head"><span>${markdown.utils.escapeHtml(language)}</span><button type="button" data-copy-code>复制代码</button></div>${renderedCode}</div>`
+}
 
 const ragForm = reactive({
   documentId: '',
@@ -412,6 +461,7 @@ const ragForm = reactive({
 
 const activeChat = computed(() => chats.value.find((item) => item.id === activeChatId.value) || null)
 let stopActiveTyping: (() => void) | null = null
+let activeTypingRenderer: TypingRenderer | null = null
 let activeStream: EventSource | null = null
 let streamStoppedByUser = false
 
@@ -442,11 +492,17 @@ watch(() => workspace.contextVersion, async () => {
  */
 async function sendMessage() {
   const content = draft.value.trim()
+  if (content) {
+    draft.value = ''
+  }
+  await sendMessageContent(content)
+}
+
+async function sendMessageContent(content: string) {
   if (!content || sending.value) return
 
   workspace.persist()
   stopStreaming()
-  draft.value = ''
   messages.value.push(createMessage('user', content))
   const assistantMessage = reactive(createMessage('assistant', ''))
   assistantMessage.typing = true
@@ -472,6 +528,7 @@ async function sendMessage() {
     message.error(errorMessage)
   }
   const typingRenderer = createTypingRenderer(assistantMessage, finishSend)
+  activeTypingRenderer = typingRenderer
   stopActiveTyping = typingRenderer.stop
 
   const handlers = {
@@ -518,10 +575,15 @@ async function sendMessage() {
 }
 
 function stopStreaming() {
+  if (activeTypingRenderer?.isDone()) {
+    activeTypingRenderer.flush()
+    return
+  }
   streamStoppedByUser = true
   activeStream?.close()
   activeStream = null
   stopActiveTyping?.()
+  activeTypingRenderer = null
   sending.value = false
 }
 
@@ -706,6 +768,62 @@ function clearMessages() {
   messages.value = []
 }
 
+async function copyText(text: string, successText: string) {
+  if (!text) return
+  try {
+    await writeClipboardText(text)
+    message.success(successText)
+  } catch {
+    message.error('复制失败，请检查浏览器剪贴板权限')
+  }
+}
+
+async function writeClipboardText(text: string) {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await Promise.race([
+        navigator.clipboard.writeText(text),
+        new Promise((_, reject) => window.setTimeout(() => reject(new Error('clipboard timeout')), 1200)),
+      ])
+      return
+    } catch {
+      // 继续走 textarea fallback
+    }
+  }
+
+  const textarea = window.document.createElement('textarea')
+  textarea.value = text
+  textarea.setAttribute('readonly', 'true')
+  textarea.style.position = 'fixed'
+  textarea.style.left = '-9999px'
+  textarea.style.top = '0'
+  window.document.body.appendChild(textarea)
+  textarea.select()
+  const copied = window.document.execCommand('copy')
+  window.document.body.removeChild(textarea)
+  if (!copied) {
+    throw new Error('copy failed')
+  }
+}
+
+function copyMessage(messageItem: ChatMessage) {
+  copyText(messageItem.content, '已复制消息')
+}
+
+function resendUserMessage(messageItem: ChatMessage) {
+  if (messageItem.role !== 'user' || sending.value || !messageItem.content) return
+  sendMessageContent(messageItem.content)
+}
+
+function handleMessageBubbleClick(event: MouseEvent) {
+  const target = event.target as HTMLElement | null
+  const button = target?.closest<HTMLButtonElement>('[data-copy-code]')
+  if (!button) return
+  const codeBlock = button.closest('.code-block')
+  const code = codeBlock?.querySelector('code')?.textContent || ''
+  copyText(code, '已复制代码')
+}
+
 /**
  * 输入框 Enter 发送
  *
@@ -742,8 +860,7 @@ function createMessage(
 }
 
 function formatMessageTime(value?: string | Date) {
-  const date = value ? new Date(value) : new Date()
-  return date.toLocaleString()
+  return formatDateTime(value ? new Date(value) : new Date())
 }
 
 /**
@@ -760,14 +877,16 @@ function waitForMessageTransition() {
   return new Promise((resolve) => window.setTimeout(resolve, 160))
 }
 
-function createTypingRenderer(assistantMessage: ChatMessage, onComplete: () => Promise<void>) {
+function createTypingRenderer(assistantMessage: ChatMessage, onComplete: () => Promise<void>): TypingRenderer {
   let pendingText = ''
   let finalAnswer: string | undefined
   let done = false
+  let completed = false
   let stopped = false
   let timer: number | null = null
+  let streamDoneAt = 0
   let lastScrollAt = 0
-  let previousWasLineBreak = false
+  let renderer: TypingRenderer
 
   const stop = () => {
     stopped = true
@@ -779,12 +898,39 @@ function createTypingRenderer(assistantMessage: ChatMessage, onComplete: () => P
     if (stopActiveTyping === stop) {
       stopActiveTyping = null
     }
+    if (activeTypingRenderer === renderer) {
+      activeTypingRenderer = null
+    }
   }
 
-  const schedule = (delay = resolveTypingDelay('', pendingText.length, previousWasLineBreak)) => {
+  const schedule = (delay = resolveTypingDelay(done)) => {
     if (!stopped && timer === null) {
       timer = window.setTimeout(tick, delay)
     }
+  }
+
+  const finish = () => {
+    if (completed) return
+    completed = true
+    if (finalAnswer !== undefined && assistantMessage.content !== finalAnswer) {
+      assistantMessage.content = finalAnswer
+      messages.value = [...messages.value]
+    }
+    stop()
+    scrollToLatest()
+    void onComplete()
+  }
+
+  const flush = () => {
+    if (stopped || completed) return
+    if (finalAnswer !== undefined) {
+      assistantMessage.content = finalAnswer
+    } else if (pendingText) {
+      assistantMessage.content += pendingText
+    }
+    pendingText = ''
+    messages.value = [...messages.value]
+    finish()
   }
 
   const tick = () => {
@@ -792,25 +938,23 @@ function createTypingRenderer(assistantMessage: ChatMessage, onComplete: () => P
     if (stopped) return
 
     if (pendingText) {
-      const nextChar = Array.from(pendingText)[0] || ''
-      assistantMessage.content += nextChar
-      pendingText = pendingText.slice(nextChar.length)
+      if (shouldFlushTyping(pendingText.length, done, streamDoneAt)) {
+        flush()
+        return
+      }
+      const batchSize = resolveTypingBatchSize(pendingText.length, done, streamDoneAt)
+      const chars = Array.from(pendingText)
+      const nextText = chars.slice(0, batchSize).join('')
+      assistantMessage.content += nextText
+      pendingText = chars.slice(batchSize).join('')
       messages.value = [...messages.value]
       throttleScrollToLatest()
-      const delay = resolveTypingDelay(nextChar, pendingText.length, previousWasLineBreak)
-      previousWasLineBreak = nextChar === '\n'
-      schedule(delay)
+      schedule(resolveTypingDelay(done))
       return
     }
 
     if (done) {
-      if (finalAnswer !== undefined) {
-        assistantMessage.content = finalAnswer
-        messages.value = [...messages.value]
-      }
-      stop()
-      scrollToLatest()
-      void onComplete()
+      finish()
     }
   }
 
@@ -822,45 +966,68 @@ function createTypingRenderer(assistantMessage: ChatMessage, onComplete: () => P
     }
   }
 
-  return {
+  renderer = {
     enqueue(text: string) {
-      if (!text || stopped) return
+      if (!text || stopped || completed) return
       pendingText += text
       schedule()
     },
     complete(answer?: string) {
-      if (stopped) return
+      if (stopped || completed) return
       finalAnswer = answer
       if (answer) {
         const bufferedContent = assistantMessage.content + pendingText
         if (answer.startsWith(bufferedContent)) {
           pendingText += answer.slice(bufferedContent.length)
+        } else {
+          pendingText = answer.slice(assistantMessage.content.length)
         }
       }
       done = true
+      streamDoneAt = window.performance.now()
       schedule()
+    },
+    flush,
+    isDone() {
+      return done
     },
     stop,
   }
+
+  return renderer
 }
 
-function resolveTypingDelay(char: string, pendingLength: number, previousWasLineBreak: boolean) {
-  if (char === '\n') {
-    return previousWasLineBreak ? TYPE_BASE_INTERVAL_MS : TYPE_HARD_PAUSE_MS
+function resolveTypingDelay(done: boolean) {
+  return done ? TYPE_CATCHUP_INTERVAL_MS : TYPE_STREAM_INTERVAL_MS
+}
+
+function resolveTypingBatchSize(pendingLength: number, done: boolean, streamDoneAt: number) {
+  if (!done) {
+    if (pendingLength > 900) return 8
+    if (pendingLength > 360) return 5
+    if (pendingLength > 120) return 3
+    return 1
   }
-  if (TYPE_HARD_PAUSE_CHARS.has(char)) {
-    return TYPE_HARD_PAUSE_MS
-  }
-  if (TYPE_SOFT_PAUSE_CHARS.has(char)) {
-    return TYPE_SOFT_PAUSE_MS
-  }
-  return pendingLength > TYPE_ACCELERATE_THRESHOLD ? TYPE_FAST_INTERVAL_MS : TYPE_BASE_INTERVAL_MS
+
+  const elapsedAfterDone = window.performance.now() - streamDoneAt
+  if (pendingLength > TYPE_LARGE_BACKLOG_THRESHOLD) return 96
+  if (elapsedAfterDone > 800) return 96
+  if (pendingLength > 900) return 64
+  if (pendingLength > 360) return 32
+  if (pendingLength > 120) return 16
+  return 8
+}
+
+function shouldFlushTyping(pendingLength: number, done: boolean, streamDoneAt: number) {
+  if (!done) return false
+  return pendingLength > TYPE_FLUSH_BACKLOG_THRESHOLD ||
+      window.performance.now() - streamDoneAt > TYPE_DONE_MAX_ANIMATION_MS
 }
 
 function renderMarkdown(content: string, typing?: boolean) {
   const html = markdown.render(content)
   return DOMPurify.sanitize(typing ? appendTypingCaret(html) : html, {
-    ADD_ATTR: ['target'],
+    ADD_ATTR: ['target', 'data-copy-code', 'type'],
   })
 }
 
@@ -887,7 +1054,17 @@ function parseReferences(value?: string): RetrievalCitation[] | undefined {
 }
 
 function formatTime(value?: string) {
-  return value ? new Date(value).toLocaleString() : ''
+  return value ? formatDateTime(new Date(value)) : ''
+}
+
+function formatDateTime(date: Date) {
+  if (Number.isNaN(date.getTime())) return ''
+  const month = date.getMonth() + 1
+  const day = date.getDate()
+  const hours = `${date.getHours()}`.padStart(2, '0')
+  const minutes = `${date.getMinutes()}`.padStart(2, '0')
+  const seconds = `${date.getSeconds()}`.padStart(2, '0')
+  return `${date.getFullYear()}年${month}月${day}日 ${hours}:${minutes}:${seconds}`
 }
 
 function toTime(value?: string) {
@@ -954,22 +1131,27 @@ async function downloadReference(reference: RetrievalCitation) {
 }
 
 .panel-head {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: flex-start;
-  justify-content: space-between;
   gap: 8px;
-  margin-bottom: 12px;
+  margin-bottom: 11px;
+}
+
+.panel-head > div {
+  min-width: 0;
 }
 
 .panel-head strong {
   display: block;
   color: #f4f7fb;
-  font-size: 15px;
+  font-size: 14px;
+  font-weight: 750;
 }
 
 .panel-head span {
   display: block;
-  max-width: 220px;
+  max-width: 100%;
   margin-top: 4px;
   overflow: hidden;
   color: #7f8b9b;
@@ -979,9 +1161,35 @@ async function downloadReference(reference: RetrievalCitation) {
 }
 
 .history-controls {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.history-controls :deep(.n-button) {
+  width: 100%;
+  height: 38px;
+  font-size: 14px;
+  font-weight: 750;
+}
+
+.history-new-button {
+  --n-color: rgba(65, 214, 183, 0.18) !important;
+  --n-color-hover: rgba(65, 214, 183, 0.26) !important;
+  --n-color-pressed: rgba(65, 214, 183, 0.2) !important;
+  --n-color-focus: rgba(65, 214, 183, 0.24) !important;
+  --n-border: 1px solid rgba(65, 214, 183, 0.36) !important;
+  --n-border-hover: 1px solid rgba(65, 214, 183, 0.58) !important;
+  --n-border-pressed: 1px solid rgba(65, 214, 183, 0.5) !important;
+  --n-border-focus: 1px solid rgba(65, 214, 183, 0.58) !important;
+  --n-text-color: #b9fff0 !important;
+  --n-text-color-hover: #e7fff8 !important;
+  --n-text-color-pressed: #d8fff6 !important;
+  --n-text-color-focus: #e7fff8 !important;
+  box-shadow: 0 0 0 1px rgba(65, 214, 183, 0.05), 0 10px 24px rgba(65, 214, 183, 0.08);
+}
+
+.history-refresh-button {
+  flex: none;
+  justify-self: end;
 }
 
 .history-list {
@@ -990,7 +1198,6 @@ async function downloadReference(reference: RetrievalCitation) {
   flex: 1;
   flex-direction: column;
   gap: 8px;
-  margin-top: 12px;
   overflow: auto;
   scrollbar-width: none;
 }
@@ -1098,14 +1305,30 @@ async function downloadReference(reference: RetrievalCitation) {
 
 .history-action-button {
   display: grid;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   place-items: center;
   border: 0;
   border-radius: 5px;
+  padding: 0;
   color: #9aa8ba;
+  line-height: 1;
   background: rgba(255, 255, 255, 0.05);
   cursor: pointer;
+}
+
+.history-action-button :deep(.n-icon) {
+  display: grid;
+  width: 16px;
+  height: 16px;
+  place-items: center;
+  line-height: 1;
+}
+
+.history-action-button :deep(svg) {
+  display: block;
+  width: 16px;
+  height: 16px;
 }
 
 .history-action-button:hover {
@@ -1249,6 +1472,8 @@ async function downloadReference(reference: RetrievalCitation) {
 
 .message-row {
   display: flex;
+  align-items: flex-end;
+  gap: 8px;
   margin-bottom: 16px;
 }
 
@@ -1314,6 +1539,72 @@ async function downloadReference(reference: RetrievalCitation) {
   word-break: break-word;
   color: #dce5f0;
   line-height: 1.7;
+}
+
+.message-actions {
+  display: flex;
+  width: 58px;
+  flex: none;
+  justify-content: flex-start;
+  gap: 6px;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-2px);
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+
+.message-row.user .message-actions {
+  justify-content: flex-start;
+}
+
+.message-row.assistant .message-actions {
+  width: 26px;
+  justify-content: flex-end;
+}
+
+.message-row:hover .message-actions,
+.message-row:focus-within .message-actions {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.message-action-button {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: 0;
+  color: #9aa8ba;
+  line-height: 1;
+  background: rgba(255, 255, 255, 0.055);
+  cursor: pointer;
+}
+
+.message-action-button:hover:not(:disabled) {
+  border-color: rgba(65, 214, 183, 0.32);
+  color: #79ead5;
+  background: rgba(65, 214, 183, 0.1);
+}
+
+.message-action-button:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.message-action-button :deep(.n-icon) {
+  display: grid;
+  width: 15px;
+  height: 15px;
+  place-items: center;
+}
+
+.message-action-button :deep(svg) {
+  display: block;
+  width: 15px;
+  height: 15px;
 }
 
 .message-content.typing:not(.markdown-body)::after,
@@ -1397,13 +1688,54 @@ async function downloadReference(reference: RetrievalCitation) {
   background: rgba(0, 0, 0, 0.28);
 }
 
-.markdown-body :deep(pre) {
+.markdown-body :deep(.code-block) {
   margin: 10px 0;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 8px;
+  overflow: hidden;
+  background: rgba(3, 8, 14, 0.72);
+}
+
+.markdown-body :deep(.code-block-head) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 7px 10px;
+  color: #8fa0b3;
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.markdown-body :deep(.code-block-head span) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.markdown-body :deep(.code-block-head button) {
+  flex: none;
+  border: 0;
+  border-radius: 5px;
+  padding: 3px 7px;
+  color: #aeeede;
+  font: inherit;
+  font-size: 12px;
+  background: rgba(65, 214, 183, 0.1);
+  cursor: pointer;
+}
+
+.markdown-body :deep(.code-block-head button:hover) {
+  color: #e8fff8;
+  background: rgba(65, 214, 183, 0.18);
+}
+
+.markdown-body :deep(pre) {
+  margin: 0;
   padding: 12px;
   overflow: auto;
-  background: rgba(3, 8, 14, 0.72);
+  background: transparent;
 }
 
 .markdown-body :deep(pre code) {
@@ -1502,8 +1834,31 @@ async function downloadReference(reference: RetrievalCitation) {
 .streaming-stop-button {
   position: relative;
   overflow: hidden;
-  box-shadow: 0 0 0 0 rgba(245, 180, 68, 0.2);
-  animation: stop-button-pulse 1.6s ease-in-out infinite;
+  --n-color: rgba(82, 60, 27, 0.82) !important;
+  --n-color-hover: rgba(95, 69, 30, 0.9) !important;
+  --n-color-pressed: rgba(76, 54, 24, 0.92) !important;
+  --n-border: 1px solid rgba(255, 203, 104, 0.34) !important;
+  --n-border-hover: 1px solid rgba(255, 215, 128, 0.58) !important;
+  --n-border-pressed: 1px solid rgba(255, 203, 104, 0.5) !important;
+  --n-text-color: #ffe3a3 !important;
+  --n-text-color-hover: #fff0c7 !important;
+  --n-text-color-pressed: #ffe7ad !important;
+  box-shadow: 0 0 0 1px rgba(255, 203, 104, 0.08), 0 10px 22px rgba(255, 173, 52, 0.08);
+  animation: stop-button-pulse 1.8s ease-in-out infinite;
+}
+
+.streaming-stop-button::before {
+  position: absolute;
+  right: auto;
+  bottom: 0;
+  left: -46%;
+  width: 46%;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, rgba(255, 221, 143, 0.95), transparent);
+  content: '';
+  pointer-events: none;
+  animation: stop-scan-line 1.45s ease-in-out infinite;
 }
 
 .streaming-stop-button::after {
@@ -1518,53 +1873,59 @@ async function downloadReference(reference: RetrievalCitation) {
 .stop-indicator {
   position: relative;
   display: inline-grid;
-  width: 20px;
-  height: 20px;
+  width: 21px;
+  height: 21px;
   place-items: center;
 }
 
-.stop-indicator::before {
-  position: absolute;
-  inset: 1px;
-  border: 1px solid rgba(255, 211, 123, 0.52);
-  border-radius: 50%;
+.stop-indicator::after {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: #ffd985;
+  box-shadow: 0 0 0 1px rgba(255, 236, 187, 0.28), 0 0 8px rgba(255, 189, 76, 0.18);
   content: '';
-  animation: stop-icon-ring 1.2s ease-out infinite;
+  animation: stop-square-pulse 1.25s ease-in-out infinite;
 }
 
 @keyframes stop-button-pulse {
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgba(245, 180, 68, 0.14);
-    filter: saturate(1);
+    box-shadow: 0 0 0 1px rgba(255, 203, 104, 0.08), 0 10px 22px rgba(255, 173, 52, 0.08);
   }
 
   50% {
-    box-shadow: 0 0 18px 1px rgba(245, 180, 68, 0.22);
-    filter: saturate(1.08);
+    box-shadow: 0 0 0 1px rgba(255, 203, 104, 0.18), 0 10px 26px rgba(255, 173, 52, 0.2);
   }
 }
 
-@keyframes stop-icon-ring {
+@keyframes stop-scan-line {
   0% {
-    opacity: 0.72;
-    transform: scale(0.72);
-  }
-
-  70% {
-    opacity: 0;
-    transform: scale(1.25);
+    left: -46%;
   }
 
   100% {
-    opacity: 0;
-    transform: scale(1.25);
+    left: 100%;
+  }
+}
+
+@keyframes stop-square-pulse {
+  0%,
+  100% {
+    background: #ffd177;
+    box-shadow: 0 0 0 1px rgba(255, 236, 187, 0.22), 0 0 5px rgba(255, 189, 76, 0.12);
+  }
+
+  50% {
+    background: #ffe8aa;
+    box-shadow: 0 0 0 1px rgba(255, 244, 211, 0.44), 0 0 12px rgba(255, 196, 85, 0.32);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .streaming-stop-button,
-  .stop-indicator::before {
+  .streaming-stop-button::before,
+  .stop-indicator::after {
     animation: none;
   }
 }

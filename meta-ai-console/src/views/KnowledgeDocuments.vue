@@ -221,7 +221,7 @@ const uploadDefaults = reactive({
   deptId: '',
   userId: '',
   documentType: '',
-  autoIndex: false,
+  autoIndex: true,
 })
 
 const uploadDraft = reactive({
@@ -231,7 +231,7 @@ const uploadDraft = reactive({
   deptId: '',
   userId: '',
   documentType: '',
-  autoIndex: false,
+  autoIndex: true,
 })
 
 const indexStatusOptions = [
@@ -620,7 +620,15 @@ function formatBytes(value: number) {
  * 时间格式化
  */
 function formatDate(value: string) {
-  return value ? new Date(value).toLocaleString() : '-'
+  if (!value) return '-'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '-'
+  const month = date.getMonth() + 1
+  const day = date.getDate()
+  const hours = `${date.getHours()}`.padStart(2, '0')
+  const minutes = `${date.getMinutes()}`.padStart(2, '0')
+  const seconds = `${date.getSeconds()}`.padStart(2, '0')
+  return `${date.getFullYear()}年${month}月${day}日 ${hours}:${minutes}:${seconds}`
 }
 </script>
 
