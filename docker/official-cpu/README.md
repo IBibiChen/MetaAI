@@ -36,7 +36,7 @@ Windows PowerShell：
 docker buildx build `
   --platform linux/amd64 `
   -t registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-official-cpu-amd64 `
-  .\docker\paddlex-ocr-official-cpu-amd64 `
+  .\docker\official-cpu `
   --load
 docker images registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr
 docker push registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-official-cpu-amd64
@@ -49,7 +49,7 @@ Linux / macOS / Git Bash：
 docker buildx build \
   --platform linux/amd64 \
   -t registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-official-cpu-amd64 \
-  docker/paddlex-ocr-official-cpu-amd64 \
+  docker/official-cpu \
   --load
 docker images registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr
 docker push registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-official-cpu-amd64
@@ -98,11 +98,11 @@ PDF OCR 文档读取完成
 有网构建机导出：
 
 ```powershell
-docker save registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-official-cpu-amd64 -o paddlex-ocr-official-cpu-amd64.tar
+docker save registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-official-cpu-amd64 -o official-cpu.tar
 ```
 
 离线机器导入：
 
 ```powershell
-docker load -i paddlex-ocr-official-cpu-amd64.tar
+docker load -i official-cpu.tar
 ```

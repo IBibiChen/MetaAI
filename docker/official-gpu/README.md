@@ -90,12 +90,12 @@ Windows PowerShell：
 ```powershell
 docker buildx build `
   --platform linux/amd64 `
-  -t registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-official-gpu-cuda11.8-cudnn8.9-trt8.6-amd64 `
-  .\docker\paddlex-ocr-official-gpu-amd64 `
+  -t registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-official-gpu-amd64 `
+  .\docker\official-gpu `
   --load
 docker images registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr
-docker push registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-official-gpu-cuda11.8-cudnn8.9-trt8.6-amd64
-docker buildx imagetools inspect registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-official-gpu-cuda11.8-cudnn8.9-trt8.6-amd64
+docker push registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-official-gpu-amd64
+docker buildx imagetools inspect registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-official-gpu-amd64
 ```
 
 Linux / macOS / Git Bash：
@@ -103,12 +103,12 @@ Linux / macOS / Git Bash：
 ```bash
 docker buildx build \
   --platform linux/amd64 \
-  -t registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-official-gpu-cuda11.8-cudnn8.9-trt8.6-amd64 \
-  docker/paddlex-ocr-official-gpu-amd64 \
+  -t registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-official-gpu-amd64 \
+  docker/official-gpu \
   --load
 docker images registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr
-docker push registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-official-gpu-cuda11.8-cudnn8.9-trt8.6-amd64
-docker buildx imagetools inspect registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-official-gpu-cuda11.8-cudnn8.9-trt8.6-amd64
+docker push registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-official-gpu-amd64
+docker buildx imagetools inspect registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-official-gpu-amd64
 ```
 
 ## 启动
@@ -117,13 +117,13 @@ docker buildx imagetools inspect registry.cn-hangzhou.aliyuncs.com/metax/paddlex
 docker run -d --name paddlex-ocr-gpu \
   --gpus all \
   -p 8080:8080 \
-  registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-official-gpu-cuda11.8-cudnn8.9-trt8.6-amd64
+  registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-official-gpu-amd64
 ```
 
 Windows PowerShell：
 
 ```powershell
-docker run -d --name paddlex-ocr-gpu --gpus all -p 8080:8080 registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-official-gpu-cuda11.8-cudnn8.9-trt8.6-amd64
+docker run -d --name paddlex-ocr-gpu --gpus all -p 8080:8080 registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-official-gpu-amd64
 ```
 
 离线部署时不要挂载空的 `/root/.paddlex`，否则会覆盖镜像内已经预置的 OCR 模型缓存
@@ -162,11 +162,11 @@ ImportError: libcuda.so.1
 有网构建机导出：
 
 ```powershell
-docker save registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-official-gpu-cuda11.8-cudnn8.9-trt8.6-amd64 -o paddlex-ocr-official-gpu-amd64.tar
+docker save registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-official-gpu-amd64 -o official-gpu.tar
 ```
 
 离线机器导入：
 
 ```powershell
-docker load -i paddlex-ocr-official-gpu-amd64.tar
+docker load -i official-gpu.tar
 ```

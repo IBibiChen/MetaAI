@@ -48,7 +48,7 @@ Windows PowerShell：
 docker buildx build `
   --platform linux/arm64 `
   -t registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-unofficial-cpu-arm64 `
-  .\docker\paddlex-ocr-unofficial-cpu-arm64 `
+  .\docker\unofficial-arm64-cpu `
   --load
 docker images registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr
 docker push registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-unofficial-cpu-arm64
@@ -61,7 +61,7 @@ Linux / macOS / Git Bash：
 docker buildx build \
   --platform linux/arm64 \
   -t registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-unofficial-cpu-arm64 \
-  docker/paddlex-ocr-unofficial-cpu-arm64 \
+  docker/unofficial-arm64-cpu \
   --load
 docker images registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr
 docker push registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-unofficial-cpu-arm64
@@ -119,13 +119,13 @@ PDF OCR 文档读取完成
 有网构建机导出：
 
 ```powershell
-docker save registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-unofficial-cpu-arm64 -o paddlex-ocr-unofficial-cpu-arm64.tar
+docker save registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-unofficial-cpu-arm64 -o unofficial-arm64-cpu.tar
 ```
 
 离线机器导入：
 
 ```powershell
-docker load -i paddlex-ocr-unofficial-cpu-arm64.tar
+docker load -i unofficial-arm64-cpu.tar
 ```
 
 ## 风险说明
