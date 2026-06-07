@@ -7,6 +7,9 @@
 当前方案按 `linux/amd64` 设计。不要直接发布假的 multi-arch tag，PaddleX / PaddlePaddle 基础镜像是否支持 `linux/arm64` 必须以
 manifest 为准
 
+如果要验证 ARM 原生 OCR，请使用 `docker/paddlex-ocr-arm64-experiment`。该目录基于多架构 PaddlePaddle 基础镜像重新安装
+PaddleX，只作为实验路径，不替代当前已跑通的 amd64 镜像
+
 ## 基础镜像架构检查
 
 构建前先检查上游 PaddleX 基础镜像支持的平台：
@@ -75,6 +78,19 @@ docker run --platform linux/amd64 -d --name paddlex-ocr -p 8080:8080 -v ${PWD}/d
 ```
 
 这不是原生 arm64 镜像，性能和稳定性都不能按生产方案看待
+
+## ARM 原生实验
+
+当前 PaddleX 官方基础镜像没有 `linux/arm64` manifest，不能直接构建真正的 ARM 原生镜像
+
+ARM 原生实验入口：
+
+```bash
+docker buildx imagetools inspect openeuler/paddlepaddle:3.2.0-oe2403sp2
+```
+
+确认输出包含 `linux/arm64` 后，按 `docker/paddlex-ocr-arm64-experiment/README.md` 构建
+`metax/paddlex-ocr:3.3.11-cpu-arm64`
 
 ## 验证
 
