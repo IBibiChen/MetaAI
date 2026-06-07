@@ -12,10 +12,54 @@ ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlex/paddlex:paddlex3.3.11-paddlepaddle3
 
 ## 前置要求
 
-- 构建机不要求有 GPU
-- 运行机必须安装 NVIDIA Driver
-- 运行机必须安装 NVIDIA Container Toolkit
-- 运行机上 `docker run --gpus all ... nvidia-smi` 必须可用
+构建机、推送机和运行机要求不同，不要混在一起判断
+
+构建机要求：
+
+- 不要求有 NVIDIA GPU
+- 必须能运行 Docker Desktop 或 Docker Engine
+- 必须能使用 Buildx，按 `docker/README.md` 初始化 `metax-multiarch`
+- 必须能访问 PaddleX 官方基础镜像源和阿里云镜像仓库
+
+推送要求：
+
+- 必须已登录阿里云镜像仓库：
+
+```powershell
+docker login --username=331860137@qq.com registry.cn-hangzhou.aliyuncs.com
+```
+
+运行机要求：
+
+- 必须是 `linux/amd64` 运行环境，Windows 上必须使用 Docker Desktop Linux containers
+- 必须有 NVIDIA GPU
+- 必须安装宿主机 NVIDIA Driver
+- 必须安装 NVIDIA Container Toolkit
+- 宿主机 NVIDIA Driver 必须兼容镜像内 CUDA 11.8
+
+镜像内已经包含 CUDA 11.8、cuDNN 8.9、TensorRT 8.6、PaddlePaddle 和 PaddleX 用户态依赖，但不包含宿主机 NVIDIA Driver。
+容器运行时通过 `--gpus all` 把宿主机 GPU 设备和驱动能力挂进容器
+
+运行机先验证宿主机 GPU：
+
+```bash
+nvidia-smi
+```
+
+再验证 Docker GPU runtime：
+
+```bash
+docker run --rm --gpus all nvidia/cuda:11.8.0-base-ubuntu22.04 nvidia-smi
+```
+
+离线运行机也必须提前安装好 Docker、NVIDIA Driver 和 NVIDIA Container Toolkit。离线包只解决镜像分发，不解决宿主机 GPU 驱动和
+Docker GPU runtime 安装
+
+不能使用该镜像的场景：
+
+- 普通 CPU 机器不能运行该 GPU 镜像
+- ARM / Jetson 不能使用该 amd64 GPU 镜像
+- 只安装 NVIDIA Driver 但没有安装 NVIDIA Container Toolkit 时，`docker run --gpus all ...` 仍然不可用
 
 ## 架构检查
 
@@ -31,13 +75,15 @@ Dockerfile 默认使用阿里云 PyPI 源，避免基础镜像内置源或部分
 
 当前不建议使用清华 PyPI 源，本地构建时已经出现 `filetype-1.2.0` 下载 403
 
-## 构建并推送
+## 本地构建并手动推送
 
 构建前先按 `docker/README.md` 初始化并启用 `metax-multiarch` Buildx 构建器
 
 GPU 镜像使用 multi-stage 构建。`model-cache` 阶段基于官方 CPU 镜像预热 OCR 模型缓存，final 阶段再复制到官方 GPU 镜像
 
 这样构建阶段不会在 GPU 镜像内执行 `create_pipeline("OCR")`，避免 buildx 环境缺少 `libcuda.so.1` 导致失败
+
+单平台镜像使用 `--load` 先导入本地 Docker，再手动 `docker push`。不要在本场景中直接使用 `--push`，否则大镜像上传阶段不方便确认本地构建结果和重试推送
 
 Windows PowerShell：
 
@@ -46,7 +92,10 @@ docker buildx build `
   --platform linux/amd64 `
   -t registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-official-gpu-cuda11.8-cudnn8.9-trt8.6-amd64 `
   .\docker\paddlex-ocr-official-gpu-amd64 `
-  --push
+  --load
+docker images registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr
+docker push registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-official-gpu-cuda11.8-cudnn8.9-trt8.6-amd64
+docker buildx imagetools inspect registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-official-gpu-cuda11.8-cudnn8.9-trt8.6-amd64
 ```
 
 Linux / macOS / Git Bash：
@@ -56,7 +105,10 @@ docker buildx build \
   --platform linux/amd64 \
   -t registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-official-gpu-cuda11.8-cudnn8.9-trt8.6-amd64 \
   docker/paddlex-ocr-official-gpu-amd64 \
-  --push
+  --load
+docker images registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr
+docker push registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-official-gpu-cuda11.8-cudnn8.9-trt8.6-amd64
+docker buildx imagetools inspect registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-official-gpu-cuda11.8-cudnn8.9-trt8.6-amd64
 ```
 
 ## 启动

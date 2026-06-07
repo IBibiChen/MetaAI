@@ -94,6 +94,24 @@ docker buildx rm -f metax-multiarch
 注意：清理镜像、容器或 builder 后，Docker Desktop 的 `docker_data.vhdx` 文件大小不一定立刻下降。VHDX 是虚拟磁盘文件，
 内部空间释放后仍可能需要 `wsl --shutdown` 和 VHDX 压缩才能归还给 Windows 文件系统
 
+## 构建和推送策略
+
+本目录中的正式镜像都是单平台镜像，统一使用 `docker buildx build --load` 先导入本地 Docker，再手动执行 `docker push`
+
+不要在单平台大镜像构建命令中直接使用 `--push`。GPU 镜像体积较大，直接 `--push` 时上传阶段不方便确认本地构建结果和重试推送
+
+典型流程：
+
+```powershell
+docker buildx build --platform linux/amd64 -t <image> <docker-dir> --load
+docker images <image-repository>
+docker push <image>
+docker buildx imagetools inspect <image>
+```
+
+注意：`--load` 不适合一次输出多个平台的 manifest list。如果后续需要真正的 `linux/amd64,linux/arm64` 多平台合并 tag，仍然需要使用
+`--push`
+
 ## 统一配置
 
 应用配置保持：

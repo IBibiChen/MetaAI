@@ -36,9 +36,11 @@ Dockerfile 默认使用阿里云 PyPI 源，避免基础镜像内置源或部分
 
 当前不建议使用清华 PyPI 源，本地构建时已经出现 `filetype-1.2.0` 下载 403
 
-## 构建并推送
+## 本地构建并手动推送
 
 构建前先按 `docker/README.md` 初始化并启用 `metax-multiarch` Buildx 构建器
+
+单平台镜像使用 `--load` 先导入本地 Docker，再手动 `docker push`。不要在本场景中直接使用 `--push`，否则大镜像上传阶段不方便确认本地构建结果和重试推送
 
 Windows PowerShell：
 
@@ -47,7 +49,10 @@ docker buildx build `
   --platform linux/arm64 `
   -t registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-unofficial-cpu-arm64 `
   .\docker\paddlex-ocr-unofficial-cpu-arm64 `
-  --push
+  --load
+docker images registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr
+docker push registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-unofficial-cpu-arm64
+docker buildx imagetools inspect registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-unofficial-cpu-arm64
 ```
 
 Linux / macOS / Git Bash：
@@ -57,7 +62,10 @@ docker buildx build \
   --platform linux/arm64 \
   -t registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-unofficial-cpu-arm64 \
   docker/paddlex-ocr-unofficial-cpu-arm64 \
-  --push
+  --load
+docker images registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr
+docker push registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-unofficial-cpu-arm64
+docker buildx imagetools inspect registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-unofficial-cpu-arm64
 ```
 
 ## 启动
