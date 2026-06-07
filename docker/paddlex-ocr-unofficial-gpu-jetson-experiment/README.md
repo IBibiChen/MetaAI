@@ -23,7 +23,7 @@ PaddleX 官方 amd64 GPU 镜像不能作为 Jetson ARM64 GPU 镜像使用
 当前生产可用路径是：
 
 - amd64 GPU 使用 `paddlex-ocr-official-gpu-amd64`
-- arm64 CPU 使用 `paddlex-ocr-unofficial-cpu-arm64`
+- arm64 CPU 使用 `paddlex-ocr-openeuler-cpu`
 - Jetson GPU 单独实验，未通过前不发布生产 tag
 
 ## Java 侧约束

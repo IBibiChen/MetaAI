@@ -2,23 +2,26 @@
 
 本目录按镜像来源、架构和硬件能力拆分 PaddleX OCR 服务镜像
 
-Java 侧统一通过 `PaddleOcrClient` 调用 `/ocr`，不感知底层是官方 CPU、官方 GPU 还是非官方 ARM 镜像
+Java 侧统一通过 `PaddleOcrClient` 调用 `/ocr`，不感知底层是官方 CPU、官方 GPU 还是 openEuler CPU 镜像
 
 ## 目录说明
 
-| 目录                                             | 来源                          | 平台            | 设备         | 用途             |
-|------------------------------------------------|-----------------------------|---------------|------------|----------------|
-| `paddlex-ocr-official-cpu-amd64`               | PaddleX 官方镜像                | `linux/amd64` | CPU        | x86 CPU 生产优先路径 |
-| `paddlex-ocr-official-gpu-amd64`               | PaddleX 官方镜像                | `linux/amd64` | NVIDIA GPU | x86 GPU 加速路径   |
-| `paddlex-ocr-unofficial-cpu-arm64`             | openEuler PaddlePaddle 基础镜像 | `linux/arm64` | CPU        | ARM CPU 自建路径   |
-| `paddlex-ocr-unofficial-gpu-jetson-experiment` | 未固定                         | `linux/arm64` | Jetson GPU | 仅实验说明          |
+| 目录                                             | 来源                          | 平台                            | 设备         | 用途                   |
+|------------------------------------------------|-----------------------------|-------------------------------|------------|----------------------|
+| `paddlex-ocr-official-cpu-amd64`               | PaddleX 官方镜像                | `linux/amd64`                 | CPU        | x86 CPU 生产优先路径       |
+| `paddlex-ocr-official-gpu-amd64`               | PaddleX 官方镜像                | `linux/amd64`                 | NVIDIA GPU | x86 GPU 加速路径         |
+| `paddlex-ocr-openeuler-cpu`                    | openEuler PaddlePaddle 基础镜像 | `linux/amd64` / `linux/arm64` | CPU        | openEuler 双平台 CPU 路径 |
+| `paddlex-ocr-unofficial-cpu-arm64`             | openEuler PaddlePaddle 基础镜像 | `linux/arm64`                 | CPU        | 历史 ARM CPU 路径        |
+| `paddlex-ocr-unofficial-gpu-jetson-experiment` | 未固定                         | `linux/arm64`                 | Jetson GPU | 仅实验说明                |
 
 ## 镜像 Tag
 
 ```text
 registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-official-cpu-amd64
 registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-official-gpu-cuda11.8-cudnn8.9-trt8.6-amd64
-registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-unofficial-cpu-arm64
+registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-openeuler-cpu-amd64
+registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-openeuler-cpu-arm64
+registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-openeuler-cpu
 ```
 
 不要发布含糊的 `3.3.11-cpu` 或 `3.3.11-gpu` 作为正式镜像，来源、架构和硬件能力必须写进 tag
@@ -27,7 +30,7 @@ registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-unofficial-cpu-arm64
 
 - amd64 CPU：优先使用 `paddlex-ocr-official-cpu-amd64`
 - amd64 GPU：优先使用 `paddlex-ocr-official-gpu-amd64`
-- arm64 CPU：使用 `paddlex-ocr-unofficial-cpu-arm64`
+- amd64 / arm64 双平台 CPU：使用 `paddlex-ocr-openeuler-cpu`
 - arm64 Jetson GPU：先按实验说明验证，不进入生产 tag
 
 ## PyPI 源
