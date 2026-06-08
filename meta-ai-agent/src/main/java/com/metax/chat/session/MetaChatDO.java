@@ -1,4 +1,4 @@
-package com.metax.chat;
+package com.metax.chat.session;
 
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;

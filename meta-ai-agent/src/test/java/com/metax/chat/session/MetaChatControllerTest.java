@@ -1,4 +1,4 @@
-package com.metax.chat;
+package com.metax.chat.session;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

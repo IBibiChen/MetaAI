@@ -1,4 +1,4 @@
-package com.metax.chat;
+package com.metax.chat.session;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;

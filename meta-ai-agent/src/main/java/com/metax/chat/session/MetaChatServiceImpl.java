@@ -1,4 +1,4 @@
-package com.metax.chat;
+package com.metax.chat.session;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -165,7 +165,7 @@ public class MetaChatServiceImpl extends ServiceImpl<MetaChatMapper, MetaChatDO>
      * 重命名会话
      *
      * @param id    会话主键
-     * @param title  标题
+     * @param title 标题
      * @return 会话实体
      */
     @Override

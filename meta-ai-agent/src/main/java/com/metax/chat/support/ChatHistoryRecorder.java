@@ -1,11 +1,11 @@
 package com.metax.chat.support;
 
-import com.metax.chat.MetaChatDO;
-import com.metax.chat.MetaChatService;
-import com.metax.chat.MetaChatUpsertRequest;
 import com.metax.chat.history.MetaChatHistoryRole;
 import com.metax.chat.history.MetaChatHistoryService;
 import com.metax.chat.history.MetaChatHistoryType;
+import com.metax.chat.session.MetaChatDO;
+import com.metax.chat.session.MetaChatService;
+import com.metax.chat.session.MetaChatUpsertRequest;
 import com.metax.rag.retrieval.model.RetrievalDocumentReference;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;

@@ -1,4 +1,4 @@
-package com.metax.chat;
+package com.metax.chat.session;
 
 import com.metax.chat.history.MetaChatHistoryType;
 
@@ -8,15 +8,15 @@ import com.metax.chat.history.MetaChatHistoryType;
  * <p>
  * 创建或获取聊天会话所需参数
  *
- * @param tenantId        租户 ID
- * @param userId          用户 ID
- * @param chatId  会话 ID
- * @param chatMode        会话模式
- * @param firstMessage    首条用户消息
- * @param kbId 知识库 ID
- * @param modelProvider   模型 provider
- * @param modelName       模型名称
- * @param source          会话来源
+ * @param tenantId      租户 ID
+ * @param userId        用户 ID
+ * @param chatId        会话 ID
+ * @param chatMode      会话模式
+ * @param firstMessage  首条用户消息
+ * @param kbId          知识库 ID
+ * @param modelProvider 模型 provider
+ * @param modelName     模型名称
+ * @param source        会话来源
  * @author IBibiChen
  * @version v1.0
  * @since 2026/6/8

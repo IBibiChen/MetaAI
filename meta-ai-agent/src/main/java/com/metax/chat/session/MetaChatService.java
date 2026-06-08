@@ -1,4 +1,4 @@
-package com.metax.chat;
+package com.metax.chat.session;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
@@ -45,7 +45,7 @@ public interface MetaChatService extends IService<MetaChatDO> {
      * 重命名会话
      *
      * @param id    会话主键
-     * @param title  标题
+     * @param title 标题
      * @return 会话实体
      */
     MetaChatDO rename(Long id, String title);

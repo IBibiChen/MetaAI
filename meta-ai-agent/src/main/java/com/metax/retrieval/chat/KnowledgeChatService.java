@@ -1,7 +1,7 @@
 package com.metax.retrieval.chat;
 
-import com.metax.chat.MetaChatDO;
 import com.metax.chat.history.MetaChatHistoryType;
+import com.metax.chat.session.MetaChatDO;
 import com.metax.chat.support.*;
 import com.metax.rag.retrieval.advisor.MetaContextFile;
 import com.metax.rag.retrieval.advisor.RetrievalAdvisorFactory;

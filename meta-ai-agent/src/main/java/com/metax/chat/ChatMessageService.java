@@ -4,6 +4,7 @@ import com.metax.chat.file.MetaChatFileResponse;
 import com.metax.chat.history.MetaChatHistoryType;
 import com.metax.chat.request.ChatFileRequest;
 import com.metax.chat.request.ChatRequest;
+import com.metax.chat.session.MetaChatDO;
 import com.metax.chat.support.*;
 import com.metax.rag.retrieval.advisor.MetaContextFile;
 import lombok.RequiredArgsConstructor;

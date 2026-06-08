@@ -1,13 +1,13 @@
 package com.metax.controller;
 
 import com.metax.chat.ChatMessageService;
-import com.metax.chat.MetaChatDO;
-import com.metax.chat.MetaChatService;
 import com.metax.chat.file.MetaChatFileResponse;
 import com.metax.chat.file.MetaChatFileService;
 import com.metax.chat.history.MetaChatHistoryRole;
 import com.metax.chat.history.MetaChatHistoryService;
 import com.metax.chat.history.MetaChatHistoryType;
+import com.metax.chat.session.MetaChatDO;
+import com.metax.chat.session.MetaChatService;
 import com.metax.chat.support.ChatHistoryRecorder;
 import com.metax.chat.support.ChatScopeResolver;
 import com.metax.chat.support.ChatStreamEventAssembler;
