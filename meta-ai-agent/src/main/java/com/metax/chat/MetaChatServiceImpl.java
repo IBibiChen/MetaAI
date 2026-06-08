@@ -1,8 +1,9 @@
-package com.metax.history;
+package com.metax.chat;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.metax.chat.history.MetaChatHistoryRole;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.Assert;
@@ -120,9 +121,9 @@ public class MetaChatServiceImpl extends ServiceImpl<MetaChatMapper, MetaChatDO>
      * @param content 消息内容
      */
     @Override
-    public void updateLastMessage(Long chatId, ChatHistoryRole role, String content) {
+    public void updateLastMessage(Long chatId, MetaChatHistoryRole role, String content) {
         Assert.notNull(chatId, "chatId must not be null");
-        Assert.notNull(role, "ChatHistoryRole must not be null");
+        Assert.notNull(role, "MetaChatHistoryRole must not be null");
         MetaChatDO entity = requireChat(chatId);
         Instant now = Instant.now();
         entity.setLastMessage(truncate(content, LAST_MESSAGE_LENGTH));

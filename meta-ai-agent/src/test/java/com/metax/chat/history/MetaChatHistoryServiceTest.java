@@ -1,4 +1,4 @@
-package com.metax.history;
+package com.metax.chat.history;
 
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -15,32 +15,32 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * ChatHistoryServiceTest .
+ * MetaChatHistoryServiceTest .
  *
  * @author IBibiChen
  * @version v1.0
  * @since 2026/6/2
  */
-class ChatHistoryServiceTest {
+class MetaChatHistoryServiceTest {
 
     @SuppressWarnings("unchecked")
-    private static final Class<Page<ChatHistoryDO>> PAGE_CLASS = (Class<Page<ChatHistoryDO>>) (Class<?>) Page.class;
+    private static final Class<Page<MetaChatHistoryDO>> PAGE_CLASS = (Class<Page<MetaChatHistoryDO>>) (Class<?>) Page.class;
 
     @SuppressWarnings("unchecked")
-    private static final Class<Wrapper<ChatHistoryDO>> WRAPPER_CLASS =
-            (Class<Wrapper<ChatHistoryDO>>) (Class<?>) Wrapper.class;
+    private static final Class<Wrapper<MetaChatHistoryDO>> WRAPPER_CLASS =
+            (Class<Wrapper<MetaChatHistoryDO>>) (Class<?>) Wrapper.class;
 
     /**
      * 保存历史消息应走 MyBatis-Plus Mapper
      */
     @Test
     void shouldSaveHistoryMessageWithMapper() {
-        ChatHistoryMapper mapper = mock(ChatHistoryMapper.class);
-        ChatHistoryServiceImpl service = service(mapper);
+        MetaChatHistoryMapper mapper = mock(MetaChatHistoryMapper.class);
+        MetaChatHistoryServiceImpl service = service(mapper);
 
-        service.saveUserMessage("c1", ChatHistoryType.CHAT, "你好");
+        service.saveUserMessage("c1", MetaChatHistoryType.CHAT, "你好");
 
-        verify(mapper).insert(any(ChatHistoryDO.class));
+        verify(mapper).insert(any(MetaChatHistoryDO.class));
     }
 
     /**
@@ -48,21 +48,21 @@ class ChatHistoryServiceTest {
      */
     @Test
     void shouldPageHistoryMessagesWithMyBatisPlusPage() {
-        ChatHistoryMapper mapper = mock(ChatHistoryMapper.class);
-        ChatHistoryServiceImpl service = service(mapper);
-        Page<ChatHistoryDO> mapperPage = Page.of(2, 10);
-        mapperPage.setRecords(java.util.List.of(entity("c1", ChatHistoryRole.USER)));
+        MetaChatHistoryMapper mapper = mock(MetaChatHistoryMapper.class);
+        MetaChatHistoryServiceImpl service = service(mapper);
+        Page<MetaChatHistoryDO> mapperPage = Page.of(2, 10);
+        mapperPage.setRecords(java.util.List.of(entity("c1", MetaChatHistoryRole.USER)));
         mapperPage.setTotal(1);
         when(mapper.selectPage(any(PAGE_CLASS), any(WRAPPER_CLASS))).thenReturn(mapperPage);
 
-        Page<ChatHistoryDO> page = service.pageByConversationId("c1", 2L, 10L);
+        Page<MetaChatHistoryDO> page = service.pageByConversationId("c1", 2L, 10L);
 
         assertThat(page.getCurrent()).isEqualTo(2);
         assertThat(page.getSize()).isEqualTo(10);
         assertThat(page.getTotal()).isEqualTo(1);
         assertThat(page.getRecords())
-                .extracting(ChatHistoryDO::getRole)
-                .containsExactly(ChatHistoryRole.USER.value());
+                .extracting(MetaChatHistoryDO::getRole)
+                .containsExactly(MetaChatHistoryRole.USER.value());
     }
 
     /**
@@ -70,24 +70,24 @@ class ChatHistoryServiceTest {
      */
     @Test
     void shouldUseDefaultPageParams() {
-        ChatHistoryMapper mapper = mock(ChatHistoryMapper.class);
-        ChatHistoryServiceImpl service = service(mapper);
+        MetaChatHistoryMapper mapper = mock(MetaChatHistoryMapper.class);
+        MetaChatHistoryServiceImpl service = service(mapper);
         when(mapper.selectPage(any(PAGE_CLASS), any(WRAPPER_CLASS))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        Page<ChatHistoryDO> page = service.pageByConversationId("c1", null, null);
+        Page<MetaChatHistoryDO> page = service.pageByConversationId("c1", null, null);
 
         assertThat(page.getCurrent()).isEqualTo(1);
         assertThat(page.getSize()).isEqualTo(20);
     }
 
-    private ChatHistoryServiceImpl service(ChatHistoryMapper mapper) {
-        ChatHistoryServiceImpl service = new ChatHistoryServiceImpl(new ObjectMapper());
+    private MetaChatHistoryServiceImpl service(MetaChatHistoryMapper mapper) {
+        MetaChatHistoryServiceImpl service = new MetaChatHistoryServiceImpl(new ObjectMapper());
         ReflectionTestUtils.setField(service, "baseMapper", mapper);
         return service;
     }
 
-    private ChatHistoryDO entity(String conversationId, ChatHistoryRole role) {
-        return new ChatHistoryDO(1L, null, conversationId, ChatHistoryType.CHAT.value(),
+    private MetaChatHistoryDO entity(String conversationId, MetaChatHistoryRole role) {
+        return new MetaChatHistoryDO(1L, null, conversationId, MetaChatHistoryType.CHAT.value(),
                 role.value(), "content", null, Instant.now());
     }
 }

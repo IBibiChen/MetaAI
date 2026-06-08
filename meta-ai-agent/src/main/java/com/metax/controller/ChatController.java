@@ -1,13 +1,13 @@
 package com.metax.controller;
 
-import com.metax.chat.file.ChatFileResponse;
-import com.metax.chat.file.ChatFileService;
-import com.metax.history.ChatHistoryService;
-import com.metax.history.ChatHistoryRole;
-import com.metax.history.ChatHistoryType;
-import com.metax.history.MetaChatDO;
-import com.metax.history.MetaChatService;
-import com.metax.history.MetaChatUpsertRequest;
+import com.metax.chat.file.MetaChatFileResponse;
+import com.metax.chat.file.MetaChatFileService;
+import com.metax.chat.history.MetaChatHistoryService;
+import com.metax.chat.history.MetaChatHistoryRole;
+import com.metax.chat.history.MetaChatHistoryType;
+import com.metax.chat.MetaChatDO;
+import com.metax.chat.MetaChatService;
+import com.metax.chat.MetaChatUpsertRequest;
 import com.metax.rag.retrieval.ChatStreamDelta;
 import com.metax.rag.retrieval.ChatStreamDone;
 import com.metax.rag.retrieval.ChatStreamError;
@@ -99,11 +99,11 @@ public class ChatController {
 
     private final RetrievalDecisionService retrievalDecisionService;
 
-    private final ChatHistoryService chatHistoryService;
+    private final MetaChatHistoryService metaChatHistoryService;
 
     private final MetaChatService metaChatService;
 
-    private final ChatFileService chatFileService;
+    private final MetaChatFileService metaChatFileService;
 
     private final MetaContextFileAdvisor metaContextFileAdvisor;
 
@@ -117,9 +117,9 @@ public class ChatController {
                           RetrievalResponseAssembler retrievalResponseAssembler,
                           RetrievalSearchService retrievalSearchService,
                           RetrievalDecisionService retrievalDecisionService,
-                          ChatHistoryService chatHistoryService,
+                          MetaChatHistoryService metaChatHistoryService,
                           MetaChatService metaChatService,
-                          ChatFileService chatFileService,
+                          MetaChatFileService metaChatFileService,
                           MetaContextFileAdvisor metaContextFileAdvisor) {
         this.chatClient = chatClient;
         this.ragChatClient = ragChatClient;
@@ -131,9 +131,9 @@ public class ChatController {
         this.retrievalResponseAssembler = retrievalResponseAssembler;
         this.retrievalSearchService = retrievalSearchService;
         this.retrievalDecisionService = retrievalDecisionService;
-        this.chatHistoryService = chatHistoryService;
+        this.metaChatHistoryService = metaChatHistoryService;
         this.metaChatService = metaChatService;
-        this.chatFileService = chatFileService;
+        this.metaChatFileService = metaChatFileService;
         this.metaContextFileAdvisor = metaContextFileAdvisor;
     }
 
@@ -159,7 +159,7 @@ public class ChatController {
             @RequestParam(name = "userId", required = false) String userId,
             @Parameter(description = "用户消息", example = "你是谁")
             @RequestParam(name = "msg", defaultValue = "你是谁") String msg) {
-        return memoryChat(conversationId, tenantId, userId, msg, ChatHistoryType.CHAT);
+        return memoryChat(conversationId, tenantId, userId, msg, MetaChatHistoryType.CHAT);
     }
 
     /**
@@ -178,7 +178,7 @@ public class ChatController {
      */
     @PostMapping(value = "/v1/chat", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(summary = "默认记忆对话，支持聊天文件", description = "在现有聊天入口中上传文件并基于文件内容总结或问答")
-    public ChatFileResponse chatWithFiles(
+    public MetaChatFileResponse chatWithFiles(
             @Parameter(description = "会话 ID，建议格式：tenantId:userId:sessionId", example = "t1:u1:s1")
             @RequestParam(name = "conversationId", required = false) String conversationId,
             @Parameter(description = "租户 ID", example = "t1")
@@ -215,13 +215,13 @@ public class ChatController {
             @Parameter(description = "用户消息", example = "你是谁")
             @RequestParam(name = "msg", defaultValue = "你是谁") String msg) {
         String resolvedConversationId = resolveConversationId(conversationId);
-        MetaChatDO chat = getOrCreateChat(resolvedConversationId, tenantId, userId, ChatHistoryType.CHAT, msg, null);
-        chatHistoryService.saveUserMessage(chat.getId(), resolvedConversationId, ChatHistoryType.CHAT, msg);
-        metaChatService.updateLastMessage(chat.getId(), ChatHistoryRole.USER, msg);
+        MetaChatDO chat = getOrCreateChat(resolvedConversationId, tenantId, userId, MetaChatHistoryType.CHAT, msg, null);
+        metaChatHistoryService.saveUserMessage(chat.getId(), resolvedConversationId, MetaChatHistoryType.CHAT, msg);
+        metaChatService.updateLastMessage(chat.getId(), MetaChatHistoryRole.USER, msg);
         ChatClient.ChatClientRequestSpec requestSpec = chatClient.prompt()
                 .advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, resolvedConversationId))
                 .user(msg);
-        return contentStream(requestSpec, chat.getId(), resolvedConversationId, ChatHistoryType.CHAT);
+        return contentStream(requestSpec, chat.getId(), resolvedConversationId, MetaChatHistoryType.CHAT);
     }
 
     /**
@@ -300,7 +300,7 @@ public class ChatController {
                 .deptIds(parseCsv(deptIds))
                 .query(msg)
                 .build();
-        return ragChat(conversationId, msg, options, ChatHistoryType.RAG);
+        return ragChat(conversationId, msg, options, MetaChatHistoryType.RAG);
     }
 
     /**
@@ -351,7 +351,7 @@ public class ChatController {
                 .deptIds(parseCsv(deptIds))
                 .query(msg)
                 .build();
-        return ragChat(conversationId, msg, options, ChatHistoryType.RAG, files);
+        return ragChat(conversationId, msg, options, MetaChatHistoryType.RAG, files);
     }
 
     /**
@@ -400,7 +400,7 @@ public class ChatController {
                 .deptIds(parseCsv(deptIds))
                 .query(msg)
                 .build();
-        return ragStreamChat(conversationId, msg, options, ChatHistoryType.RAG);
+        return ragStreamChat(conversationId, msg, options, MetaChatHistoryType.RAG);
     }
 
     /**
@@ -449,7 +449,7 @@ public class ChatController {
                 .deptIds(parseCsv(deptIds))
                 .query(msg)
                 .build();
-        return ragStreamChat(conversationId, msg, options, ChatHistoryType.RAG, files);
+        return ragStreamChat(conversationId, msg, options, MetaChatHistoryType.RAG, files);
     }
 
     /**
@@ -525,15 +525,15 @@ public class ChatController {
                 })
                 .user(msg);
 
-        MetaChatDO chat = getOrCreateChat(resolvedConversationId, tenantId, userId, ChatHistoryType.RAG_DETAILS, msg,
+        MetaChatDO chat = getOrCreateChat(resolvedConversationId, tenantId, userId, MetaChatHistoryType.RAG_DETAILS, msg,
                 knowledgeBaseId);
-        chatHistoryService.saveUserMessage(chat.getId(), resolvedConversationId, ChatHistoryType.RAG_DETAILS, msg);
-        metaChatService.updateLastMessage(chat.getId(), ChatHistoryRole.USER, msg);
+        metaChatHistoryService.saveUserMessage(chat.getId(), resolvedConversationId, MetaChatHistoryType.RAG_DETAILS, msg);
+        metaChatService.updateLastMessage(chat.getId(), MetaChatHistoryRole.USER, msg);
         RetrievalChatDetailsResponse response = retrievalResponseAssembler.details(requestSpec.call().chatClientResponse(),
                 resolvedConversationId);
-        chatHistoryService.saveAssistantMessage(chat.getId(), resolvedConversationId, ChatHistoryType.RAG_DETAILS,
+        metaChatHistoryService.saveAssistantMessage(chat.getId(), resolvedConversationId, MetaChatHistoryType.RAG_DETAILS,
                 response.answer(), List.of());
-        metaChatService.updateLastMessage(chat.getId(), ChatHistoryRole.ASSISTANT, response.answer());
+        metaChatService.updateLastMessage(chat.getId(), MetaChatHistoryRole.ASSISTANT, response.answer());
         return response;
     }
 
@@ -730,19 +730,19 @@ public class ChatController {
                               String tenantId,
                               String userId,
                               String msg,
-                              ChatHistoryType historyType) {
+                              MetaChatHistoryType historyType) {
         String resolvedConversationId = resolveConversationId(conversationId);
         MetaChatDO chat = getOrCreateChat(resolvedConversationId, tenantId, userId, historyType, msg, null);
 
-        chatHistoryService.saveUserMessage(chat.getId(), resolvedConversationId, historyType, msg);
-        metaChatService.updateLastMessage(chat.getId(), ChatHistoryRole.USER, msg);
+        metaChatHistoryService.saveUserMessage(chat.getId(), resolvedConversationId, historyType, msg);
+        metaChatService.updateLastMessage(chat.getId(), MetaChatHistoryRole.USER, msg);
         String answer = chatClient.prompt()
                 .advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, resolvedConversationId))
                 .user(msg)
                 .call()
                 .content();
-        chatHistoryService.saveAssistantMessage(chat.getId(), resolvedConversationId, historyType, answer);
-        metaChatService.updateLastMessage(chat.getId(), ChatHistoryRole.ASSISTANT, answer);
+        metaChatHistoryService.saveAssistantMessage(chat.getId(), resolvedConversationId, historyType, answer);
+        metaChatService.updateLastMessage(chat.getId(), MetaChatHistoryRole.ASSISTANT, answer);
         return answer;
     }
 
@@ -760,7 +760,7 @@ public class ChatController {
      * @param files          本轮上传文件
      * @return 文件对话响应
      */
-    private ChatFileResponse fileChat(String conversationId,
+    private MetaChatFileResponse fileChat(String conversationId,
                                       String tenantId,
                                       String userId,
                                       String msg,
@@ -773,21 +773,21 @@ public class ChatController {
         if (scope.userId() == null || scope.userId().isBlank()) {
             throw new IllegalArgumentException("userId must not be blank");
         }
-        List<MetaContextFile> uploaded = chatFileService.uploadAndIndex(scope.tenantId(), scope.userId(),
+        List<MetaContextFile> uploaded = metaChatFileService.uploadAndIndex(scope.tenantId(), scope.userId(),
                 resolvedConversationId, files);
         List<MetaContextFile> contextFiles = uploaded.isEmpty()
-                ? chatFileService.readyFiles(scope.tenantId(), scope.userId(), resolvedConversationId)
+                ? metaChatFileService.readyFiles(scope.tenantId(), scope.userId(), resolvedConversationId)
                 : uploaded;
         if (contextFiles.isEmpty()) {
             String answer = memoryChat(resolvedConversationId, scope.tenantId(), scope.userId(), msg,
-                    ChatHistoryType.CHAT);
-            return new ChatFileResponse(answer, resolvedConversationId, List.of());
+                    MetaChatHistoryType.CHAT);
+            return new MetaChatFileResponse(answer, resolvedConversationId, List.of());
         }
 
         MetaChatDO chat = getOrCreateChat(resolvedConversationId, scope.tenantId(), scope.userId(),
-                ChatHistoryType.FILE_CHAT, msg, null);
-        chatHistoryService.saveUserMessage(chat.getId(), resolvedConversationId, ChatHistoryType.FILE_CHAT, msg);
-        metaChatService.updateLastMessage(chat.getId(), ChatHistoryRole.USER, msg);
+                MetaChatHistoryType.FILE_CHAT, msg, null);
+        metaChatHistoryService.saveUserMessage(chat.getId(), resolvedConversationId, MetaChatHistoryType.FILE_CHAT, msg);
+        metaChatService.updateLastMessage(chat.getId(), MetaChatHistoryRole.USER, msg);
         ChatClientResponse response = chatClient.prompt()
                 .advisors(spec -> contextFileParams(spec, scope.tenantId(), scope.userId(), resolvedConversationId,
                         msg, uploaded))
@@ -795,10 +795,10 @@ public class ChatController {
                 .call()
                 .chatClientResponse();
         String answer = content(response);
-        chatHistoryService.saveAssistantMessage(chat.getId(), resolvedConversationId, ChatHistoryType.FILE_CHAT,
+        metaChatHistoryService.saveAssistantMessage(chat.getId(), resolvedConversationId, MetaChatHistoryType.FILE_CHAT,
                 answer);
-        metaChatService.updateLastMessage(chat.getId(), ChatHistoryRole.ASSISTANT, answer);
-        return new ChatFileResponse(answer, resolvedConversationId, files(response));
+        metaChatService.updateLastMessage(chat.getId(), MetaChatHistoryRole.ASSISTANT, answer);
+        return new MetaChatFileResponse(answer, resolvedConversationId, files(response));
     }
 
     /**
@@ -828,24 +828,24 @@ public class ChatController {
         if (scope.userId() == null || scope.userId().isBlank()) {
             throw new IllegalArgumentException("userId must not be blank");
         }
-        List<MetaContextFile> uploaded = chatFileService.uploadAndIndex(scope.tenantId(), scope.userId(),
+        List<MetaContextFile> uploaded = metaChatFileService.uploadAndIndex(scope.tenantId(), scope.userId(),
                 resolvedConversationId, files);
         MetaChatDO chat = getOrCreateChat(resolvedConversationId, scope.tenantId(), scope.userId(),
-                ChatHistoryType.FILE_CHAT, msg, null);
-        chatHistoryService.saveUserMessage(chat.getId(), resolvedConversationId, ChatHistoryType.FILE_CHAT, msg);
-        metaChatService.updateLastMessage(chat.getId(), ChatHistoryRole.USER, msg);
+                MetaChatHistoryType.FILE_CHAT, msg, null);
+        metaChatHistoryService.saveUserMessage(chat.getId(), resolvedConversationId, MetaChatHistoryType.FILE_CHAT, msg);
+        metaChatService.updateLastMessage(chat.getId(), MetaChatHistoryRole.USER, msg);
         ChatClient.ChatClientRequestSpec requestSpec = chatClient.prompt()
                 .advisors(spec -> contextFileParams(spec, scope.tenantId(), scope.userId(), resolvedConversationId,
                         msg, uploaded))
                 .user(msg);
-        return chatClientResponseStream(requestSpec, chat.getId(), resolvedConversationId, ChatHistoryType.FILE_CHAT,
+        return chatClientResponseStream(requestSpec, chat.getId(), resolvedConversationId, MetaChatHistoryType.FILE_CHAT,
                 false);
     }
 
     private RetrievalChatResponse ragChat(String conversationId,
                                           String msg,
                                           RetrievalOptions options,
-                                          ChatHistoryType historyType) {
+                                          MetaChatHistoryType historyType) {
         return ragChat(conversationId, msg, options, historyType, null);
     }
 
@@ -866,7 +866,7 @@ public class ChatController {
     private RetrievalChatResponse ragChat(String conversationId,
                                           String msg,
                                           RetrievalOptions options,
-                                          ChatHistoryType historyType,
+                                          MetaChatHistoryType historyType,
                                           MultipartFile[] files) {
         String resolvedConversationId = resolveConversationId(conversationId);
         RetrievalOptions resolvedOptions = Objects.requireNonNull(options, "RetrievalOptions must not be null");
@@ -875,8 +875,8 @@ public class ChatController {
         MetaChatDO chat = getOrCreateChat(resolvedConversationId, resolvedOptions.getTenantId(),
                 resolvedOptions.getUserId(), historyType, msg, resolvedOptions.getKnowledgeBaseId());
 
-        chatHistoryService.saveUserMessage(chat.getId(), resolvedConversationId, historyType, msg);
-        metaChatService.updateLastMessage(chat.getId(), ChatHistoryRole.USER, msg);
+        metaChatHistoryService.saveUserMessage(chat.getId(), resolvedConversationId, historyType, msg);
+        metaChatService.updateLastMessage(chat.getId(), MetaChatHistoryRole.USER, msg);
         RetrievalDecisionResult decision = retrievalDecisionService.decide(resolvedOptions);
         log.info("RAG 检索决策：conversationId = {}，decision = {}，reason = {}，query = {}",
                 resolvedConversationId, decision.decision(), decision.reason(), resolvedOptions.getQuery());
@@ -900,16 +900,16 @@ public class ChatController {
                     .call()
                     .chatClientResponse(), resolvedConversationId);
         }
-        chatHistoryService.saveAssistantMessage(chat.getId(), resolvedConversationId, historyType, response.answer(),
+        metaChatHistoryService.saveAssistantMessage(chat.getId(), resolvedConversationId, historyType, response.answer(),
                 response.references());
-        metaChatService.updateLastMessage(chat.getId(), ChatHistoryRole.ASSISTANT, response.answer());
+        metaChatService.updateLastMessage(chat.getId(), MetaChatHistoryRole.ASSISTANT, response.answer());
         return response;
     }
 
     private Flux<ServerSentEvent<Object>> ragStreamChat(String conversationId,
                                                         String msg,
                                                         RetrievalOptions options,
-                                                        ChatHistoryType historyType) {
+                                                        MetaChatHistoryType historyType) {
         return ragStreamChat(conversationId, msg, options, historyType, null);
     }
 
@@ -930,7 +930,7 @@ public class ChatController {
     private Flux<ServerSentEvent<Object>> ragStreamChat(String conversationId,
                                                         String msg,
                                                         RetrievalOptions options,
-                                                        ChatHistoryType historyType,
+                                                        MetaChatHistoryType historyType,
                                                         MultipartFile[] files) {
         String resolvedConversationId = resolveConversationId(conversationId);
         RetrievalOptions resolvedOptions = Objects.requireNonNull(options, "RetrievalOptions must not be null");
@@ -939,8 +939,8 @@ public class ChatController {
         MetaChatDO chat = getOrCreateChat(resolvedConversationId, resolvedOptions.getTenantId(),
                 resolvedOptions.getUserId(), historyType, msg, resolvedOptions.getKnowledgeBaseId());
 
-        chatHistoryService.saveUserMessage(chat.getId(), resolvedConversationId, historyType, msg);
-        metaChatService.updateLastMessage(chat.getId(), ChatHistoryRole.USER, msg);
+        metaChatHistoryService.saveUserMessage(chat.getId(), resolvedConversationId, historyType, msg);
+        metaChatService.updateLastMessage(chat.getId(), MetaChatHistoryRole.USER, msg);
         RetrievalDecisionResult decision = retrievalDecisionService.decide(resolvedOptions);
         log.info("RAG 检索决策：conversationId = {}，decision = {}，reason = {}，query = {}",
                 resolvedConversationId, decision.decision(), decision.reason(), resolvedOptions.getQuery());
@@ -976,7 +976,7 @@ public class ChatController {
     private Flux<ServerSentEvent<Object>> contentStream(ChatClient.ChatClientRequestSpec requestSpec,
                                                         Long chatId,
                                                         String conversationId,
-                                                        ChatHistoryType historyType) {
+                                                        MetaChatHistoryType historyType) {
         StringBuilder answer = new StringBuilder();
         Flux<ServerSentEvent<Object>> meta = Flux.just(event("meta", new ChatStreamMeta(conversationId)));
         Flux<ServerSentEvent<Object>> body = requestSpec.stream()
@@ -986,8 +986,8 @@ public class ChatController {
                 .map(content -> event("delta", new ChatStreamDelta(content)));
         Mono<ServerSentEvent<Object>> done = Mono.fromSupplier(() -> {
             String fullAnswer = answer.toString();
-            chatHistoryService.saveAssistantMessage(chatId, conversationId, historyType, fullAnswer);
-            metaChatService.updateLastMessage(chatId, ChatHistoryRole.ASSISTANT, fullAnswer);
+            metaChatHistoryService.saveAssistantMessage(chatId, conversationId, historyType, fullAnswer);
+            metaChatService.updateLastMessage(chatId, MetaChatHistoryRole.ASSISTANT, fullAnswer);
             return event("done", new ChatStreamDone(fullAnswer, conversationId, List.of()));
         });
         return meta.concatWith(body).concatWith(done)
@@ -1013,7 +1013,7 @@ public class ChatController {
     private Flux<ServerSentEvent<Object>> chatClientResponseStream(ChatClient.ChatClientRequestSpec requestSpec,
                                                                    Long chatId,
                                                                    String conversationId,
-                                                                   ChatHistoryType historyType,
+                                                                   MetaChatHistoryType historyType,
                                                                    boolean includeReferences) {
         StringBuilder answer = new StringBuilder();
         AtomicReference<ChatClientResponse> lastResponse = new AtomicReference<>(ChatClientResponse.builder().build());
@@ -1040,8 +1040,8 @@ public class ChatController {
             } else {
                 data = new ChatStreamDone(fullAnswer, conversationId, List.of(), files);
             }
-            chatHistoryService.saveAssistantMessage(chatId, conversationId, historyType, fullAnswer, references);
-            metaChatService.updateLastMessage(chatId, ChatHistoryRole.ASSISTANT, fullAnswer);
+            metaChatHistoryService.saveAssistantMessage(chatId, conversationId, historyType, fullAnswer, references);
+            metaChatService.updateLastMessage(chatId, MetaChatHistoryRole.ASSISTANT, fullAnswer);
             return event("done", data);
         });
         return meta.concatWith(body).concatWith(done)
@@ -1117,7 +1117,7 @@ public class ChatController {
         if (scope.userId() == null || scope.userId().isBlank()) {
             throw new IllegalArgumentException("userId must not be blank");
         }
-        return chatFileService.uploadAndIndex(scope.tenantId(), scope.userId(), conversationId, files);
+        return metaChatFileService.uploadAndIndex(scope.tenantId(), scope.userId(), conversationId, files);
     }
 
     /**
@@ -1167,7 +1167,7 @@ public class ChatController {
     private MetaChatDO getOrCreateChat(String conversationId,
                                        String tenantId,
                                        String userId,
-                                       ChatHistoryType chatMode,
+                                       MetaChatHistoryType chatMode,
                                        String firstMessage,
                                        String knowledgeBaseId) {
         ConversationScope scope = resolveScope(conversationId, tenantId, userId);

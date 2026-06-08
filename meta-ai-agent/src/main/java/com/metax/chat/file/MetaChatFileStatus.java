@@ -1,7 +1,7 @@
 package com.metax.chat.file;
 
 /**
- * ChatFileStatus .
+ * MetaChatFileStatus .
  *
  * <p>
  * 聊天文件解析和临时索引状态
@@ -10,7 +10,7 @@ package com.metax.chat.file;
  * @version v1.0
  * @since 2026/6/8
  */
-public enum ChatFileStatus {
+public enum MetaChatFileStatus {
 
     /**
      * 已上传，等待解析

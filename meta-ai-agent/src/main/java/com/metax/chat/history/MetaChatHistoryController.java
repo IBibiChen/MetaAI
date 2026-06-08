@@ -1,4 +1,4 @@
-package com.metax.history;
+package com.metax.chat.history;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.metax.common.CommonResult;
@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.util.StringUtils;
 
 /**
- * ChatHistoryController .
+ * MetaChatHistoryController .
  *
  * <p>
  * 完整聊天历史查询接口
@@ -25,15 +25,15 @@ import org.springframework.util.StringUtils;
 @RestController
 @RequiredArgsConstructor
 @Tag(name = "聊天历史", description = "完整聊天历史归档查询接口")
-public class ChatHistoryController {
+public class MetaChatHistoryController {
 
-    private final ChatHistoryService chatHistoryService;
+    private final MetaChatHistoryService metaChatHistoryService;
 
     /**
      * 查询完整聊天历史
      *
      * <p>
-     * 这里查询的是 ChatHistory 完整归档，不是 ChatMemory 最近窗口
+     * 这里查询的是 MetaChatHistory 完整归档，不是 ChatMemory 最近窗口
      * ChatMemory 只服务 prompt 上下文，超过 maxMessages 的旧消息会被裁剪
      *
      * @param request 查询参数
@@ -41,15 +41,15 @@ public class ChatHistoryController {
      */
     @GetMapping(value = "/v1/chat/history/page")
     @Operation(summary = "查询完整聊天历史", description = "按 conversationId 分页查询完整历史，不读取 ChatMemory 窗口记忆")
-    public CommonResult<Page<ChatHistoryDO>> page(@Valid @ParameterObject ChatHistoryPageRequest request) {
+    public CommonResult<Page<MetaChatHistoryDO>> page(@Valid @ParameterObject MetaChatHistoryPageRequest request) {
         if (request.getChatId() != null) {
-            return CommonResult.success(chatHistoryService.pageByChatId(request.getChatId(),
+            return CommonResult.success(metaChatHistoryService.pageByChatId(request.getChatId(),
                     request.getCurrent(), request.getSize()));
         }
         if (!StringUtils.hasText(request.getConversationId())) {
             throw new IllegalArgumentException("conversationId 不能为空");
         }
-        return CommonResult.success(chatHistoryService.pageByConversationId(request.getConversationId(),
+        return CommonResult.success(metaChatHistoryService.pageByConversationId(request.getConversationId(),
                 request.getCurrent(), request.getSize()));
     }
 }

@@ -1,4 +1,4 @@
-package com.metax.history;
+package com.metax.chat.history;
 
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -18,7 +18,7 @@ import org.hibernate.annotations.Comment;
 import java.time.Instant;
 
 /**
- * ChatHistoryDO .
+ * MetaChatHistoryDO .
  *
  * <p>
  * 完整聊天历史实体
@@ -36,7 +36,7 @@ import java.time.Instant;
 @TableName("meta_chat_history")
 @Comment("完整聊天历史表")
 @Schema(description = "完整聊天历史消息")
-public class ChatHistoryDO {
+public class MetaChatHistoryDO {
 
     /**
      * 历史消息 ID

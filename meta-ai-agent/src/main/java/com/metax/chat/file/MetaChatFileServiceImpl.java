@@ -37,7 +37,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 /**
- * ChatFileServiceImpl .
+ * MetaChatFileServiceImpl .
  *
  * <p>
  * 聊天文件服务实现，文件只写入会话级临时索引，不进入知识库文档表
@@ -48,8 +48,8 @@ import java.util.*;
  */
 @Slf4j
 @Service
-public class ChatFileServiceImpl extends ServiceImpl<ChatFileMapper, MetaChatFileDO>
-        implements ChatFileService {
+public class MetaChatFileServiceImpl extends ServiceImpl<MetaChatFileMapper, MetaChatFileDO>
+        implements MetaChatFileService {
 
     /**
      * 单个会话文件最大上传大小
@@ -82,11 +82,11 @@ public class ChatFileServiceImpl extends ServiceImpl<ChatFileMapper, MetaChatFil
 
     private final VectorStore vectorStore;
 
-    public ChatFileServiceImpl(ObjectStorageClient objectStorageClient,
-                               MetaDocumentTypeResolver documentTypeResolver,
-                               MetaDocumentReaderFactory documentReaderFactory,
-                               MetaDocumentTransformerFactory documentTransformerFactory,
-                               VectorStore vectorStore) {
+    public MetaChatFileServiceImpl(ObjectStorageClient objectStorageClient,
+                                   MetaDocumentTypeResolver documentTypeResolver,
+                                   MetaDocumentReaderFactory documentReaderFactory,
+                                   MetaDocumentTransformerFactory documentTransformerFactory,
+                                   VectorStore vectorStore) {
         this.objectStorageClient = objectStorageClient;
         this.documentTypeResolver = documentTypeResolver;
         this.documentReaderFactory = documentReaderFactory;
@@ -139,7 +139,7 @@ public class ChatFileServiceImpl extends ServiceImpl<ChatFileMapper, MetaChatFil
                 .eq(MetaChatFileDO::getTenantId, tenantId)
                 .eq(MetaChatFileDO::getUserId, userId)
                 .eq(MetaChatFileDO::getConversationId, conversationId)
-                .eq(MetaChatFileDO::getParseStatus, ChatFileStatus.READY.name())
+                .eq(MetaChatFileDO::getParseStatus, MetaChatFileStatus.READY.name())
                 .eq(MetaChatFileDO::getDeleted, Boolean.FALSE)
                 .orderByDesc(MetaChatFileDO::getCreatedAt))
                 .stream()
@@ -216,7 +216,7 @@ public class ChatFileServiceImpl extends ServiceImpl<ChatFileMapper, MetaChatFil
         entity.setContentType(contentType);
         entity.setFileSize(file.getSize());
         entity.setFileSha256(fileSha256);
-        entity.setParseStatus(ChatFileStatus.UPLOADED.name());
+        entity.setParseStatus(MetaChatFileStatus.UPLOADED.name());
         entity.setChunkCount(0);
         entity.setDeleted(Boolean.FALSE);
         Instant now = Instant.now();
@@ -225,17 +225,17 @@ public class ChatFileServiceImpl extends ServiceImpl<ChatFileMapper, MetaChatFil
         save(entity);
 
         try {
-            entity.setParseStatus(ChatFileStatus.PARSING.name());
+            entity.setParseStatus(MetaChatFileStatus.PARSING.name());
             entity.setUpdatedAt(Instant.now());
             updateById(entity);
             int chunkCount = indexFile(entity);
-            entity.setParseStatus(ChatFileStatus.READY.name());
+            entity.setParseStatus(MetaChatFileStatus.READY.name());
             entity.setChunkCount(chunkCount);
             entity.setUpdatedAt(Instant.now());
             updateById(entity);
             return entity;
         } catch (RuntimeException ex) {
-            entity.setParseStatus(ChatFileStatus.PARSE_FAILED.name());
+            entity.setParseStatus(MetaChatFileStatus.PARSE_FAILED.name());
             entity.setUpdatedAt(Instant.now());
             updateById(entity);
             // 已经写入对象存储但未成功索引的文件不应继续占用会话上下文

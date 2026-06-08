@@ -23,7 +23,7 @@ public class MyBatisPlusConfig {
      * MyBatis Plus 分页插件
      *
      * <p>
-     * ChatHistory 分页查询依赖该插件生成数据库分页 SQL
+     * MetaChatHistory 分页查询依赖该插件生成数据库分页 SQL
      *
      * @return MyBatis Plus 拦截器
      */

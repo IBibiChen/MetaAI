@@ -8,7 +8,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.List;
 
 /**
- * ChatFileService .
+ * MetaChatFileService .
  *
  * <p>
  * 聊天文件服务，负责会话级文件上传、解析、临时索引和检索
@@ -17,7 +17,7 @@ import java.util.List;
  * @version v1.0
  * @since 2026/6/8
  */
-public interface ChatFileService extends MetaContextFileService {
+public interface MetaChatFileService extends MetaContextFileService {
 
     /**
      * 上传并解析聊天文件

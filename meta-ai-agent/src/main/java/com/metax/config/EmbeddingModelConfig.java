@@ -66,7 +66,7 @@ public class EmbeddingModelConfig {
      * 普通 ChatClient 和 RAG ChatClient 绑定当前唯一 ChatModel 和默认 redisChatMemory
      * 两者按系统提示词边界拆分，RAG 检索增强能力仍在请求阶段通过 RetrievalAugmentationAdvisor 动态追加
      * ChatMemory 只影响模型上下文窗口，不负责完整用户历史归档
-     * ChatHistory 负责用户可查看的完整历史，不影响知识库检索使用的 VectorStore
+     * MetaChatHistory 负责用户可查看的完整历史，不影响知识库检索使用的 VectorStore
      *
      * 当前主链路装配图
      *

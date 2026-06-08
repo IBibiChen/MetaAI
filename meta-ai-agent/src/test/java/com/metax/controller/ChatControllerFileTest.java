@@ -1,12 +1,12 @@
 package com.metax.controller;
 
-import com.metax.chat.file.ChatFileResponse;
-import com.metax.chat.file.ChatFileService;
-import com.metax.history.ChatHistoryService;
-import com.metax.history.ChatHistoryRole;
-import com.metax.history.ChatHistoryType;
-import com.metax.history.MetaChatDO;
-import com.metax.history.MetaChatService;
+import com.metax.chat.file.MetaChatFileResponse;
+import com.metax.chat.file.MetaChatFileService;
+import com.metax.chat.history.MetaChatHistoryService;
+import com.metax.chat.history.MetaChatHistoryRole;
+import com.metax.chat.history.MetaChatHistoryType;
+import com.metax.chat.MetaChatDO;
+import com.metax.chat.MetaChatService;
 import com.metax.rag.indexing.DocumentIndexingService;
 import com.metax.rag.model.MetadataKeys;
 import com.metax.rag.retrieval.RetrievalAdvisorFactory;
@@ -52,9 +52,9 @@ class ChatControllerFileTest {
 
     @Test
     void chatShouldAnswerWithConversationFiles() {
-        ChatHistoryService chatHistoryService = mock(ChatHistoryService.class);
+        MetaChatHistoryService metaChatHistoryService = mock(MetaChatHistoryService.class);
         MetaChatService metaChatService = metaChatService();
-        ChatFileService fileService = mock(ChatFileService.class);
+        MetaChatFileService fileService = mock(MetaChatFileService.class);
         MetaContextFile file = file("file-1", "demo.pdf", "pdf");
         when(fileService.uploadAndIndex(eq("t1"), eq("u1"), eq("c1"), any())).thenReturn(List.of());
         when(fileService.readyFiles("t1", "u1", "c1")).thenReturn(List.of(file));
@@ -63,26 +63,26 @@ class ChatControllerFileTest {
                         .text("文件内容")
                         .metadata(Map.of(MetadataKeys.FILE_NAME, "demo.pdf", MetadataKeys.CHUNK_INDEX, 0))
                         .build()));
-        ChatController controller = controller(new TestChatModel("基于文件的回答"), chatHistoryService,
+        ChatController controller = controller(new TestChatModel("基于文件的回答"), metaChatHistoryService,
                 metaChatService, fileService);
 
-        ChatFileResponse response = controller.chatWithFiles("c1", "t1", "u1", "总结一下", null);
+        MetaChatFileResponse response = controller.chatWithFiles("c1", "t1", "u1", "总结一下", null);
 
         assertThat(response.answer()).isEqualTo("基于文件的回答");
         assertThat(response.conversationId()).isEqualTo("c1");
         assertThat(response.files()).hasSize(1);
         assertThat(response.files().get(0).fileId()).isEqualTo("file-1");
-        verify(chatHistoryService).saveUserMessage(1L, "c1", ChatHistoryType.FILE_CHAT, "总结一下");
-        verify(chatHistoryService).saveAssistantMessage(1L, "c1", ChatHistoryType.FILE_CHAT, "基于文件的回答");
-        verify(metaChatService).updateLastMessage(1L, ChatHistoryRole.USER, "总结一下");
-        verify(metaChatService).updateLastMessage(1L, ChatHistoryRole.ASSISTANT, "基于文件的回答");
+        verify(metaChatHistoryService).saveUserMessage(1L, "c1", MetaChatHistoryType.FILE_CHAT, "总结一下");
+        verify(metaChatHistoryService).saveAssistantMessage(1L, "c1", MetaChatHistoryType.FILE_CHAT, "基于文件的回答");
+        verify(metaChatService).updateLastMessage(1L, MetaChatHistoryRole.USER, "总结一下");
+        verify(metaChatService).updateLastMessage(1L, MetaChatHistoryRole.ASSISTANT, "基于文件的回答");
     }
 
     @Test
     void ragShouldAnswerWithConversationFilesWhenRetrievalSkipped() {
-        ChatHistoryService chatHistoryService = mock(ChatHistoryService.class);
+        MetaChatHistoryService metaChatHistoryService = mock(MetaChatHistoryService.class);
         MetaChatService metaChatService = metaChatService();
-        ChatFileService fileService = mock(ChatFileService.class);
+        MetaChatFileService fileService = mock(MetaChatFileService.class);
         RetrievalDecisionService decisionService = mock(RetrievalDecisionService.class);
         MetaContextFile file = file("file-1", "demo.pdf", "pdf");
         when(decisionService.decide(any())).thenReturn(RetrievalDecisionResult.skip("skip_pattern"));
@@ -93,7 +93,7 @@ class ChatControllerFileTest {
                         .text("上传文件内容")
                         .metadata(Map.of(MetadataKeys.FILE_NAME, "demo.pdf", MetadataKeys.CHUNK_INDEX, 0))
                         .build()));
-        ChatController controller = controller(new TestChatModel("对比回答"), chatHistoryService,
+        ChatController controller = controller(new TestChatModel("对比回答"), metaChatHistoryService,
                 metaChatService, fileService, decisionService);
 
         RetrievalChatResponse response = controller.ragWithFiles("c1", "对比一下", "t1", "kb1",
@@ -107,27 +107,27 @@ class ChatControllerFileTest {
     }
 
     private ChatController controller(ChatModel chatModel,
-                                      ChatHistoryService chatHistoryService,
+                                      MetaChatHistoryService metaChatHistoryService,
                                       MetaChatService metaChatService,
-                                      ChatFileService fileService) {
+                                      MetaChatFileService fileService) {
         ChatClient chatClient = ChatClient.builder(chatModel).build();
         return new ChatController(chatClient, chatClient, chatModel, mock(VectorStore.class),
                 mock(DocumentIndexingService.class), mock(RetrievalAdvisorFactory.class),
                 mock(RetrievalFilterExpressionFactory.class), new RetrievalResponseAssembler(),
-                mock(RetrievalSearchService.class), mock(RetrievalDecisionService.class), chatHistoryService,
+                mock(RetrievalSearchService.class), mock(RetrievalDecisionService.class), metaChatHistoryService,
                 metaChatService, fileService, new MetaContextFileAdvisor(fileService));
     }
 
     private ChatController controller(ChatModel chatModel,
-                                      ChatHistoryService chatHistoryService,
+                                      MetaChatHistoryService metaChatHistoryService,
                                       MetaChatService metaChatService,
-                                      ChatFileService fileService,
+                                      MetaChatFileService fileService,
                                       RetrievalDecisionService decisionService) {
         ChatClient chatClient = ChatClient.builder(chatModel).build();
         return new ChatController(chatClient, chatClient, chatModel, mock(VectorStore.class),
                 mock(DocumentIndexingService.class), mock(RetrievalAdvisorFactory.class),
                 mock(RetrievalFilterExpressionFactory.class), new RetrievalResponseAssembler(),
-                mock(RetrievalSearchService.class), decisionService, chatHistoryService,
+                mock(RetrievalSearchService.class), decisionService, metaChatHistoryService,
                 metaChatService, fileService, new MetaContextFileAdvisor(fileService));
     }
 

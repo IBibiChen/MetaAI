@@ -1,4 +1,4 @@
-package com.metax.history;
+package com.metax.chat;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.metax.common.CommonResult;

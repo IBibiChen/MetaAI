@@ -1,7 +1,7 @@
-package com.metax.history;
+package com.metax.chat.history;
 
 /**
- * ChatHistoryRole .
+ * MetaChatHistoryRole .
  *
  * <p>
  * 用于区分历史消息发送方
@@ -10,7 +10,7 @@ package com.metax.history;
  * @version v1.0
  * @since 2026/6/2
  */
-public enum ChatHistoryRole {
+public enum MetaChatHistoryRole {
 
     /**
      * 用户消息
@@ -24,7 +24,7 @@ public enum ChatHistoryRole {
 
     private final String value;
 
-    ChatHistoryRole(String value) {
+    MetaChatHistoryRole(String value) {
         this.value = value;
     }
 

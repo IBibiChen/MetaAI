@@ -1,7 +1,7 @@
-package com.metax.history;
+package com.metax.chat.history;
 
 /**
- * ChatHistoryType .
+ * MetaChatHistoryType .
  *
  * <p>
  * 用于区分普通对话、文件对话、RAG 对话和 RAG details 调试对话
@@ -10,7 +10,7 @@ package com.metax.history;
  * @version v1.0
  * @since 2026/6/2
  */
-public enum ChatHistoryType {
+public enum MetaChatHistoryType {
 
     /**
      * 普通记忆对话
@@ -34,7 +34,7 @@ public enum ChatHistoryType {
 
     private final String value;
 
-    ChatHistoryType(String value) {
+    MetaChatHistoryType(String value) {
         this.value = value;
     }
 

@@ -38,7 +38,7 @@ public class ChatMemoryConfig {
      * Repository 负责持久化，Memory 负责窗口管理
      * Redis Repository 负责把消息写入 Redis，MessageWindowChatMemory 负责截取最近 N 条消息进入 prompt
      * MessageWindowChatMemory 超过 maxMessages 后会用裁剪后的窗口消息覆盖 Repository 中的会话记录
-     * 因此 ChatMemory 不是完整历史归档，用户查看历史必须查询 ChatHistory
+     * 因此 ChatMemory 不是完整历史归档，用户查看历史必须查询 MetaChatHistory
      * 默认窗口大小建议 10 到 20 轮，复杂助手可放宽到 20 到 50 条消息
      * 当前配置保留最近 30 条消息，避免长会话无限膨胀导致 token 成本失控
      * maxMessages 来自 metax.ai.chat.memory.max-messages，便于在不同环境调整记忆窗口大小

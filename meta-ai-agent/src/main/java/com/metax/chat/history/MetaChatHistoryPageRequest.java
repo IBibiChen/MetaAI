@@ -1,4 +1,4 @@
-package com.metax.history;
+package com.metax.chat.history;
 
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -7,7 +7,7 @@ import jakarta.validation.constraints.Min;
 import lombok.Data;
 
 /**
- * ChatHistoryPageRequest .
+ * MetaChatHistoryPageRequest .
  *
  * <p>
  * 完整聊天历史分页查询参数
@@ -18,7 +18,7 @@ import lombok.Data;
  */
 @Data
 @Schema(description = "完整聊天历史分页查询参数")
-public class ChatHistoryPageRequest {
+public class MetaChatHistoryPageRequest {
 
     /**
      * 会话 ID

@@ -5,7 +5,7 @@ import com.metax.rag.retrieval.MetaContextFile;
 import java.util.List;
 
 /**
- * ChatFileResponse .
+ * MetaChatFileResponse .
  *
  * @param answer         模型回答
  * @param conversationId 会话 ID
@@ -14,7 +14,7 @@ import java.util.List;
  * @version v1.0
  * @since 2026/6/8
  */
-public record ChatFileResponse(
+public record MetaChatFileResponse(
         String answer,
         String conversationId,
         List<MetaContextFile> files

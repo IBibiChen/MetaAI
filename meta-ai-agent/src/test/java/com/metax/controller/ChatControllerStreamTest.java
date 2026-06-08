@@ -1,11 +1,11 @@
 package com.metax.controller;
 
-import com.metax.chat.file.ChatFileService;
-import com.metax.history.ChatHistoryService;
-import com.metax.history.ChatHistoryRole;
-import com.metax.history.ChatHistoryType;
-import com.metax.history.MetaChatDO;
-import com.metax.history.MetaChatService;
+import com.metax.chat.file.MetaChatFileService;
+import com.metax.chat.history.MetaChatHistoryService;
+import com.metax.chat.history.MetaChatHistoryRole;
+import com.metax.chat.history.MetaChatHistoryType;
+import com.metax.chat.MetaChatDO;
+import com.metax.chat.MetaChatService;
 import com.metax.rag.retrieval.ChatStreamDelta;
 import com.metax.rag.retrieval.ChatStreamDone;
 import com.metax.rag.retrieval.ChatStreamMeta;
@@ -52,9 +52,9 @@ class ChatControllerStreamTest {
 
     @Test
     void chatStreamShouldReturnMetaDeltaAndDoneEvents() {
-        ChatHistoryService chatHistoryService = mock(ChatHistoryService.class);
+        MetaChatHistoryService metaChatHistoryService = mock(MetaChatHistoryService.class);
         MetaChatService metaChatService = metaChatService();
-        ChatController controller = controller(new TestChatModel("你", "好"), chatHistoryService, metaChatService,
+        ChatController controller = controller(new TestChatModel("你", "好"), metaChatHistoryService, metaChatService,
                 mock(RetrievalDecisionService.class));
 
         Flux<ServerSentEvent<Object>> events = controller.chatStream("c1", "t1", "u1", "你好");
@@ -70,19 +70,19 @@ class ChatControllerStreamTest {
         assertThat(result.get(2).data()).isEqualTo(new ChatStreamDelta("好"));
         assertThat(result.get(3).event()).isEqualTo("done");
         assertThat(result.get(3).data()).isEqualTo(new ChatStreamDone("你好", "c1", List.of()));
-        verify(chatHistoryService).saveUserMessage(1L, "c1", ChatHistoryType.CHAT, "你好");
-        verify(chatHistoryService).saveAssistantMessage(1L, "c1", ChatHistoryType.CHAT, "你好");
-        verify(metaChatService).updateLastMessage(1L, ChatHistoryRole.USER, "你好");
-        verify(metaChatService).updateLastMessage(1L, ChatHistoryRole.ASSISTANT, "你好");
+        verify(metaChatHistoryService).saveUserMessage(1L, "c1", MetaChatHistoryType.CHAT, "你好");
+        verify(metaChatHistoryService).saveAssistantMessage(1L, "c1", MetaChatHistoryType.CHAT, "你好");
+        verify(metaChatService).updateLastMessage(1L, MetaChatHistoryRole.USER, "你好");
+        verify(metaChatService).updateLastMessage(1L, MetaChatHistoryRole.ASSISTANT, "你好");
     }
 
     @Test
     void ragStreamShouldReturnEmptyReferencesWhenDecisionSkip() {
-        ChatHistoryService chatHistoryService = mock(ChatHistoryService.class);
+        MetaChatHistoryService metaChatHistoryService = mock(MetaChatHistoryService.class);
         MetaChatService metaChatService = metaChatService();
         RetrievalDecisionService decisionService = mock(RetrievalDecisionService.class);
         when(decisionService.decide(any())).thenReturn(RetrievalDecisionResult.skip("skip_pattern"));
-        ChatController controller = controller(new TestChatModel("回", "答"), chatHistoryService, metaChatService,
+        ChatController controller = controller(new TestChatModel("回", "答"), metaChatHistoryService, metaChatService,
                 decisionService);
 
         Flux<ServerSentEvent<Object>> events = controller.ragStream("c1", "你是谁", "t1", "kb1",
@@ -96,23 +96,23 @@ class ChatControllerStreamTest {
         assertThat(result.get(2).event()).isEqualTo("delta");
         assertThat(result.get(3).event()).isEqualTo("done");
         assertThat(result.get(3).data()).isEqualTo(new ChatStreamDone("回答", "c1", List.of()));
-        verify(chatHistoryService).saveUserMessage(1L, "c1", ChatHistoryType.RAG, "你是谁");
-        verify(chatHistoryService).saveAssistantMessage(eq(1L), eq("c1"), eq(ChatHistoryType.RAG), eq("回答"),
+        verify(metaChatHistoryService).saveUserMessage(1L, "c1", MetaChatHistoryType.RAG, "你是谁");
+        verify(metaChatHistoryService).saveAssistantMessage(eq(1L), eq("c1"), eq(MetaChatHistoryType.RAG), eq("回答"),
                 eq(List.of()));
-        verify(metaChatService).updateLastMessage(1L, ChatHistoryRole.USER, "你是谁");
-        verify(metaChatService).updateLastMessage(1L, ChatHistoryRole.ASSISTANT, "回答");
+        verify(metaChatService).updateLastMessage(1L, MetaChatHistoryRole.USER, "你是谁");
+        verify(metaChatService).updateLastMessage(1L, MetaChatHistoryRole.ASSISTANT, "回答");
     }
 
     private ChatController controller(ChatModel chatModel,
-                                      ChatHistoryService chatHistoryService,
+                                      MetaChatHistoryService metaChatHistoryService,
                                       MetaChatService metaChatService,
                                       RetrievalDecisionService decisionService) {
         ChatClient chatClient = ChatClient.builder(chatModel).build();
-        ChatFileService fileService = mock(ChatFileService.class);
+        MetaChatFileService fileService = mock(MetaChatFileService.class);
         return new ChatController(chatClient, chatClient, chatModel, mock(VectorStore.class),
                 mock(DocumentIndexingService.class), mock(RetrievalAdvisorFactory.class),
                 mock(RetrievalFilterExpressionFactory.class), new RetrievalResponseAssembler(),
-                mock(RetrievalSearchService.class), decisionService, chatHistoryService, metaChatService,
+                mock(RetrievalSearchService.class), decisionService, metaChatHistoryService, metaChatService,
                 fileService, new MetaContextFileAdvisor(fileService));
     }
 

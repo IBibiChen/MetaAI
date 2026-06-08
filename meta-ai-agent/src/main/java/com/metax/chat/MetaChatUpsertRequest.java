@@ -1,4 +1,6 @@
-package com.metax.history;
+package com.metax.chat;
+
+import com.metax.chat.history.MetaChatHistoryType;
 
 /**
  * MetaChatUpsertRequest .
@@ -23,7 +25,7 @@ public record MetaChatUpsertRequest(
         String tenantId,
         String userId,
         String conversationId,
-        ChatHistoryType chatMode,
+        MetaChatHistoryType chatMode,
         String firstMessage,
         String knowledgeBaseId,
         String modelProvider,

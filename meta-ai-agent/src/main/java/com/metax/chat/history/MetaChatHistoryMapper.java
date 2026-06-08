@@ -1,10 +1,10 @@
-package com.metax.history;
+package com.metax.chat.history;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;
 
 /**
- * ChatHistoryMapper .
+ * MetaChatHistoryMapper .
  *
  * <p>
  * 完整聊天历史 MyBatis Plus Mapper
@@ -15,6 +15,6 @@ import org.apache.ibatis.annotations.Mapper;
  * @since 2026/6/2
  */
 @Mapper
-public interface ChatHistoryMapper extends BaseMapper<ChatHistoryDO> {
+public interface MetaChatHistoryMapper extends BaseMapper<MetaChatHistoryDO> {
 
 }

@@ -24,7 +24,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * ChatFileServiceImplTest .
+ * MetaChatFileServiceImplTest .
  *
  * <p>
  * 聊天文件索引 metadata 单元测试
@@ -33,7 +33,7 @@ import static org.mockito.Mockito.when;
  * @version v1.0
  * @since 2026/6/8
  */
-class ChatFileServiceImplTest {
+class MetaChatFileServiceImplTest {
 
     @Test
     void uploadAndIndexShouldWriteFileMetadataWithoutDocumentId() {
@@ -48,7 +48,7 @@ class ChatFileServiceImplTest {
         when(readerFactory.create(any())).thenReturn(reader(List.of(new Document("文件内容"))));
         when(transformerFactory.tokenTextSplitter()).thenReturn(identityTransformer());
         when(transformerFactory.contentFormatTransformer()).thenReturn(identityTransformer());
-        ChatFileServiceImpl service = new TestChatFileServiceImpl(objectStorageClient,
+        MetaChatFileServiceImpl service = new TestMetaChatFileServiceImpl(objectStorageClient,
                 new MetaDocumentTypeResolver(), readerFactory, transformerFactory, vectorStore);
         MockMultipartFile file = new MockMultipartFile("files", "demo.pdf", "application/pdf",
                 "test".getBytes(java.nio.charset.StandardCharsets.UTF_8));
@@ -78,13 +78,13 @@ class ChatFileServiceImplTest {
         return documents -> documents;
     }
 
-    private static final class TestChatFileServiceImpl extends ChatFileServiceImpl {
+    private static final class TestMetaChatFileServiceImpl extends MetaChatFileServiceImpl {
 
-        private TestChatFileServiceImpl(ObjectStorageClient objectStorageClient,
-                                        MetaDocumentTypeResolver documentTypeResolver,
-                                        MetaDocumentReaderFactory documentReaderFactory,
-                                        MetaDocumentTransformerFactory documentTransformerFactory,
-                                        VectorStore vectorStore) {
+        private TestMetaChatFileServiceImpl(ObjectStorageClient objectStorageClient,
+                                            MetaDocumentTypeResolver documentTypeResolver,
+                                            MetaDocumentReaderFactory documentReaderFactory,
+                                            MetaDocumentTransformerFactory documentTransformerFactory,
+                                            VectorStore vectorStore) {
             super(objectStorageClient, documentTypeResolver, documentReaderFactory, documentTransformerFactory,
                     vectorStore);
         }

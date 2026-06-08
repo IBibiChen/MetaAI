@@ -4,7 +4,7 @@ import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;
 
 /**
- * ChatFileMapper .
+ * MetaChatFileMapper .
  *
  * <p>
  * 聊天文件元数据 MyBatis Plus Mapper
@@ -14,5 +14,5 @@ import org.apache.ibatis.annotations.Mapper;
  * @since 2026/6/8
  */
 @Mapper
-public interface ChatFileMapper extends BaseMapper<MetaChatFileDO> {
+public interface MetaChatFileMapper extends BaseMapper<MetaChatFileDO> {
 }

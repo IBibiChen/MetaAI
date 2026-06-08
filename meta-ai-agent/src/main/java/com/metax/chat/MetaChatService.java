@@ -1,7 +1,8 @@
-package com.metax.history;
+package com.metax.chat;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
+import com.metax.chat.history.MetaChatHistoryRole;
 
 /**
  * MetaChatService .
@@ -38,7 +39,7 @@ public interface MetaChatService extends IService<MetaChatDO> {
      * @param role    消息角色
      * @param content 消息内容
      */
-    void updateLastMessage(Long chatId, ChatHistoryRole role, String content);
+    void updateLastMessage(Long chatId, MetaChatHistoryRole role, String content);
 
     /**
      * 重命名会话

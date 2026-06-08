@@ -1,4 +1,4 @@
-package com.metax.history;
+package com.metax.chat.history;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -11,7 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * ChatHistoryControllerTest .
+ * MetaChatHistoryControllerTest .
  *
  * <p>
  * 完整聊天历史接口参数校验测试
@@ -20,14 +20,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * @version v1.0
  * @since 2026/6/3
  */
-@WebMvcTest(ChatHistoryController.class)
-class ChatHistoryControllerTest {
+@WebMvcTest(MetaChatHistoryController.class)
+class MetaChatHistoryControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
 
     @MockitoBean
-    private ChatHistoryService chatHistoryService;
+    private MetaChatHistoryService metaChatHistoryService;
 
     /**
      * 缺少 conversationId 应返回统一参数错误
