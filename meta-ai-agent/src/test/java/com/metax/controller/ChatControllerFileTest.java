@@ -7,6 +7,8 @@ import com.metax.chat.history.MetaChatHistoryRole;
 import com.metax.chat.history.MetaChatHistoryType;
 import com.metax.chat.MetaChatDO;
 import com.metax.chat.MetaChatService;
+import com.metax.controller.request.ChatFileRequest;
+import com.metax.controller.request.RetrievalChatFileRequest;
 import com.metax.rag.indexing.DocumentIndexingService;
 import com.metax.rag.model.MetadataKeys;
 import com.metax.rag.retrieval.advisor.RetrievalAdvisorFactory;
@@ -66,7 +68,7 @@ class ChatControllerFileTest {
         ChatController controller = controller(new TestChatModel("基于文件的回答"), metaChatHistoryService,
                 metaChatService, fileService);
 
-        MetaChatFileResponse response = controller.chatWithFiles("c1", "t1", "u1", "总结一下", null);
+        MetaChatFileResponse response = controller.chatWithFiles(chatFileRequest("c1", "t1", "u1", "总结一下"));
 
         assertThat(response.answer()).isEqualTo("基于文件的回答");
         assertThat(response.chatId()).isEqualTo("c1");
@@ -96,8 +98,8 @@ class ChatControllerFileTest {
         ChatController controller = controller(new TestChatModel("对比回答"), metaChatHistoryService,
                 metaChatService, fileService, decisionService);
 
-        RetrievalChatResponse response = controller.ragWithFiles("c1", "对比一下", "t1", "kb1",
-                null, null, "u1", null, null);
+        RetrievalChatResponse response = controller.ragWithFiles(retrievalChatFileRequest("c1", "对比一下", "t1",
+                "kb1", "u1"));
 
         assertThat(response.answer()).isEqualTo("对比回答");
         assertThat(response.chatId()).isEqualTo("c1");
@@ -141,6 +143,29 @@ class ChatControllerFileTest {
 
     private MetaContextFile file(String fileId, String filename, String documentType) {
         return new MetaContextFile(fileId, filename, documentType);
+    }
+
+    private ChatFileRequest chatFileRequest(String chatId, String tenantId, String userId, String msg) {
+        ChatFileRequest request = new ChatFileRequest();
+        request.setChatId(chatId);
+        request.setTenantId(tenantId);
+        request.setUserId(userId);
+        request.setMsg(msg);
+        return request;
+    }
+
+    private RetrievalChatFileRequest retrievalChatFileRequest(String chatId,
+                                                              String msg,
+                                                              String tenantId,
+                                                              String kbId,
+                                                              String userId) {
+        RetrievalChatFileRequest request = new RetrievalChatFileRequest();
+        request.setChatId(chatId);
+        request.setMsg(msg);
+        request.setTenantId(tenantId);
+        request.setKbId(kbId);
+        request.setUserId(userId);
+        return request;
     }
 
     private static final class TestChatModel implements ChatModel {

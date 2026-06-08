@@ -1,60 +1,54 @@
 package com.metax.controller;
 
-import com.metax.chat.file.MetaChatFileResponse;
-import com.metax.chat.file.MetaChatFileService;
-import com.metax.chat.history.MetaChatHistoryService;
-import com.metax.chat.history.MetaChatHistoryRole;
-import com.metax.chat.history.MetaChatHistoryType;
 import com.metax.chat.MetaChatDO;
 import com.metax.chat.MetaChatService;
 import com.metax.chat.MetaChatUpsertRequest;
-import com.metax.rag.retrieval.stream.ChatStreamDelta;
-import com.metax.rag.retrieval.stream.ChatStreamDone;
-import com.metax.rag.retrieval.stream.ChatStreamError;
-import com.metax.rag.retrieval.stream.ChatStreamMeta;
+import com.metax.chat.file.MetaChatFileResponse;
+import com.metax.chat.file.MetaChatFileService;
+import com.metax.chat.history.MetaChatHistoryRole;
+import com.metax.chat.history.MetaChatHistoryService;
+import com.metax.chat.history.MetaChatHistoryType;
+import com.metax.controller.request.*;
 import com.metax.rag.etl.model.DocumentSourceType;
 import com.metax.rag.indexing.DocumentIndexingRequest;
 import com.metax.rag.indexing.DocumentIndexingRun;
 import com.metax.rag.indexing.DocumentIndexingService;
+import com.metax.rag.retrieval.advisor.MetaContextFile;
+import com.metax.rag.retrieval.advisor.MetaContextFileAdvisor;
+import com.metax.rag.retrieval.advisor.MetaContextFileKeys;
 import com.metax.rag.retrieval.advisor.RetrievalAdvisorFactory;
-import com.metax.rag.retrieval.model.RetrievalChatDetailsResponse;
-import com.metax.rag.retrieval.model.RetrievalChatResponse;
+import com.metax.rag.retrieval.assembly.RetrievalResponseAssembler;
 import com.metax.rag.retrieval.decision.RetrievalDecision;
 import com.metax.rag.retrieval.decision.RetrievalDecisionResult;
 import com.metax.rag.retrieval.decision.RetrievalDecisionService;
 import com.metax.rag.retrieval.filter.RetrievalFilterExpressionFactory;
-import com.metax.rag.retrieval.model.RetrievalOptions;
-import com.metax.rag.retrieval.assembly.RetrievalResponseAssembler;
-import com.metax.rag.retrieval.model.RetrievalSearchResponse;
+import com.metax.rag.retrieval.model.*;
 import com.metax.rag.retrieval.search.RetrievalSearchService;
+import com.metax.rag.retrieval.stream.ChatStreamDelta;
+import com.metax.rag.retrieval.stream.ChatStreamDone;
+import com.metax.rag.retrieval.stream.ChatStreamError;
+import com.metax.rag.retrieval.stream.ChatStreamMeta;
 import com.metax.rag.retrieval.trace.RetrievalTrace;
-import com.metax.rag.retrieval.model.RetrievalDocumentReference;
-import com.metax.rag.retrieval.advisor.MetaContextFile;
-import com.metax.rag.retrieval.advisor.MetaContextFileAdvisor;
-import com.metax.rag.retrieval.advisor.MetaContextFileKeys;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ChatClientResponse;
-import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.vectorstore.filter.Filter;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.ServerSentEvent;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RequestPart;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -72,12 +66,21 @@ import java.util.concurrent.atomic.AtomicReference;
  * @since 2026/5/28
  */
 @RestController
+@RequiredArgsConstructor
 @Tag(name = "智能问答", description = "模型直连、记忆对话、知识库问答和文档索引调试接口")
 public class ChatController {
 
     private static final Logger log = LoggerFactory.getLogger(ChatController.class);
 
     private static final String DEFAULT_CHAT_ID = "tenantId:userId:sessionId";
+
+    private static final String DEFAULT_CHAT_MESSAGE = "你是谁";
+
+    private static final String DEFAULT_FILE_CHAT_MESSAGE = "总结一下这个文件";
+
+    private static final String DEFAULT_RAG_FILE_CHAT_MESSAGE = "对比知识库方案和上传文件";
+
+    private static final String DEFAULT_VISIBILITY = "PUBLIC";
 
     private final ChatClient chatClient;
 
@@ -107,36 +110,6 @@ public class ChatController {
 
     private final MetaContextFileAdvisor metaContextFileAdvisor;
 
-    public ChatController(@Qualifier("chatClient") ChatClient chatClient,
-                          @Qualifier("ragChatClient") ChatClient ragChatClient,
-                          ChatModel chatModel,
-                          VectorStore vectorStore,
-                          DocumentIndexingService documentIndexingService,
-                          RetrievalAdvisorFactory retrievalAdvisorFactory,
-                          RetrievalFilterExpressionFactory retrievalFilterExpressionFactory,
-                          RetrievalResponseAssembler retrievalResponseAssembler,
-                          RetrievalSearchService retrievalSearchService,
-                          RetrievalDecisionService retrievalDecisionService,
-                          MetaChatHistoryService metaChatHistoryService,
-                          MetaChatService metaChatService,
-                          MetaChatFileService metaChatFileService,
-                          MetaContextFileAdvisor metaContextFileAdvisor) {
-        this.chatClient = chatClient;
-        this.ragChatClient = ragChatClient;
-        this.chatModel = chatModel;
-        this.vectorStore = vectorStore;
-        this.documentIndexingService = documentIndexingService;
-        this.retrievalAdvisorFactory = retrievalAdvisorFactory;
-        this.retrievalFilterExpressionFactory = retrievalFilterExpressionFactory;
-        this.retrievalResponseAssembler = retrievalResponseAssembler;
-        this.retrievalSearchService = retrievalSearchService;
-        this.retrievalDecisionService = retrievalDecisionService;
-        this.metaChatHistoryService = metaChatHistoryService;
-        this.metaChatService = metaChatService;
-        this.metaChatFileService = metaChatFileService;
-        this.metaContextFileAdvisor = metaContextFileAdvisor;
-    }
-
     /**
      * 默认记忆对话
      *
@@ -144,22 +117,16 @@ public class ChatController {
      * 模型 provider 由 spring.ai.model.chat 配置决定
      * 默认记忆后端固定使用 redisChatMemory
      *
-     * @param chatId 会话 ID
-     * @param msg            消息
+     * @param request 记忆对话请求参数
      * @return 模型响应内容
      */
     @GetMapping(value = "/v1/chat")
     @Operation(summary = "默认记忆对话", description = "使用当前配置选中的 ChatModel 和 ChatMemory 进行多轮对话")
-    public String chat(
-            @Parameter(description = "会话 ID，建议格式：tenantId:userId:sessionId", example = "t1:u1:s1")
-            @RequestParam(name = "chatId", required = false) String chatId,
-            @Parameter(description = "租户 ID", example = "t1")
-            @RequestParam(name = "tenantId", required = false) String tenantId,
-            @Parameter(description = "用户 ID", example = "u1")
-            @RequestParam(name = "userId", required = false) String userId,
-            @Parameter(description = "用户消息", example = "你是谁")
-            @RequestParam(name = "msg", defaultValue = "你是谁") String msg) {
-        return memoryChat(chatId, tenantId, userId, msg, MetaChatHistoryType.CHAT);
+    public String chat(@Valid @ParameterObject ChatRequest request) {
+
+        String msg = messageOrDefault(request.getMsg(), DEFAULT_CHAT_MESSAGE);
+        return memoryChat(request.getChatId(), request.getTenantId(), request.getUserId(), msg,
+                MetaChatHistoryType.CHAT);
     }
 
     /**
@@ -169,27 +136,15 @@ public class ChatController {
      * 本接口复用 /v1/chat 入口，multipart 只用于携带会话级文件
      * 文件只绑定当前 chatId，不进入知识库，也不会被 /v1/rag 检索
      *
-     * @param chatId 会话 ID
-     * @param tenantId       租户 ID
-     * @param userId         用户 ID
-     * @param msg            消息
-     * @param files          聊天文件
+     * @param request 记忆对话文件请求参数
      * @return 文件上下文对话响应
      */
     @PostMapping(value = "/v1/chat", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(summary = "默认记忆对话，支持聊天文件", description = "在现有聊天入口中上传文件并基于文件内容总结或问答")
-    public MetaChatFileResponse chatWithFiles(
-            @Parameter(description = "会话 ID，建议格式：tenantId:userId:sessionId", example = "t1:u1:s1")
-            @RequestParam(name = "chatId", required = false) String chatId,
-            @Parameter(description = "租户 ID", example = "t1")
-            @RequestParam(name = "tenantId", required = false) String tenantId,
-            @Parameter(description = "用户 ID", example = "u1")
-            @RequestParam(name = "userId", required = false) String userId,
-            @Parameter(description = "用户消息", example = "总结一下这个文件")
-            @RequestParam(name = "msg", defaultValue = "总结一下这个文件") String msg,
-            @Parameter(description = "聊天文件")
-            @RequestPart(name = "files", required = false) MultipartFile[] files) {
-        return fileChat(chatId, tenantId, userId, msg, files);
+    public MetaChatFileResponse chatWithFiles(@Valid @ModelAttribute ChatFileRequest request) {
+
+        String msg = messageOrDefault(request.getMsg(), DEFAULT_FILE_CHAT_MESSAGE);
+        return fileChat(request.getChatId(), request.getTenantId(), request.getUserId(), msg, request.getFiles());
     }
 
     /**
@@ -199,25 +154,20 @@ public class ChatController {
      * 使用 SSE 返回 meta、delta、done 和 error 事件
      * 模型完整回答会在流结束后写入完整聊天历史
      *
-     * @param chatId 会话 ID
-     * @param msg            消息
+     * @param request 记忆对话请求参数
      * @return SSE 流式事件
      */
     @GetMapping(value = "/v1/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @Operation(summary = "默认记忆对话流式返回", description = "使用当前配置选中的 ChatModel 和 ChatMemory 进行多轮流式对话")
-    public Flux<ServerSentEvent<Object>> chatStream(
-            @Parameter(description = "会话 ID，建议格式：tenantId:userId:sessionId", example = "t1:u1:s1")
-            @RequestParam(name = "chatId", required = false) String chatId,
-            @Parameter(description = "租户 ID", example = "t1")
-            @RequestParam(name = "tenantId", required = false) String tenantId,
-            @Parameter(description = "用户 ID", example = "u1")
-            @RequestParam(name = "userId", required = false) String userId,
-            @Parameter(description = "用户消息", example = "你是谁")
-            @RequestParam(name = "msg", defaultValue = "你是谁") String msg) {
-        String resolvedChatId = resolveChatId(chatId);
-        MetaChatDO chat = getOrCreateChat(resolvedChatId, tenantId, userId, MetaChatHistoryType.CHAT, msg, null);
+    public Flux<ServerSentEvent<Object>> chatStream(@Valid @ParameterObject ChatRequest request) {
+
+        String msg = messageOrDefault(request.getMsg(), DEFAULT_CHAT_MESSAGE);
+        String resolvedChatId = resolveChatId(request.getChatId());
+        MetaChatDO chat = getOrCreateChat(resolvedChatId, request.getTenantId(), request.getUserId(),
+                MetaChatHistoryType.CHAT, msg, null);
         metaChatHistoryService.saveUserMessage(chat.getId(), resolvedChatId, MetaChatHistoryType.CHAT, msg);
         metaChatService.updateLastMessage(chat.getId(), MetaChatHistoryRole.USER, msg);
+
         ChatClient.ChatClientRequestSpec requestSpec = chatClient.prompt()
                 .advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, resolvedChatId))
                 .user(msg);
@@ -230,28 +180,17 @@ public class ChatController {
      * <p>
      * multipart 入口用于上传会话级临时文件，文件上下文由 MetaContextFileAdvisor 注入
      *
-     * @param chatId 会话 ID
-     * @param tenantId       租户 ID
-     * @param userId         用户 ID
-     * @param msg            消息
-     * @param files          聊天文件
+     * @param request 记忆对话文件请求参数
      * @return SSE 流式事件
      */
     @PostMapping(value = "/v1/chat/stream", consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
             produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @Operation(summary = "默认记忆对话流式返回，支持聊天文件", description = "上传临时文件并基于文件内容进行流式总结或问答")
-    public Flux<ServerSentEvent<Object>> chatStreamWithFiles(
-            @Parameter(description = "会话 ID，建议格式：tenantId:userId:sessionId", example = "t1:u1:s1")
-            @RequestParam(name = "chatId", required = false) String chatId,
-            @Parameter(description = "租户 ID", example = "t1")
-            @RequestParam(name = "tenantId", required = false) String tenantId,
-            @Parameter(description = "用户 ID", example = "u1")
-            @RequestParam(name = "userId", required = false) String userId,
-            @Parameter(description = "用户消息", example = "总结一下这个文件")
-            @RequestParam(name = "msg", defaultValue = "总结一下这个文件") String msg,
-            @Parameter(description = "聊天文件")
-            @RequestPart(name = "files", required = false) MultipartFile[] files) {
-        return fileStreamChat(chatId, tenantId, userId, msg, files);
+    public Flux<ServerSentEvent<Object>> chatStreamWithFiles(@Valid @ModelAttribute ChatFileRequest request) {
+
+        String msg = messageOrDefault(request.getMsg(), DEFAULT_FILE_CHAT_MESSAGE);
+        return fileStreamChat(request.getChatId(), request.getTenantId(), request.getUserId(), msg,
+                request.getFiles());
     }
 
     /**
@@ -261,46 +200,15 @@ public class ChatController {
      * ChatModel、EmbeddingModel 和 VectorStore 都由配置文件决定
      * 默认 ChatClient 固定使用 redisChatMemory
      *
-     * @param chatId  会话 ID
-     * @param msg             消息
-     * @param tenantId        租户 ID
-     * @param kbId 知识库 ID
-     * @param documentId      文档 ID
-     * @param documentType    文档类型
-     * @param userId          用户 ID
-     * @param deptIds         可访问部门 ID 列表
+     * @param request 知识库问答请求参数
      * @return 模型响应内容
      */
     @GetMapping(value = "/v1/rag")
     @Operation(summary = "知识库问答", description = "使用当前配置选中的模型、记忆和知识库进行问答")
-    public RetrievalChatResponse rag(
-            @Parameter(description = "会话 ID，建议格式：tenantId:userId:sessionId", example = "t1:u1:s1")
-            @RequestParam(name = "chatId", required = false) String chatId,
-            @Parameter(description = "用户消息", example = "Spring AI 的知识库问答是什么")
-            @RequestParam(name = "msg", defaultValue = "你是谁") String msg,
-            @Parameter(description = "租户 ID，知识库查询强制过滤字段", example = "t1")
-            @RequestParam(name = "tenantId", required = false) String tenantId,
-            @Parameter(description = "知识库 ID，知识库查询强制过滤字段", example = "kb1")
-            @RequestParam(name = "kbId", required = false) String kbId,
-            @Parameter(description = "文档 ID，可选收窄条件", example = "doc-001")
-            @RequestParam(name = "documentId", required = false) String documentId,
-            @Parameter(description = "文档类型，可选收窄条件，例如 txt、md、json、tika", example = "md")
-            @RequestParam(name = "documentType", required = false) String documentType,
-            @Parameter(description = "当前用户 ID，用于用户私有文档过滤", example = "u1")
-            @RequestParam(name = "userId", required = false) String userId,
-            @Parameter(description = "当前用户可访问部门 ID 列表，多个用英文逗号分隔", example = "d1,d2")
-            @RequestParam(name = "deptIds", required = false) String deptIds) {
-        validateRetrievalScope(tenantId, kbId);
-        RetrievalOptions options = RetrievalOptions.builder()
-                .tenantId(tenantId)
-                .kbId(kbId)
-                .documentId(documentId)
-                .documentType(documentType)
-                .userId(userId)
-                .deptIds(parseCsv(deptIds))
-                .query(msg)
-                .build();
-        return ragChat(chatId, msg, options, MetaChatHistoryType.RAG);
+    public RetrievalChatResponse rag(@Valid @ParameterObject RetrievalChatRequest request) {
+
+        String msg = messageOrDefault(request.getMsg(), DEFAULT_CHAT_MESSAGE);
+        return ragChat(request.getChatId(), msg, retrievalOptions(request, msg), MetaChatHistoryType.RAG);
     }
 
     /**
@@ -309,49 +217,16 @@ public class ChatController {
      * <p>
      * 知识库上下文由 RetrievalAugmentationAdvisor 注入，临时文件上下文由 MetaContextFileAdvisor 注入
      *
-     * @param chatId  会话 ID
-     * @param msg             消息
-     * @param tenantId        租户 ID
-     * @param kbId 知识库 ID
-     * @param documentId      文档 ID
-     * @param documentType    文档类型
-     * @param userId          用户 ID
-     * @param deptIds         可访问部门 ID 列表
-     * @param files           聊天文件
+     * @param request 知识库问答文件请求参数
      * @return 模型响应内容
      */
     @PostMapping(value = "/v1/rag", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(summary = "知识库问答，支持聊天文件", description = "同时参考知识库和本次会话上传文件进行总结、问答或对比")
-    public RetrievalChatResponse ragWithFiles(
-            @Parameter(description = "会话 ID，建议格式：tenantId:userId:sessionId", example = "t1:u1:s1")
-            @RequestParam(name = "chatId", required = false) String chatId,
-            @Parameter(description = "用户消息", example = "对比知识库方案和上传文件")
-            @RequestParam(name = "msg", defaultValue = "对比知识库方案和上传文件") String msg,
-            @Parameter(description = "租户 ID，知识库查询强制过滤字段", example = "t1")
-            @RequestParam(name = "tenantId", required = false) String tenantId,
-            @Parameter(description = "知识库 ID，知识库查询强制过滤字段", example = "kb1")
-            @RequestParam(name = "kbId", required = false) String kbId,
-            @Parameter(description = "文档 ID，可选收窄条件", example = "doc-001")
-            @RequestParam(name = "documentId", required = false) String documentId,
-            @Parameter(description = "文档类型，可选收窄条件，例如 txt、md、json、tika", example = "md")
-            @RequestParam(name = "documentType", required = false) String documentType,
-            @Parameter(description = "当前用户 ID，用于用户私有文档过滤", example = "u1")
-            @RequestParam(name = "userId", required = false) String userId,
-            @Parameter(description = "当前用户可访问部门 ID 列表，多个用英文逗号分隔", example = "d1,d2")
-            @RequestParam(name = "deptIds", required = false) String deptIds,
-            @Parameter(description = "聊天文件")
-            @RequestPart(name = "files", required = false) MultipartFile[] files) {
-        validateRetrievalScope(tenantId, kbId);
-        RetrievalOptions options = RetrievalOptions.builder()
-                .tenantId(tenantId)
-                .kbId(kbId)
-                .documentId(documentId)
-                .documentType(documentType)
-                .userId(userId)
-                .deptIds(parseCsv(deptIds))
-                .query(msg)
-                .build();
-        return ragChat(chatId, msg, options, MetaChatHistoryType.RAG, files);
+    public RetrievalChatResponse ragWithFiles(@Valid @ModelAttribute RetrievalChatFileRequest request) {
+
+        String msg = messageOrDefault(request.getMsg(), DEFAULT_RAG_FILE_CHAT_MESSAGE);
+        return ragChat(request.getChatId(), msg, retrievalOptions(request, msg), MetaChatHistoryType.RAG,
+                request.getFiles());
     }
 
     /**
@@ -361,95 +236,31 @@ public class ChatController {
      * 使用 SSE 返回 meta、delta、done 和 error 事件
      * done 事件中返回完整 answer、chatId 和轻量 references
      *
-     * @param chatId  会话 ID
-     * @param msg             消息
-     * @param tenantId        租户 ID
-     * @param kbId 知识库 ID
-     * @param documentId      文档 ID
-     * @param documentType    文档类型
-     * @param userId          用户 ID
-     * @param deptIds         可访问部门 ID 列表
+     * @param request 知识库问答请求参数
      * @return SSE 流式事件
      */
     @GetMapping(value = "/v1/rag/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @Operation(summary = "知识库问答流式返回", description = "使用当前配置选中的模型、记忆和知识库进行流式问答")
-    public Flux<ServerSentEvent<Object>> ragStream(
-            @Parameter(description = "会话 ID，建议格式：tenantId:userId:sessionId", example = "t1:u1:s1")
-            @RequestParam(name = "chatId", required = false) String chatId,
-            @Parameter(description = "用户消息", example = "Spring AI 的知识库问答是什么")
-            @RequestParam(name = "msg", defaultValue = "你是谁") String msg,
-            @Parameter(description = "租户 ID，知识库查询强制过滤字段", example = "t1")
-            @RequestParam(name = "tenantId", required = false) String tenantId,
-            @Parameter(description = "知识库 ID，知识库查询强制过滤字段", example = "kb1")
-            @RequestParam(name = "kbId", required = false) String kbId,
-            @Parameter(description = "文档 ID，可选收窄条件", example = "doc-001")
-            @RequestParam(name = "documentId", required = false) String documentId,
-            @Parameter(description = "文档类型，可选收窄条件，例如 txt、md、json、tika", example = "md")
-            @RequestParam(name = "documentType", required = false) String documentType,
-            @Parameter(description = "当前用户 ID，用于用户私有文档过滤", example = "u1")
-            @RequestParam(name = "userId", required = false) String userId,
-            @Parameter(description = "当前用户可访问部门 ID 列表，多个用英文逗号分隔", example = "d1,d2")
-            @RequestParam(name = "deptIds", required = false) String deptIds) {
-        validateRetrievalScope(tenantId, kbId);
-        RetrievalOptions options = RetrievalOptions.builder()
-                .tenantId(tenantId)
-                .kbId(kbId)
-                .documentId(documentId)
-                .documentType(documentType)
-                .userId(userId)
-                .deptIds(parseCsv(deptIds))
-                .query(msg)
-                .build();
-        return ragStreamChat(chatId, msg, options, MetaChatHistoryType.RAG);
+    public Flux<ServerSentEvent<Object>> ragStream(@Valid @ParameterObject RetrievalChatRequest request) {
+
+        String msg = messageOrDefault(request.getMsg(), DEFAULT_CHAT_MESSAGE);
+        return ragStreamChat(request.getChatId(), msg, retrievalOptions(request, msg), MetaChatHistoryType.RAG);
     }
 
     /**
      * RAG 检索增强对话流式返回，支持聊天文件
      *
-     * @param chatId  会话 ID
-     * @param msg             消息
-     * @param tenantId        租户 ID
-     * @param kbId 知识库 ID
-     * @param documentId      文档 ID
-     * @param documentType    文档类型
-     * @param userId          用户 ID
-     * @param deptIds         可访问部门 ID 列表
-     * @param files           聊天文件
+     * @param request 知识库问答文件请求参数
      * @return SSE 流式事件
      */
     @PostMapping(value = "/v1/rag/stream", consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
             produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @Operation(summary = "知识库问答流式返回，支持聊天文件", description = "同时参考知识库和本次会话上传文件进行流式总结、问答或对比")
-    public Flux<ServerSentEvent<Object>> ragStreamWithFiles(
-            @Parameter(description = "会话 ID，建议格式：tenantId:userId:sessionId", example = "t1:u1:s1")
-            @RequestParam(name = "chatId", required = false) String chatId,
-            @Parameter(description = "用户消息", example = "对比知识库方案和上传文件")
-            @RequestParam(name = "msg", defaultValue = "对比知识库方案和上传文件") String msg,
-            @Parameter(description = "租户 ID，知识库查询强制过滤字段", example = "t1")
-            @RequestParam(name = "tenantId", required = false) String tenantId,
-            @Parameter(description = "知识库 ID，知识库查询强制过滤字段", example = "kb1")
-            @RequestParam(name = "kbId", required = false) String kbId,
-            @Parameter(description = "文档 ID，可选收窄条件", example = "doc-001")
-            @RequestParam(name = "documentId", required = false) String documentId,
-            @Parameter(description = "文档类型，可选收窄条件，例如 txt、md、json、tika", example = "md")
-            @RequestParam(name = "documentType", required = false) String documentType,
-            @Parameter(description = "当前用户 ID，用于用户私有文档过滤", example = "u1")
-            @RequestParam(name = "userId", required = false) String userId,
-            @Parameter(description = "当前用户可访问部门 ID 列表，多个用英文逗号分隔", example = "d1,d2")
-            @RequestParam(name = "deptIds", required = false) String deptIds,
-            @Parameter(description = "聊天文件")
-            @RequestPart(name = "files", required = false) MultipartFile[] files) {
-        validateRetrievalScope(tenantId, kbId);
-        RetrievalOptions options = RetrievalOptions.builder()
-                .tenantId(tenantId)
-                .kbId(kbId)
-                .documentId(documentId)
-                .documentType(documentType)
-                .userId(userId)
-                .deptIds(parseCsv(deptIds))
-                .query(msg)
-                .build();
-        return ragStreamChat(chatId, msg, options, MetaChatHistoryType.RAG, files);
+    public Flux<ServerSentEvent<Object>> ragStreamWithFiles(@Valid @ModelAttribute RetrievalChatFileRequest request) {
+
+        String msg = messageOrDefault(request.getMsg(), DEFAULT_RAG_FILE_CHAT_MESSAGE);
+        return ragStreamChat(request.getChatId(), msg, retrievalOptions(request, msg), MetaChatHistoryType.RAG,
+                request.getFiles());
     }
 
     /**
@@ -458,64 +269,20 @@ public class ChatController {
      * <p>
      * 返回模型回答和本次检索命中的引用来源，便于排查 topK、metadata filter 和 chunk 命中质量
      *
-     * @param chatId   会话 ID
-     * @param msg              消息
-     * @param tenantId         租户 ID
-     * @param kbId  知识库 ID
-     * @param documentId       文档 ID
-     * @param documentType     文档类型
-     * @param userId           用户 ID
-     * @param deptIds          可访问部门 ID 列表
-     * @param topK             检索数量
-     * @param threshold        相似度阈值
-     * @param filterExpression 原始过滤表达式，仅用于 trace 调试展示
+     * @param request 知识库检索调试请求参数
      * @return 知识库问答调试详情
      */
     @PostMapping(value = "/v1/rag/details")
     @Operation(summary = "知识库问答调试详情", description = "返回 answer、references 和 trace，用于调试召回质量、过滤条件和后处理效果")
-    public RetrievalChatDetailsResponse ragDetails(
-            @Parameter(description = "会话 ID，建议格式：tenantId:userId:sessionId", example = "t1:u1:s1")
-            @RequestParam(name = "chatId", required = false) String chatId,
-            @Parameter(description = "用户消息", example = "Spring AI 的 ETL 是什么", required = true)
-            @RequestParam(name = "msg") String msg,
-            @Parameter(description = "租户 ID，知识库查询强制过滤字段", example = "t1", required = true)
-            @RequestParam(name = "tenantId") String tenantId,
-            @Parameter(description = "知识库 ID，知识库查询强制过滤字段", example = "kb1", required = true)
-            @RequestParam(name = "kbId") String kbId,
-            @Parameter(description = "文档 ID，可选收窄条件", example = "doc-001")
-            @RequestParam(name = "documentId", required = false) String documentId,
-            @Parameter(description = "文档类型，可选收窄条件，例如 txt、md、json、tika", example = "md")
-            @RequestParam(name = "documentType", required = false) String documentType,
-            @Parameter(description = "当前用户 ID，用于用户私有文档过滤", example = "u1")
-            @RequestParam(name = "userId", required = false) String userId,
-            @Parameter(description = "当前用户可访问部门 ID 列表，多个用英文逗号分隔", example = "d1,d2")
-            @RequestParam(name = "deptIds", required = false) String deptIds,
-            @Parameter(description = "本次检索 topK，不传时使用全局配置", example = "5")
-            @RequestParam(name = "topK", required = false) Integer topK,
-            @Parameter(description = "本次检索相似度阈值，不传时使用全局配置", example = "0.5")
-            @RequestParam(name = "threshold", required = false) Double threshold,
-            @Parameter(description = "原始过滤表达式，仅用于 trace 调试展示，实际检索使用结构化权限过滤",
-                    example = "tenantId == 't1' && kbId == 'kb1'")
-            @RequestParam(name = "filterExpression", required = false) String filterExpression) {
-        String resolvedChatId = resolveChatId(chatId);
-        validateRetrievalScope(tenantId, kbId);
-        RetrievalOptions options = RetrievalOptions.builder()
-                .tenantId(tenantId)
-                .kbId(kbId)
-                .documentId(documentId)
-                .documentType(documentType)
-                .userId(userId)
-                .deptIds(parseCsv(deptIds))
-                .topK(topK)
-                .similarityThreshold(threshold)
-                .filterExpression(filterExpression)
-                .query(msg)
-                .build();
+    public RetrievalChatDetailsResponse ragDetails(@Valid @ParameterObject RetrievalDetailsRequest request) {
+
+        String resolvedChatId = resolveChatId(request.getChatId());
+        RetrievalOptions options = retrievalOptions(request);
         Filter.Expression filter = retrievalFilterExpressionFactory.create(options);
-        RetrievalTrace.Builder traceBuilder = RetrievalTrace.builder(msg)
+        RetrievalTrace.Builder traceBuilder = RetrievalTrace.builder(request.getMsg())
                 .filter(String.valueOf(filter))
-                .topK(topK)
-                .similarityThreshold(threshold);
+                .topK(request.getTopK())
+                .similarityThreshold(request.getThreshold());
 
         ChatClient.ChatClientRequestSpec requestSpec = ragChatClient.prompt()
                 .advisors(spec -> {
@@ -523,12 +290,13 @@ public class ChatController {
                     spec.param(RetrievalTrace.CONTEXT_KEY, traceBuilder);
                     spec.advisors(retrievalAdvisorFactory.create(vectorStore, chatModel, options, filter));
                 })
-                .user(msg);
+                .user(request.getMsg());
 
-        MetaChatDO chat = getOrCreateChat(resolvedChatId, tenantId, userId, MetaChatHistoryType.RAG_DETAILS, msg,
-                kbId);
-        metaChatHistoryService.saveUserMessage(chat.getId(), resolvedChatId, MetaChatHistoryType.RAG_DETAILS, msg);
-        metaChatService.updateLastMessage(chat.getId(), MetaChatHistoryRole.USER, msg);
+        MetaChatDO chat = getOrCreateChat(resolvedChatId, request.getTenantId(), request.getUserId(),
+                MetaChatHistoryType.RAG_DETAILS, request.getMsg(), request.getKbId());
+        metaChatHistoryService.saveUserMessage(chat.getId(), resolvedChatId, MetaChatHistoryType.RAG_DETAILS,
+                request.getMsg());
+        metaChatService.updateLastMessage(chat.getId(), MetaChatHistoryRole.USER, request.getMsg());
         RetrievalChatDetailsResponse response = retrievalResponseAssembler.details(requestSpec.call().chatClientResponse(),
                 resolvedChatId);
         metaChatHistoryService.saveAssistantMessage(chat.getId(), resolvedChatId, MetaChatHistoryType.RAG_DETAILS,
@@ -543,151 +311,53 @@ public class ChatController {
      * <p>
      * 绕过 ChatClient 和 ChatModel，直接查看 VectorStore 在当前过滤条件下召回的 chunk
      *
-     * @param msg              检索 query
-     * @param tenantId         租户 ID
-     * @param kbId  知识库 ID
-     * @param documentId       文档 ID
-     * @param documentType     文档类型
-     * @param userId           用户 ID
-     * @param deptIds          可访问部门 ID 列表
-     * @param topK             检索数量
-     * @param threshold        相似度阈值
-     * @param filterExpression 原始过滤表达式，仅用于 trace 调试展示
+     * @param request 知识库检索调试请求参数
      * @return 直接检索响应
      */
     @PostMapping(value = "/v1/rag/search")
     @Operation(summary = "知识库检索调试", description = "绕过 ChatClient 和 ChatModel，直接返回向量库召回的 chunk")
-    public RetrievalSearchResponse ragSearch(
-            @Parameter(description = "检索 query", example = "Spring AI 的 ETL 是什么", required = true)
-            @RequestParam(name = "msg") String msg,
-            @Parameter(description = "租户 ID，知识库查询强制过滤字段", example = "t1", required = true)
-            @RequestParam(name = "tenantId") String tenantId,
-            @Parameter(description = "知识库 ID，知识库查询强制过滤字段", example = "kb1", required = true)
-            @RequestParam(name = "kbId") String kbId,
-            @Parameter(description = "文档 ID，可选收窄条件", example = "doc-001")
-            @RequestParam(name = "documentId", required = false) String documentId,
-            @Parameter(description = "文档类型，可选收窄条件，例如 txt、md、json、tika", example = "md")
-            @RequestParam(name = "documentType", required = false) String documentType,
-            @Parameter(description = "当前用户 ID，用于用户私有文档过滤", example = "u1")
-            @RequestParam(name = "userId", required = false) String userId,
-            @Parameter(description = "当前用户可访问部门 ID 列表，多个用英文逗号分隔", example = "d1,d2")
-            @RequestParam(name = "deptIds", required = false) String deptIds,
-            @Parameter(description = "本次检索 topK，不传时使用全局配置", example = "5")
-            @RequestParam(name = "topK", required = false) Integer topK,
-            @Parameter(description = "本次检索相似度阈值，不传时使用全局配置", example = "0.5")
-            @RequestParam(name = "threshold", required = false) Double threshold,
-            @Parameter(description = "原始过滤表达式，仅用于 trace 调试展示，实际检索使用结构化权限过滤",
-                    example = "tenantId == 't1' && kbId == 'kb1'")
-            @RequestParam(name = "filterExpression", required = false) String filterExpression) {
-        validateRetrievalScope(tenantId, kbId);
-        RetrievalOptions options = RetrievalOptions.builder()
-                .tenantId(tenantId)
-                .kbId(kbId)
-                .documentId(documentId)
-                .documentType(documentType)
-                .userId(userId)
-                .deptIds(parseCsv(deptIds))
-                .topK(topK)
-                .similarityThreshold(threshold)
-                .filterExpression(filterExpression)
-                .query(msg)
-                .build();
-        return retrievalSearchService.search(vectorStore, options);
+    public RetrievalSearchResponse ragSearch(@Valid @ParameterObject RetrievalDetailsRequest request) {
+        return retrievalSearchService.search(vectorStore, retrievalOptions(request));
     }
 
     /**
      * 从对象存储既有对象创建 RAG 异步文档索引执行
      *
-     * @param tenantId        租户 ID
-     * @param kbId 知识库 ID
-     * @param documentId      文档 ID
-     * @param visibility      文档可见性
-     * @param deptId          部门 ID
-     * @param userId          用户 ID
-     * @param documentType    文档类型
-     * @param source          来源标识
-     * @param bucket          对象存储 bucket
-     * @param objectKey       对象存储 object key
+     * @param request 对象存储文档索引导入请求参数
      * @return 文档索引执行
      */
     @PostMapping(value = "/v1/rag/documents/import")
     @Operation(summary = "从对象存储创建知识库文档索引任务", description = "原始文件必须已经归档到对象存储，本接口只创建异步 ETL 索引任务")
-    public DocumentIndexingRun importRagDocument(
-            @Parameter(description = "租户 ID", example = "t1", required = true)
-            @RequestParam(name = "tenantId") String tenantId,
-            @Parameter(description = "知识库 ID", example = "kb1", required = true)
-            @RequestParam(name = "kbId") String kbId,
-            @Parameter(description = "文档 ID，同一 documentId 重复导入会覆盖旧 chunk", example = "doc-001",
-                    required = true)
-            @RequestParam(name = "documentId") String documentId,
-            @Parameter(description = "文档可见性，可选值：PUBLIC、DEPT、USER", example = "PUBLIC")
-            @RequestParam(name = "visibility", defaultValue = "PUBLIC") String visibility,
-            @Parameter(description = "部门 ID，visibility=DEPT 时必填", example = "d1")
-            @RequestParam(name = "deptId", required = false) String deptId,
-            @Parameter(description = "用户 ID，visibility=USER 时必填", example = "u1")
-            @RequestParam(name = "userId", required = false) String userId,
-            @Parameter(description = "文档类型，可为空，为空时根据 objectKey 后缀识别", example = "md")
-            @RequestParam(name = "documentType", required = false) String documentType,
-            @Parameter(description = "来源标识，可用于前端展示引用来源", example = "knowledge/t1/kb1/demo.md")
-            @RequestParam(name = "source", required = false) String source,
-            @Parameter(description = "对象存储 bucket", example = "meta-ai-knowledge", required = true)
-            @RequestParam(name = "bucket") String bucket,
-            @Parameter(description = "对象存储 object key", example = "knowledge/t1/kb1/demo.md", required = true)
-            @RequestParam(name = "objectKey") String objectKey) {
+    public DocumentIndexingRun importRagDocument(@Valid @ParameterObject DocumentImportRequest request) {
         return documentIndexingService.submit(DocumentIndexingRequest.builder()
-                .tenantId(tenantId)
-                .kbId(kbId)
-                .documentId(documentId)
-                .visibility(visibility)
-                .deptId(deptId)
-                .userId(userId)
-                .documentType(documentType)
+                .tenantId(request.getTenantId())
+                .kbId(request.getKbId())
+                .documentId(request.getDocumentId())
+                .visibility(valueOrDefault(request.getVisibility(), DEFAULT_VISIBILITY))
+                .deptId(request.getDeptId())
+                .userId(request.getUserId())
+                .documentType(request.getDocumentType())
                 .sourceType(DocumentSourceType.OBJECT_STORAGE)
-                .source(source)
-                .filename(filenameFromPath(objectKey))
-                .bucket(bucket)
-                .objectKey(objectKey)
+                .source(request.getSource())
+                .filename(filenameFromPath(request.getObjectKey()))
+                .bucket(request.getBucket())
+                .objectKey(request.getObjectKey())
                 .build());
     }
 
     /**
      * 从受控本地目录创建 RAG 异步文档索引执行
      *
-     * @param tenantId        租户 ID
-     * @param kbId 知识库 ID
-     * @param documentId      文档 ID
-     * @param visibility      文档可见性
-     * @param deptId          部门 ID
-     * @param userId          用户 ID
-     * @param documentType    文档类型
-     * @param source          来源标识
-     * @param path            本地文件相对路径
+     * @param request 本地文档索引导入请求参数
      * @return 文档索引执行
      */
     @PostMapping(value = "/v1/rag/documents/import/local")
     @Operation(summary = "从受控本地目录创建知识库文档索引任务", description = "path 必须是 metax.ai.rag.storage.local-root 下的相对路径")
-    public DocumentIndexingRun importLocalRagDocument(
-            @Parameter(description = "租户 ID", example = "t1", required = true)
-            @RequestParam(name = "tenantId") String tenantId,
-            @Parameter(description = "知识库 ID", example = "kb1", required = true)
-            @RequestParam(name = "kbId") String kbId,
-            @Parameter(description = "文档 ID，同一 documentId 重复导入会覆盖旧 chunk", example = "doc-001",
-                    required = true)
-            @RequestParam(name = "documentId") String documentId,
-            @Parameter(description = "文档可见性，可选值：PUBLIC、DEPT、USER", example = "PUBLIC")
-            @RequestParam(name = "visibility", defaultValue = "PUBLIC") String visibility,
-            @Parameter(description = "部门 ID，visibility=DEPT 时必填", example = "d1")
-            @RequestParam(name = "deptId", required = false) String deptId,
-            @Parameter(description = "用户 ID，visibility=USER 时必填", example = "u1")
-            @RequestParam(name = "userId", required = false) String userId,
-            @Parameter(description = "文档类型，可为空，为空时根据 path 后缀识别", example = "md")
-            @RequestParam(name = "documentType", required = false) String documentType,
-            @Parameter(description = "来源标识，可用于前端展示引用来源", example = "local/demo.md")
-            @RequestParam(name = "source", required = false) String source,
-            @Parameter(description = "本地知识库文件相对路径", example = "demo.md", required = true)
-            @RequestParam(name = "path") String path) {
-        return documentIndexingService.importLocalFile(tenantId, kbId, documentId, visibility, deptId,
-                userId, documentType, path, source);
+    public DocumentIndexingRun importLocalRagDocument(@Valid @ParameterObject LocalDocumentImportRequest request) {
+        return documentIndexingService.importLocalFile(request.getTenantId(), request.getKbId(),
+                request.getDocumentId(), valueOrDefault(request.getVisibility(), DEFAULT_VISIBILITY),
+                request.getDeptId(), request.getUserId(), request.getDocumentType(), request.getPath(),
+                request.getSource());
     }
 
     /**
@@ -708,15 +378,13 @@ public class ChatController {
     /**
      * 当前 ChatModel 直连
      *
-     * @param msg 消息
+     * @param request 模型直连请求参数
      * @return 模型响应内容
      */
     @GetMapping(value = "/v1/model")
     @Operation(summary = "当前 ChatModel 直连", description = "绕过 ChatClient 和 ChatMemory，直接调用当前配置选中的 ChatModel")
-    public String model(
-            @Parameter(description = "用户消息", example = "你是谁")
-            @RequestParam(name = "msg", defaultValue = "你是谁") String msg) {
-        return chatModel.call(msg);
+    public String model(@Valid @ParameterObject ModelChatRequest request) {
+        return chatModel.call(messageOrDefault(request.getMsg(), DEFAULT_CHAT_MESSAGE));
     }
 
     /**
@@ -1153,6 +821,48 @@ public class ChatController {
                 .build();
     }
 
+    private RetrievalOptions retrievalOptions(RetrievalChatRequest request, String msg) {
+        validateRetrievalScope(request.getTenantId(), request.getKbId());
+        return RetrievalOptions.builder()
+                .tenantId(request.getTenantId())
+                .kbId(request.getKbId())
+                .documentId(request.getDocumentId())
+                .documentType(request.getDocumentType())
+                .userId(request.getUserId())
+                .deptIds(parseCsv(request.getDeptIds()))
+                .query(msg)
+                .build();
+    }
+
+    private RetrievalOptions retrievalOptions(RetrievalChatFileRequest request, String msg) {
+        validateRetrievalScope(request.getTenantId(), request.getKbId());
+        return RetrievalOptions.builder()
+                .tenantId(request.getTenantId())
+                .kbId(request.getKbId())
+                .documentId(request.getDocumentId())
+                .documentType(request.getDocumentType())
+                .userId(request.getUserId())
+                .deptIds(parseCsv(request.getDeptIds()))
+                .query(msg)
+                .build();
+    }
+
+    private RetrievalOptions retrievalOptions(RetrievalDetailsRequest request) {
+        validateRetrievalScope(request.getTenantId(), request.getKbId());
+        return RetrievalOptions.builder()
+                .tenantId(request.getTenantId())
+                .kbId(request.getKbId())
+                .documentId(request.getDocumentId())
+                .documentType(request.getDocumentType())
+                .userId(request.getUserId())
+                .deptIds(parseCsv(request.getDeptIds()))
+                .topK(request.getTopK())
+                .similarityThreshold(request.getThreshold())
+                .filterExpression(request.getFilterExpression())
+                .query(request.getMsg())
+                .build();
+    }
+
     private void validateRetrievalScope(String tenantId, String kbId) {
         if (tenantId == null || tenantId.isBlank()) {
             throw new IllegalArgumentException("tenantId must not be blank");
@@ -1160,6 +870,14 @@ public class ChatController {
         if (kbId == null || kbId.isBlank()) {
             throw new IllegalArgumentException("kbId must not be blank");
         }
+    }
+
+    private String messageOrDefault(String value, String defaultValue) {
+        return valueOrDefault(value, defaultValue);
+    }
+
+    private String valueOrDefault(String value, String defaultValue) {
+        return value == null || value.isBlank() ? defaultValue : value;
     }
 
     private String resolveChatId(String chatId) {

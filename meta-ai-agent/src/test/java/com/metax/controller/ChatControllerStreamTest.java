@@ -6,6 +6,8 @@ import com.metax.chat.file.MetaChatFileService;
 import com.metax.chat.history.MetaChatHistoryRole;
 import com.metax.chat.history.MetaChatHistoryService;
 import com.metax.chat.history.MetaChatHistoryType;
+import com.metax.controller.request.ChatRequest;
+import com.metax.controller.request.RetrievalChatRequest;
 import com.metax.rag.indexing.DocumentIndexingService;
 import com.metax.rag.retrieval.advisor.MetaContextFileAdvisor;
 import com.metax.rag.retrieval.advisor.RetrievalAdvisorFactory;
@@ -54,7 +56,7 @@ class ChatControllerStreamTest {
         ChatController controller = controller(new TestChatModel("你", "好"), metaChatHistoryService, metaChatService,
                 mock(RetrievalDecisionService.class));
 
-        Flux<ServerSentEvent<Object>> events = controller.chatStream("c1", "t1", "u1", "你好");
+        Flux<ServerSentEvent<Object>> events = controller.chatStream(chatRequest("c1", "t1", "u1", "你好"));
 
         List<ServerSentEvent<Object>> result = events.collectList().block();
 
@@ -82,8 +84,8 @@ class ChatControllerStreamTest {
         ChatController controller = controller(new TestChatModel("回", "答"), metaChatHistoryService, metaChatService,
                 decisionService);
 
-        Flux<ServerSentEvent<Object>> events = controller.ragStream("c1", "你是谁", "t1", "kb1",
-                null, null, null, null);
+        Flux<ServerSentEvent<Object>> events = controller.ragStream(retrievalChatRequest("c1", "你是谁", "t1",
+                "kb1"));
 
         List<ServerSentEvent<Object>> result = events.collectList().block();
 
@@ -119,6 +121,24 @@ class ChatControllerStreamTest {
         chat.setId(1L);
         when(metaChatService.getOrCreate(any())).thenReturn(chat);
         return metaChatService;
+    }
+
+    private ChatRequest chatRequest(String chatId, String tenantId, String userId, String msg) {
+        ChatRequest request = new ChatRequest();
+        request.setChatId(chatId);
+        request.setTenantId(tenantId);
+        request.setUserId(userId);
+        request.setMsg(msg);
+        return request;
+    }
+
+    private RetrievalChatRequest retrievalChatRequest(String chatId, String msg, String tenantId, String kbId) {
+        RetrievalChatRequest request = new RetrievalChatRequest();
+        request.setChatId(chatId);
+        request.setMsg(msg);
+        request.setTenantId(tenantId);
+        request.setKbId(kbId);
+        return request;
     }
 
     private static final class TestChatModel implements ChatModel {
