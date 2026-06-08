@@ -23,6 +23,13 @@ class MetaDocumentTypeResolverTest {
         assertThat(resolver.resolve(null, "demo.md")).isEqualTo("markdown");
         assertThat(resolver.resolve(null, "demo.json")).isEqualTo("json");
         assertThat(resolver.resolve(null, "demo.pdf")).isEqualTo("pdf");
+        assertThat(resolver.resolve(null, "demo.png")).isEqualTo("png");
+        assertThat(resolver.resolve(null, "demo.jpg")).isEqualTo("jpg");
+        assertThat(resolver.resolve(null, "demo.jpeg")).isEqualTo("jpeg");
+        assertThat(resolver.resolve(null, "demo.webp")).isEqualTo("webp");
+        assertThat(resolver.resolve(null, "demo.bmp")).isEqualTo("bmp");
+        assertThat(resolver.resolve(null, "demo.tif")).isEqualTo("tif");
+        assertThat(resolver.resolve(null, "demo.tiff")).isEqualTo("tiff");
         assertThat(resolver.resolve(null, "demo.unknown")).isEqualTo("tika");
     }
 
@@ -33,5 +40,6 @@ class MetaDocumentTypeResolverTest {
     void shouldPreferExplicitType() {
         assertThat(resolver.resolve("json", "demo.md")).isEqualTo("json");
         assertThat(resolver.resolve(".md", "demo.json")).isEqualTo("markdown");
+        assertThat(resolver.resolve(".jpg", "demo.json")).isEqualTo("jpg");
     }
 }

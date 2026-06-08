@@ -14,10 +14,10 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * PaddleOcrPdfDocumentReader .
+ * PaddleOcrDocumentReader .
  *
  * <p>
- * 扫描版 PDF Reader，通过 PaddleOCR 把页面图片识别为文本 Document
+ * OCR Reader，通过 PaddleOCR 把扫描版 PDF 或图片识别为文本 Document
  * 该 Reader 绑定请求级 Resource，不注册为 Spring 单例 Bean
  *
  * <p>
@@ -28,38 +28,39 @@ import java.util.Objects;
  * @version v1.0
  * @since 2026/6/5
  */
-public class PaddleOcrPdfDocumentReader implements DocumentReader {
+public class PaddleOcrDocumentReader implements DocumentReader {
 
-    private static final Logger log = LoggerFactory.getLogger(PaddleOcrPdfDocumentReader.class);
+    private static final Logger log = LoggerFactory.getLogger(PaddleOcrDocumentReader.class);
 
     private final MetaDocumentResource documentResource;
 
     private final PaddleOcrClient paddleOcrClient;
 
-    public PaddleOcrPdfDocumentReader(MetaDocumentResource documentResource, PaddleOcrClient paddleOcrClient) {
+    public PaddleOcrDocumentReader(MetaDocumentResource documentResource, PaddleOcrClient paddleOcrClient) {
         this.documentResource = Objects.requireNonNull(documentResource, "MetaDocumentResource must not be null");
         this.paddleOcrClient = Objects.requireNonNull(paddleOcrClient, "PaddleOcrClient must not be null");
     }
 
     /**
-     * 读取 PDF OCR 文本
+     * 读取 OCR 文本
      *
      * <p>
-     * PaddleOCR 返回的每一页文本都会转换为一个 Spring AI Document
+     * PaddleOCR 返回的每个结果都会转换为一个 Spring AI Document
+     * PDF 通常按页返回，图片通常返回单个结果
      * 保持页级 Document 可以在快照和后续 chunk 中保留更清晰的来源定位
      *
      * @return OCR 识别后的 Document 列表
      */
     @Override
     public List<Document> get() {
-        log.info("开始读取 PDF OCR 文档：source = {}，documentType = {}",
+        log.info("开始读取 OCR 文档：source = {}，documentType = {}",
                 documentResource.source(), documentResource.documentType());
-        List<String> pages = paddleOcrClient.recognizePdf(documentResource.resource());
+        List<String> pages = paddleOcrClient.recognize(documentResource.resource(), documentResource.documentType());
         List<Document> documents = new ArrayList<>();
         for (int index = 0; index < pages.size(); index++) {
             String text = pages.get(index);
             if (!StringUtils.hasText(text)) {
-                // OCR 空页不生成 Document，避免无意义空 chunk 进入后续切分和 embedding
+                // OCR 空页或空图片结果不生成 Document，避免无意义空 chunk 进入后续切分和 embedding
                 continue;
             }
             HashMap<String, Object> metadata = new HashMap<>();
@@ -71,17 +72,23 @@ public class PaddleOcrPdfDocumentReader implements DocumentReader {
             metadata.put("pageNumber", index + 1);
             // ocrProvider 用于排查该 Document 来自 OCR Reader，而不是 Tika 或其他 Reader
             metadata.put("ocrProvider", "paddleocr");
+            // ocrFileType 用于排查 PaddleX /ocr 调用时走的是 PDF 还是图片分支
+            metadata.put("ocrFileType", ocrFileType(documentResource.documentType()));
             documents.add(Document.builder()
                     .text(text.trim())
                     .metadata(metadata)
                     .build());
         }
         if (documents.isEmpty()) {
-            // 所有页面都为空时必须让索引失败，不能把扫描件 PDF 伪装成已成功入库
-            throw new IllegalStateException("PaddleOCR returned no readable PDF page text");
+            // 所有结果都为空时必须让索引失败，不能把扫描件 PDF 或图片伪装成已成功入库
+            throw new IllegalStateException("PaddleOCR returned no readable document text");
         }
-        log.info("PDF OCR 文档读取完成：source = {}，pages = {}，documents = {}",
+        log.info("OCR 文档读取完成：source = {}，items = {}，documents = {}",
                 documentResource.source(), pages.size(), documents.size());
         return documents;
+    }
+
+    private String ocrFileType(String documentType) {
+        return "pdf".equalsIgnoreCase(documentType) ? "pdf" : "image";
     }
 }

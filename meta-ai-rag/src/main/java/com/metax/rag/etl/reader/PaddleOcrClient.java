@@ -15,8 +15,10 @@ import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Set;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
@@ -40,6 +42,17 @@ public class PaddleOcrClient {
      */
     private static final int PDF_FILE_TYPE = 0;
 
+    /**
+     * PaddleOCR / PaddleX OCR 服务中 1 表示图片文件
+     */
+    private static final int IMAGE_FILE_TYPE = 1;
+
+    private static final String PDF_DOCUMENT_TYPE = "pdf";
+
+    private static final Set<String> IMAGE_DOCUMENT_TYPES = Set.of(
+            "png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff", "image"
+    );
+
     private final RagProperties properties;
 
     public PaddleOcrClient(RagProperties properties) {
@@ -47,28 +60,30 @@ public class PaddleOcrClient {
     }
 
     /**
-     * 识别 PDF 文本
+     * 识别 OCR 文本
      *
      * <p>
      * 请求字段按 PaddleX OCR serving 约定传入
-     * file 是 PDF 文件 Base64，fileType = 0 表示 PDF，visualize 控制是否返回可视化结果
+     * file 是文件 Base64，fileType 根据 documentType 区分 PDF 和图片，visualize 控制是否返回可视化结果
      * RAG 入库只消费 OCR 文本，不消费可视化图片
      *
-     * @param resource PDF 资源
-     * @return 按页返回的 OCR 文本
+     * @param resource     OCR 资源
+     * @param documentType 文档类型
+     * @return OCR 文本列表
      */
-    public List<String> recognizePdf(Resource resource) {
+    public List<String> recognize(Resource resource, String documentType) {
         Objects.requireNonNull(resource, "Resource must not be null");
         RagProperties.Ocr ocr = properties.getOcr();
         long start = System.nanoTime();
         String filename = resource.getFilename();
+        int fileType = resolveFileType(documentType);
         Map<String, Object> request = new LinkedHashMap<>();
         request.put("file", encode(resource));
-        request.put("fileType", PDF_FILE_TYPE);
+        request.put("fileType", fileType);
         request.put("visualize", ocr.isVisualize());
 
-        log.info("开始调用 PaddleOCR：filename = {}，baseUrl = {}，endpoint = {}，fileType = {}，visualize = {}",
-                filename, ocr.getBaseUrl(), ocr.getEndpoint(), PDF_FILE_TYPE, ocr.isVisualize());
+        log.info("开始调用 PaddleOCR：filename = {}，documentType = {}，baseUrl = {}，endpoint = {}，fileType = {}，visualize = {}",
+                filename, normalize(documentType), ocr.getBaseUrl(), ocr.getEndpoint(), fileType, ocr.isVisualize());
         Map<?, ?> response;
         try {
             response = restClient(ocr).post()
@@ -77,18 +92,19 @@ public class PaddleOcrClient {
                     .retrieve()
                     .body(Map.class);
         } catch (RuntimeException ex) {
-            log.error("PaddleOCR 调用失败：filename = {}，baseUrl = {}，endpoint = {}，costMs = {}",
-                    filename, ocr.getBaseUrl(), ocr.getEndpoint(), costMs(start), ex);
+            log.error("PaddleOCR 调用失败：filename = {}，documentType = {}，baseUrl = {}，endpoint = {}，costMs = {}",
+                    filename, normalize(documentType), ocr.getBaseUrl(), ocr.getEndpoint(), costMs(start), ex);
             throw ex;
         }
         List<String> pages = parsePages(response);
         if (pages.isEmpty()) {
-            log.warn("PaddleOCR 返回空文本：filename = {}，costMs = {}", filename, costMs(start));
-            // OCR 空结果必须让索引失败，避免扫描件 PDF 以空内容写入向量库
+            log.warn("PaddleOCR 返回空文本：filename = {}，documentType = {}，costMs = {}",
+                    filename, normalize(documentType), costMs(start));
+            // OCR 空结果必须让索引失败，避免扫描件 PDF 或图片以空内容写入向量库
             throw new IllegalStateException("PaddleOCR returned empty text");
         }
-        log.info("PaddleOCR 调用完成：filename = {}，pages = {}，costMs = {}",
-                filename, pages.size(), costMs(start));
+        log.info("PaddleOCR 调用完成：filename = {}，documentType = {}，items = {}，costMs = {}",
+                filename, normalize(documentType), pages.size(), costMs(start));
         return pages;
     }
 
@@ -96,7 +112,7 @@ public class PaddleOcrClient {
      * 创建 OCR HTTP client
      *
      * <p>
-     * timeout 同时用于连接和读取，避免扫描 PDF 识别耗时较长时过早中断
+     * timeout 同时用于连接和读取，避免扫描 PDF 或图片识别耗时较长时过早中断
      *
      * @param ocr OCR 配置
      * @return RestClient
@@ -118,17 +134,38 @@ public class PaddleOcrClient {
      * 将 Resource 内容编码为 Base64
      *
      * <p>
-     * 对象存储 Resource 会在这里按需读取原始 PDF 字节
+     * 对象存储 Resource 会在这里按需读取原始文件字节
      *
-     * @param resource PDF 资源
+     * @param resource OCR 资源
      * @return Base64 字符串
      */
     private String encode(Resource resource) {
         try {
             return Base64.getEncoder().encodeToString(resource.getContentAsByteArray());
         } catch (IOException ex) {
-            throw new UncheckedIOException("Failed to read PDF resource for OCR", ex);
+            throw new UncheckedIOException("Failed to read resource for OCR", ex);
         }
+    }
+
+    /**
+     * 解析 PaddleX OCR fileType
+     *
+     * @param documentType 文档类型
+     * @return PaddleX fileType
+     */
+    private int resolveFileType(String documentType) {
+        String normalized = normalize(documentType);
+        if (PDF_DOCUMENT_TYPE.equals(normalized)) {
+            return PDF_FILE_TYPE;
+        }
+        if (IMAGE_DOCUMENT_TYPES.contains(normalized)) {
+            return IMAGE_FILE_TYPE;
+        }
+        throw new IllegalArgumentException("Unsupported OCR documentType: " + documentType);
+    }
+
+    private String normalize(String documentType) {
+        return documentType == null ? "" : documentType.trim().toLowerCase(Locale.ROOT).replace(".", "");
     }
 
     /**

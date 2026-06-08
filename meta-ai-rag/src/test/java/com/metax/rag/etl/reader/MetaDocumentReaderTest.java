@@ -89,7 +89,7 @@ class MetaDocumentReaderTest {
      */
     @Test
     void shouldReadPdfByPaddleOcrReader() {
-        MetaDocumentReaderFactory factory = pdfOcrFactory();
+        MetaDocumentReaderFactory factory = ocrFactory();
         DocumentReader reader = factory.create(resource("pdf-bytes", "demo.pdf", "pdf"));
 
         List<Document> documents = reader.read();
@@ -99,7 +99,30 @@ class MetaDocumentReaderTest {
         assertThat(documents.get(0).getMetadata())
                 .containsEntry("source", "demo.pdf")
                 .containsEntry("pageNumber", 1)
-                .containsEntry("ocrProvider", "paddleocr");
+                .containsEntry("ocrProvider", "paddleocr")
+                .containsEntry("ocrFileType", "pdf");
+    }
+
+    /**
+     * 图片文档应优先委托 PaddleOCR Reader 解析
+     *
+     * <p>
+     * 该用例验证 ReaderFactory 对图片 documentType 的策略选择和 OCR Reader metadata
+     */
+    @Test
+    void shouldReadImageByPaddleOcrReader() {
+        MetaDocumentReaderFactory factory = ocrFactory();
+        DocumentReader reader = factory.create(resource("image-bytes", "demo.jpg", "jpg"));
+
+        List<Document> documents = reader.read();
+
+        assertThat(documents).hasSize(1);
+        assertThat(documents.get(0).getText()).isEqualTo("第一页 OCR 文本");
+        assertThat(documents.get(0).getMetadata())
+                .containsEntry("source", "demo.jpg")
+                .containsEntry("pageNumber", 1)
+                .containsEntry("ocrProvider", "paddleocr")
+                .containsEntry("ocrFileType", "image");
     }
 
     private MetaDocumentReaderFactory factory() {
@@ -113,19 +136,19 @@ class MetaDocumentReaderTest {
     }
 
     /**
-     * 创建带 PaddleOCR PDF 策略的 ReaderFactory
+     * 创建带 PaddleOCR 策略的 ReaderFactory
      *
      * <p>
      * 测试中通过覆盖 PaddleOcrClient 避免真实调用 OCR HTTP 服务
      *
      * @return MetaDocumentReaderFactory
      */
-    private MetaDocumentReaderFactory pdfOcrFactory() {
+    private MetaDocumentReaderFactory ocrFactory() {
         TikaDocumentReaderStrategy tika = new TikaDocumentReaderStrategy();
         return new MetaDocumentReaderFactory(List.of(
-                new PaddleOcrPdfDocumentReaderStrategy(ocrProperties(), new PaddleOcrClient(ocrProperties()) {
+                new PaddleOcrDocumentReaderStrategy(ocrProperties(), new PaddleOcrClient(ocrProperties()) {
                     @Override
-                    public List<String> recognizePdf(Resource resource) {
+                    public List<String> recognize(Resource resource, String documentType) {
                         return List.of("第一页 OCR 文本");
                     }
                 }),
