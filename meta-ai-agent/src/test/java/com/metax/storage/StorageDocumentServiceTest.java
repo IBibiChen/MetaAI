@@ -104,7 +104,7 @@ class StorageDocumentServiceTest {
         assertThat(captor.getValue().visibility()).isEqualTo("DEPT");
         assertThat(captor.getValue().deptId()).isEqualTo("dept-1");
         assertThat(captor.getValue().bucket()).isEqualTo("meta-ai-knowledge");
-        assertThat(captor.getValue().filename()).isEqualTo("demo.txt");
+        assertThat(captor.getValue().documentName()).isEqualTo("demo.txt");
         assertThat(response.indexStatus()).isEqualTo(StorageDocumentIndexStatus.INDEXING.name());
         assertThat(response.chunkCount()).isZero();
         assertThat(response.latestIndexingRunId()).isNotBlank();

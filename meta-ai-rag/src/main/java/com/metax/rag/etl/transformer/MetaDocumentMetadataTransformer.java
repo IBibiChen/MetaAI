@@ -83,7 +83,7 @@ public class MetaDocumentMetadataTransformer implements DocumentTransformer {
         // documentType 和 source 用于检索收窄、引用展示和问题排查
         metadata.put(MetadataKeys.DOCUMENT_TYPE, request.documentType());
         metadata.put(MetadataKeys.SOURCE, request.source());
-        metadata.put(MetadataKeys.DOCUMENT_NAME, blankToEmpty(request.filename()));
+        metadata.put(MetadataKeys.DOCUMENT_NAME, blankToEmpty(request.documentName()));
         // createdAt 使用统一时间戳，保证同一次索引生成的所有原始 Document 时间一致
         metadata.put(MetadataKeys.CREATED_AT, createdAt);
         Document enriched = rebuildDocument(document, metadata, document.getId());

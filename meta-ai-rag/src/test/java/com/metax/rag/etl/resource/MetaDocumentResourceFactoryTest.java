@@ -180,7 +180,7 @@ class MetaDocumentResourceFactoryTest {
                 .visibility("PUBLIC")
                 .documentType(documentType)
                 .sourceType(sourceType)
-                .filename(filename(objectKey, localPath))
+                .documentName(filename(objectKey, localPath))
                 .bucket(bucket)
                 .objectKey(objectKey)
                 .localPath(localPath)

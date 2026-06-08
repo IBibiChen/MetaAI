@@ -96,7 +96,7 @@ public class DocumentIndexingService {
                 .documentType(documentType)
                 .sourceType(DocumentSourceType.LOCAL_FILE)
                 .source(source)
-                .filename(filenameFromPath(localPath))
+                .documentName(documentNameFromPath(localPath))
                 .localPath(localPath)
                 .build();
 
@@ -172,7 +172,7 @@ public class DocumentIndexingService {
                 .orElseThrow(() -> new IllegalArgumentException("RAG document indexing run not found: " + runId));
     }
 
-    private String filenameFromPath(String path) {
+    private String documentNameFromPath(String path) {
         if (path == null || path.isBlank()) {
             return null;
         }

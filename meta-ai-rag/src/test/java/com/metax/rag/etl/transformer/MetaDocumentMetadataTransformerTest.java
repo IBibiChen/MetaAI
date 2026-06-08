@@ -82,7 +82,7 @@ class MetaDocumentMetadataTransformerTest {
     @Test
     void shouldAppendEmptyOptionalMetadata() {
         DocumentIndexingRequest request = requestBuilder()
-                .filename(null)
+                .documentName(null)
                 .build();
 
         Document document = new MetaDocumentMetadataTransformer(request)
@@ -108,7 +108,7 @@ class MetaDocumentMetadataTransformerTest {
                 .documentType("markdown")
                 .sourceType(DocumentSourceType.OBJECT_STORAGE)
                 .source("docs/demo.md")
-                .filename("demo.md")
+                .documentName("demo.md")
                 .bucket("bucket")
                 .objectKey("object");
     }

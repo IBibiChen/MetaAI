@@ -253,7 +253,7 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
                     .documentType(entity.getDocumentType())
                     .sourceType(DocumentSourceType.OBJECT_STORAGE)
                     .source(entity.getSource())
-                    .filename(entity.getOriginalFilename())
+                    .documentName(entity.getOriginalFilename())
                     .bucket(entity.getBucket())
                     .objectKey(entity.getObjectKey())
                     .build(), run -> {

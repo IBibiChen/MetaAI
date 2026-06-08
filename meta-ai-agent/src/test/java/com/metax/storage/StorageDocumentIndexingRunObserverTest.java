@@ -99,7 +99,7 @@ class StorageDocumentIndexingRunObserverTest {
                 .documentType("txt")
                 .sourceType(DocumentSourceType.OBJECT_STORAGE)
                 .source("source.txt")
-                .filename("source.txt")
+                .documentName("source.txt")
                 .bucket("bucket")
                 .objectKey("object")
                 .build();

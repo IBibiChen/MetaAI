@@ -82,7 +82,7 @@ public final class DocumentIndexingRequest {
      * 文档类型，用于选择 Reader 和后续检索过滤
      *
      * <p>
-     * 允许调用方为空，提交文档索引执行前会根据文件名或 objectKey 自动识别
+     * 允许调用方为空，提交文档索引执行前会根据 localPath 或 objectKey 自动识别
      */
     private final String documentType;
 
@@ -97,9 +97,9 @@ public final class DocumentIndexingRequest {
     private final String source;
 
     /**
-     * 原始文件名，用于前端展示引用来源
+     * 文档展示名，用于前端展示引用来源
      */
-    private final String filename;
+    private final String documentName;
 
     /**
      * 对象存储 bucket 名称
@@ -117,9 +117,9 @@ public final class DocumentIndexingRequest {
     private final String localPath;
 
     /**
-     * 返回用于推断 documentType 的文件名
+     * 返回用于推断 documentType 的路径提示
      *
-     * @return 文件名或路径
+     * @return 本地相对路径或对象存储 objectKey
      */
     public String typeHint() {
         return sourceType == DocumentSourceType.LOCAL_FILE ? localPath : objectKey;
@@ -152,7 +152,7 @@ public final class DocumentIndexingRequest {
                 .documentType(resolvedDocumentType)
                 .sourceType(sourceType)
                 .source(resolvedSource)
-                .filename(filename)
+                .documentName(documentName)
                 .bucket(bucket)
                 .objectKey(objectKey)
                 .localPath(localPath)

@@ -66,7 +66,7 @@ class MetaDocumentSnapshotWriterTest {
                 .documentType("markdown")
                 .sourceType(DocumentSourceType.OBJECT_STORAGE)
                 .source("docs/demo.md")
-                .filename("demo.md")
+                .documentName("demo.md")
                 .bucket("bucket")
                 .objectKey("object")
                 .build();
@@ -81,7 +81,7 @@ class MetaDocumentSnapshotWriterTest {
                 .documentType("markdown")
                 .sourceType(DocumentSourceType.OBJECT_STORAGE)
                 .source("docs/demo.md")
-                .filename("demo.md")
+                .documentName("demo.md")
                 .bucket("bucket")
                 .objectKey("object")
                 .build();

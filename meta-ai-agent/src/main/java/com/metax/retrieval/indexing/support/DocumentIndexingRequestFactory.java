@@ -37,8 +37,8 @@ public class DocumentIndexingRequestFactory {
                 .documentType(request.getDocumentType())
                 .sourceType(DocumentSourceType.OBJECT_STORAGE)
                 .source(request.getSource())
-                // filename 只用于展示和排查，真实读取仍然依赖 bucket + objectKey
-                .filename(filenameFromPath(request.getObjectKey()))
+                // documentName 只用于展示和排查，真实读取仍然依赖 bucket + objectKey
+                .documentName(documentNameFromPath(request.getObjectKey()))
                 .bucket(request.getBucket())
                 .objectKey(request.getObjectKey())
                 .build();
@@ -73,7 +73,7 @@ public class DocumentIndexingRequestFactory {
      * @param path 对象存储路径
      * @return 文件名
      */
-    private String filenameFromPath(String path) {
+    private String documentNameFromPath(String path) {
         if (path == null || path.isBlank()) {
             return null;
         }

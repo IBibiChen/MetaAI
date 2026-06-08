@@ -112,7 +112,7 @@ class MetaEtlPipelineFactoryTest {
                 .documentType("txt")
                 .sourceType(DocumentSourceType.LOCAL_FILE)
                 .source("docs/demo.txt")
-                .filename("demo.txt")
+                .documentName("demo.txt")
                 .localPath("docs/demo.txt")
                 .build();
     }
