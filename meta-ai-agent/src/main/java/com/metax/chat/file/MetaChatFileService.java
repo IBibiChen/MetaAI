@@ -24,19 +24,19 @@ public interface MetaChatFileService extends MetaContextFileService {
      *
      * @param tenantId       租户 ID
      * @param userId         用户 ID
-     * @param conversationId 会话 ID
+     * @param chatId 会话 ID
      * @param files          上传文件
      * @return 已解析文件列表
      */
-    List<MetaContextFile> uploadAndIndex(String tenantId, String userId, String conversationId, MultipartFile[] files);
+    List<MetaContextFile> uploadAndIndex(String tenantId, String userId, String chatId, MultipartFile[] files);
 
     /**
      * 查询当前会话可用文件
      *
      * @param tenantId       租户 ID
      * @param userId         用户 ID
-     * @param conversationId 会话 ID
+     * @param chatId 会话 ID
      * @return 文件列表
      */
-    List<MetaContextFile> readyFiles(String tenantId, String userId, String conversationId);
+    List<MetaContextFile> readyFiles(String tenantId, String userId, String chatId);
 }

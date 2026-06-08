@@ -50,21 +50,21 @@ public class MetaChatHistoryDO {
     private Long id;
 
     /**
-     * 会话主键
+     * 会话主表 ID
      */
-    @Column(name = "chat_id")
-    @Comment("会话主键")
-    @Schema(description = "会话主键", example = "1938200000000000001")
+    @Column(name = "fk_id")
+    @Comment("会话主表 ID")
+    @Schema(description = "会话主表 ID", example = "1938200000000000001")
     @JsonSerialize(using = ToStringSerializer.class)
-    private Long chatId;
+    private Long fkId;
 
     /**
      * 会话 ID
      */
-    @Column(name = "conversation_id", length = 255, nullable = false)
+    @Column(name = "chat_id", length = 255, nullable = false)
     @Comment("会话 ID")
     @Schema(description = "会话 ID，建议格式：tenantId:userId:sessionId", example = "t1:u1:s1")
-    private String conversationId;
+    private String chatId;
 
     /**
      * 对话类型

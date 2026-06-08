@@ -30,16 +30,16 @@ class MetaChatHistoryControllerTest {
     private MetaChatHistoryService metaChatHistoryService;
 
     /**
-     * 缺少 conversationId 应返回统一参数错误
+     * 缺少 chatId 应返回统一参数错误
      *
      * @throws Exception MVC 调用异常
      */
     @Test
-    void shouldReturnCommonResultWhenConversationIdMissing() throws Exception {
+    void shouldReturnCommonResultWhenchatIdMissing() throws Exception {
         mockMvc.perform(get("/v1/chat/history/page"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value(400))
-                .andExpect(jsonPath("$.message").value("conversationId 不能为空"));
+                .andExpect(jsonPath("$.message").value("chatId 不能为空"));
     }
 
     /**
@@ -50,7 +50,7 @@ class MetaChatHistoryControllerTest {
     @Test
     void shouldReturnCommonResultWhenPageSizeInvalid() throws Exception {
         mockMvc.perform(get("/v1/chat/history/page")
-                        .param("conversationId", "c1")
+                        .param("chatId", "c1")
                         .param("size", "501"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value(400))

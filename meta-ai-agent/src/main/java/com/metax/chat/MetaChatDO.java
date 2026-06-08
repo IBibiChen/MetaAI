@@ -34,7 +34,7 @@ import java.time.Instant;
 @AllArgsConstructor
 @Entity
 @Table(name = "meta_chat", indexes = {
-        @Index(name = "uk_meta_chat_conversation_id", columnList = "conversation_id", unique = true),
+        @Index(name = "uk_meta_chat_chat_id", columnList = "chat_id", unique = true),
         @Index(name = "idx_meta_chat_user_list",
                 columnList = "tenant_id,user_id,deleted,archived,pinned,last_message_at"),
         @Index(name = "idx_meta_chat_favorite",
@@ -75,10 +75,10 @@ public class MetaChatDO {
     /**
      * 会话 ID
      */
-    @Column(name = "conversation_id", length = 255, nullable = false, unique = true)
+    @Column(name = "chat_id", length = 255, nullable = false, unique = true)
     @Comment("会话 ID")
     @Schema(description = "会话 ID，建议格式：tenantId:userId:sessionId", example = "t1:u1:s1")
-    private String conversationId;
+    private String chatId;
 
     /**
      * 会话标题

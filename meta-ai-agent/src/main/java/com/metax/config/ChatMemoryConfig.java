@@ -42,7 +42,7 @@ public class ChatMemoryConfig {
      * 默认窗口大小建议 10 到 20 轮，复杂助手可放宽到 20 到 50 条消息
      * 当前配置保留最近 30 条消息，避免长会话无限膨胀导致 token 成本失控
      * maxMessages 来自 metax.ai.chat.memory.max-messages，便于在不同环境调整记忆窗口大小
-     * conversationId 推荐使用 tenantId:userId:sessionId，避免多租户和多会话串记忆
+     * chatId 推荐使用 tenantId:userId:sessionId，避免多租户和多会话串记忆
      *
      * @param redisChatMemoryRepository Redis 消息存储后端
      * @param maxMessages               记忆窗口消息数量

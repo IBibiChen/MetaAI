@@ -51,7 +51,7 @@ import static org.mockito.Mockito.when;
 class ChatControllerFileTest {
 
     @Test
-    void chatShouldAnswerWithConversationFiles() {
+    void chatShouldAnswerWithChatFiles() {
         MetaChatHistoryService metaChatHistoryService = mock(MetaChatHistoryService.class);
         MetaChatService metaChatService = metaChatService();
         MetaChatFileService fileService = mock(MetaChatFileService.class);
@@ -69,7 +69,7 @@ class ChatControllerFileTest {
         MetaChatFileResponse response = controller.chatWithFiles("c1", "t1", "u1", "总结一下", null);
 
         assertThat(response.answer()).isEqualTo("基于文件的回答");
-        assertThat(response.conversationId()).isEqualTo("c1");
+        assertThat(response.chatId()).isEqualTo("c1");
         assertThat(response.files()).hasSize(1);
         assertThat(response.files().get(0).fileId()).isEqualTo("file-1");
         verify(metaChatHistoryService).saveUserMessage(1L, "c1", MetaChatHistoryType.FILE_CHAT, "总结一下");
@@ -79,7 +79,7 @@ class ChatControllerFileTest {
     }
 
     @Test
-    void ragShouldAnswerWithConversationFilesWhenRetrievalSkipped() {
+    void ragShouldAnswerWithChatFilesWhenRetrievalSkipped() {
         MetaChatHistoryService metaChatHistoryService = mock(MetaChatHistoryService.class);
         MetaChatService metaChatService = metaChatService();
         MetaChatFileService fileService = mock(MetaChatFileService.class);
@@ -100,7 +100,7 @@ class ChatControllerFileTest {
                 null, null, "u1", null, null);
 
         assertThat(response.answer()).isEqualTo("对比回答");
-        assertThat(response.conversationId()).isEqualTo("c1");
+        assertThat(response.chatId()).isEqualTo("c1");
         assertThat(response.references()).isEmpty();
         assertThat(response.files()).hasSize(1);
         assertThat(response.files().get(0).fileId()).isEqualTo("file-1");

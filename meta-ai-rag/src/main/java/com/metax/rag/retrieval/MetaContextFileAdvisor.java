@@ -54,8 +54,8 @@ public class MetaContextFileAdvisor implements BaseAdvisor {
         }
         String tenantId = contextValue(context, MetaContextFileKeys.TENANT_ID);
         String userId = contextValue(context, MetaContextFileKeys.USER_ID);
-        String conversationId = contextValue(context, MetaContextFileKeys.CONVERSATION_ID);
-        if (!StringUtils.hasText(tenantId) || !StringUtils.hasText(userId) || !StringUtils.hasText(conversationId)) {
+        String chatId = contextValue(context, MetaContextFileKeys.CHAT_ID);
+        if (!StringUtils.hasText(tenantId) || !StringUtils.hasText(userId) || !StringUtils.hasText(chatId)) {
             return chatClientRequest;
         }
 
@@ -63,14 +63,14 @@ public class MetaContextFileAdvisor implements BaseAdvisor {
         if (!StringUtils.hasText(query)) {
             query = chatClientRequest.prompt().getUserMessage().getText();
         }
-        List<MetaContextFile> files = files(context, tenantId, userId, conversationId);
+        List<MetaContextFile> files = files(context, tenantId, userId, chatId);
         if (files.isEmpty()) {
             context.put(MetaContextFileKeys.CONTEXT_FILES, List.of());
             context.put(MetaContextFileKeys.DOCUMENTS, List.of());
             return chatClientRequest.mutate().context(context).build();
         }
 
-        List<Document> documents = contextFileService.retrieve(tenantId, userId, conversationId, files, query);
+        List<Document> documents = contextFileService.retrieve(tenantId, userId, chatId, files, query);
         context.put(MetaContextFileKeys.CONTEXT_FILES, files);
         context.put(MetaContextFileKeys.DOCUMENTS, documents);
         return chatClientRequest.mutate()
@@ -118,21 +118,21 @@ public class MetaContextFileAdvisor implements BaseAdvisor {
      * @param context        Advisor context
      * @param tenantId       租户 ID
      * @param userId         用户 ID
-     * @param conversationId 会话 ID
+     * @param chatId 会话 ID
      * @return 本次参与上下文增强的会话文件
      */
     @SuppressWarnings("unchecked")
     private List<MetaContextFile> files(Map<String, Object> context,
                                         String tenantId,
                                         String userId,
-                                        String conversationId) {
+                                        String chatId) {
         Object uploaded = context.get(MetaContextFileKeys.INCOMING_FILES);
         if (uploaded instanceof List<?> list && list.stream().allMatch(MetaContextFile.class::isInstance)) {
             if (!list.isEmpty()) {
                 return (List<MetaContextFile>) list;
             }
         }
-        return contextFileService.readyFiles(tenantId, userId, conversationId);
+        return contextFileService.readyFiles(tenantId, userId, chatId);
     }
 
     /**

@@ -1,7 +1,7 @@
 import {request, unwrapResult} from './request'
 
 import type {
-    ChatHistory,
+    MetaChatHistory,
     ChatOptions,
     ChatStreamDelta,
     ChatStreamDone,
@@ -31,10 +31,10 @@ export interface ChatStreamHandlers {
  * @example
  * const answer = await sendPlainChat('t1:u1:s1', 't1', 'u1', '你是谁')
  */
-export async function sendPlainChat(conversationId: string, tenantId: string, userId: string, msg: string) {
+export async function sendPlainChat(chatId: string, tenantId: string, userId: string, msg: string) {
     const response = await request.get<string>('/v1/chat', {
         params: {
-            conversationId,
+            chatId,
             tenantId,
             userId,
             msg,
@@ -51,14 +51,14 @@ export async function sendPlainChat(conversationId: string, tenantId: string, us
  * 使用 EventSource 消费 SSE 事件
  */
 export function streamPlainChat(
-    conversationId: string,
+    chatId: string,
     tenantId: string,
     userId: string,
     msg: string,
     handlers: ChatStreamHandlers,
 ) {
     return openChatStream('/api/v1/chat/stream', {
-        conversationId,
+        chatId,
         tenantId,
         userId,
         msg,
@@ -75,7 +75,7 @@ export function streamPlainChat(
 export async function sendRagChat(options: ChatOptions) {
     const response = await request.get<RetrievalChatResponse>('/v1/rag', {
         params: {
-            conversationId: options.conversationId,
+            chatId: options.chatId,
             msg: options.msg,
             tenantId: options.tenantId,
             knowledgeBaseId: options.knowledgeBaseId,
@@ -97,7 +97,7 @@ export async function sendRagChat(options: ChatOptions) {
  */
 export function streamRagChat(options: ChatOptions, handlers: ChatStreamHandlers) {
     return openChatStream('/api/v1/rag/stream', {
-        conversationId: options.conversationId,
+        chatId: options.chatId,
         msg: options.msg,
         tenantId: options.tenantId,
         knowledgeBaseId: options.knowledgeBaseId,
@@ -109,31 +109,13 @@ export function streamRagChat(options: ChatOptions, handlers: ChatStreamHandlers
 }
 
 /**
- * 查询聊天历史
- *
- * <p>
- * 查询的是完整 ChatHistory 归档
- * 不是 Spring AI ChatMemory 的最近窗口
- */
-export async function fetchChatHistory(conversationId: string, current = 1, size = 80) {
-    const response = await request.get<CommonResult<PageResult<ChatHistory>>>('/v1/chat/history/page', {
-        params: {
-            conversationId,
-            current,
-            size,
-        },
-    })
-    return unwrapResult(response.data)
-}
-
-/**
  * 按 chatId 查询聊天历史
  *
  * <p>
  * 点击左侧会话列表时优先使用 chatId 加载完整消息
  */
 export async function fetchChatHistoryByChatId(chatId: string, current = 1, size = 200) {
-    const response = await request.get<CommonResult<PageResult<ChatHistory>>>('/v1/chat/history/page', {
+    const response = await request.get<CommonResult<PageResult<MetaChatHistory>>>('/v1/chat/history/page', {
         params: {
             chatId,
             current,
@@ -161,8 +143,8 @@ export async function fetchChats(tenantId: string, userId: string, current = 1, 
 /**
  * 重命名聊天会话
  */
-export async function renameChat(chatId: string, title: string) {
-    const response = await request.patch<CommonResult<MetaChat>>(`/v1/chats/${chatId}/title`, {
+export async function renameChat(id: string, title: string) {
+    const response = await request.patch<CommonResult<MetaChat>>(`/v1/chats/${id}/title`, {
         title,
     })
     return unwrapResult(response.data)
@@ -171,16 +153,16 @@ export async function renameChat(chatId: string, title: string) {
 /**
  * 更新聊天会话状态
  */
-export async function updateChatFlags(chatId: string, flags: Partial<Pick<MetaChat, 'pinned' | 'favorite' | 'archived'>>) {
-    const response = await request.patch<CommonResult<MetaChat>>(`/v1/chats/${chatId}/flags`, flags)
+export async function updateChatFlags(id: string, flags: Partial<Pick<MetaChat, 'pinned' | 'favorite' | 'archived'>>) {
+    const response = await request.patch<CommonResult<MetaChat>>(`/v1/chats/${id}/flags`, flags)
     return unwrapResult(response.data)
 }
 
 /**
  * 软删除聊天会话
  */
-export async function deleteChat(chatId: string) {
-    const response = await request.delete<CommonResult<void>>(`/v1/chats/${chatId}`)
+export async function deleteChat(id: string) {
+    const response = await request.delete<CommonResult<void>>(`/v1/chats/${id}`)
     return unwrapResult(response.data)
 }
 

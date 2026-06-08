@@ -7,9 +7,9 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springdoc.core.annotations.ParameterObject;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.util.StringUtils;
 
 /**
  * MetaChatHistoryController .
@@ -40,16 +40,12 @@ public class MetaChatHistoryController {
      * @return 历史消息分页
      */
     @GetMapping(value = "/v1/chat/history/page")
-    @Operation(summary = "查询完整聊天历史", description = "按 conversationId 分页查询完整历史，不读取 ChatMemory 窗口记忆")
+    @Operation(summary = "查询完整聊天历史", description = "按 chatId 分页查询完整历史，不读取 ChatMemory 窗口记忆")
     public CommonResult<Page<MetaChatHistoryDO>> page(@Valid @ParameterObject MetaChatHistoryPageRequest request) {
-        if (request.getChatId() != null) {
-            return CommonResult.success(metaChatHistoryService.pageByChatId(request.getChatId(),
-                    request.getCurrent(), request.getSize()));
+        if (!StringUtils.hasText(request.getChatId())) {
+            throw new IllegalArgumentException("chatId 不能为空");
         }
-        if (!StringUtils.hasText(request.getConversationId())) {
-            throw new IllegalArgumentException("conversationId 不能为空");
-        }
-        return CommonResult.success(metaChatHistoryService.pageByConversationId(request.getConversationId(),
+        return CommonResult.success(metaChatHistoryService.pageByChatId(request.getChatId(),
                 request.getCurrent(), request.getSize()));
     }
 }

@@ -29,7 +29,7 @@ import java.util.Objects;
  * <pre>{@code
  * {
  *   "answer": "Spring AI ETL 由 Reader、Transformer、Writer 组成",
- *   "conversationId": "tenantId:userId:sessionId",
+ *   "chatId": "tenantId:userId:sessionId",
  *   "references": [
  *     {
  *       "score": 0.82,
@@ -58,16 +58,16 @@ public class RetrievalResponseAssembler {
      * references 来自 RetrievalAugmentationAdvisor.DOCUMENT_CONTEXT
      *
      * @param response       ChatClientResponse
-     * @param conversationId 会话 ID
+     * @param chatId 会话 ID
      * @return RAG 详情响应
      */
-    public RetrievalChatDetailsResponse details(ChatClientResponse response, String conversationId) {
+    public RetrievalChatDetailsResponse details(ChatClientResponse response, String chatId) {
         // 阶段 1：读取模型最终回答，answer 是 ChatModel 生成后的文本
         // ChatResponse 可能为空，details 接口要优先保证响应结构稳定
         String answer = answer(response);
 
         // 阶段 2：组装 answer、references 和 trace，供 details 接口排查完整检索链路
-        return new RetrievalChatDetailsResponse(answer, conversationId, references(response), trace(response));
+        return new RetrievalChatDetailsResponse(answer, chatId, references(response), trace(response));
     }
 
     /**
@@ -77,11 +77,11 @@ public class RetrievalResponseAssembler {
      * 普通接口返回 answer 和轻量 references，避免把 chunk 文本、score 和 metadata 暴露给前端常规调用
      *
      * @param response       ChatClientResponse
-     * @param conversationId 会话 ID
+     * @param chatId 会话 ID
      * @return RAG 普通响应
      */
-    public RetrievalChatResponse chat(ChatClientResponse response, String conversationId) {
-        return new RetrievalChatResponse(answer(response), conversationId, citations(response), files(response));
+    public RetrievalChatResponse chat(ChatClientResponse response, String chatId) {
+        return new RetrievalChatResponse(answer(response), chatId, citations(response), files(response));
     }
 
     /**
@@ -92,11 +92,11 @@ public class RetrievalResponseAssembler {
      * 该响应仍保留 RAG ChatClient 的系统提示词和 ChatMemory，但不会暴露任何历史或检索引用
      *
      * @param response       ChatClientResponse
-     * @param conversationId 会话 ID
+     * @param chatId 会话 ID
      * @return RAG 普通响应
      */
-    public RetrievalChatResponse chatWithoutReferences(ChatClientResponse response, String conversationId) {
-        return new RetrievalChatResponse(answer(response), conversationId, List.of(), files(response));
+    public RetrievalChatResponse chatWithoutReferences(ChatClientResponse response, String chatId) {
+        return new RetrievalChatResponse(answer(response), chatId, List.of(), files(response));
     }
 
     /**
@@ -107,11 +107,11 @@ public class RetrievalResponseAssembler {
      *
      * @param answer         完整回答
      * @param response       最后一个流式 ChatClientResponse
-     * @param conversationId 会话 ID
+     * @param chatId 会话 ID
      * @return RAG 普通响应
      */
-    public RetrievalChatResponse streamChat(String answer, ChatClientResponse response, String conversationId) {
-        return new RetrievalChatResponse(answer, conversationId, citations(response), files(response));
+    public RetrievalChatResponse streamChat(String answer, ChatClientResponse response, String chatId) {
+        return new RetrievalChatResponse(answer, chatId, citations(response), files(response));
     }
 
     @SuppressWarnings("unchecked")

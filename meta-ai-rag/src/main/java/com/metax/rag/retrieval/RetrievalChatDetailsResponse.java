@@ -30,7 +30,7 @@ public record RetrievalChatDetailsResponse(
          * 会话 ID
          */
         @Schema(description = "会话 ID", example = "t1:u1:s1")
-        String conversationId,
+        String chatId,
         /**
          * 本次 RAG 检索命中的完整引用来源
          */

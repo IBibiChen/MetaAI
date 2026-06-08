@@ -20,7 +20,7 @@ import java.util.List;
  * <pre>{@code
  * {
  *   "answer": "RAG 由检索和生成两部分组成",
- *   "conversationId": "tenantId:userId:sessionId",
+ *   "chatId": "tenantId:userId:sessionId",
  *   "references": [
  *     {
  *       "documentId": "1938200000000000001",
@@ -52,7 +52,7 @@ public record RetrievalChatResponse(
          * 会话 ID
          */
         @Schema(description = "会话 ID", example = "t1:u1:s1")
-        String conversationId,
+        String chatId,
         /**
          * 本次 RAG 检索引用的文件列表
          */
@@ -65,7 +65,7 @@ public record RetrievalChatResponse(
         List<MetaContextFile> files
 ) {
 
-    public RetrievalChatResponse(String answer, String conversationId, List<RetrievalCitation> references) {
-        this(answer, conversationId, references, List.of());
+    public RetrievalChatResponse(String answer, String chatId, List<RetrievalCitation> references) {
+        this(answer, chatId, references, List.of());
     }
 }

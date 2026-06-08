@@ -25,14 +25,7 @@ public class MetaChatHistoryPageRequest {
      */
     @Parameter(description = "会话 ID，建议格式：tenantId:userId:sessionId", example = "t1:u1:s1", required = true)
     @Schema(description = "会话 ID，建议格式：tenantId:userId:sessionId", example = "t1:u1:s1")
-    private String conversationId;
-
-    /**
-     * 会话主键
-     */
-    @Parameter(description = "会话主键，优先于 conversationId", example = "1938200000000000001")
-    @Schema(description = "会话主键，优先于 conversationId", example = "1938200000000000001")
-    private Long chatId;
+    private String chatId;
 
     /**
      * 页码，从 1 开始

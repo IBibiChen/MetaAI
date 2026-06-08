@@ -21,24 +21,24 @@ public interface MetaContextFileService {
      *
      * @param tenantId       租户 ID
      * @param userId         用户 ID
-     * @param conversationId 会话 ID
+     * @param chatId 会话 ID
      * @return 会话级上下文文件
      */
-    List<MetaContextFile> readyFiles(String tenantId, String userId, String conversationId);
+    List<MetaContextFile> readyFiles(String tenantId, String userId, String chatId);
 
     /**
      * 检索会话文件内容
      *
      * @param tenantId       租户 ID
      * @param userId         用户 ID
-     * @param conversationId 会话 ID
+     * @param chatId 会话 ID
      * @param files          会话级上下文文件
      * @param query          用户问题
      * @return 命中的 chunk
      */
     List<Document> retrieve(String tenantId,
                             String userId,
-                            String conversationId,
+                            String chatId,
                             List<MetaContextFile> files,
                             String query);
 }

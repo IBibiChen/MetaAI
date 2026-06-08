@@ -8,7 +8,7 @@ import java.util.List;
  * MetaChatFileResponse .
  *
  * @param answer         模型回答
- * @param conversationId 会话 ID
+ * @param chatId 会话 ID
  * @param files          本次参与文件对话的文件
  * @author IBibiChen
  * @version v1.0
@@ -16,7 +16,7 @@ import java.util.List;
  */
 public record MetaChatFileResponse(
         String answer,
-        String conversationId,
+        String chatId,
         List<MetaContextFile> files
 ) {
 }

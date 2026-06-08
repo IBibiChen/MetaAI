@@ -173,15 +173,15 @@ export interface StorageDocumentQuery {
  * 聊天历史消息
  *
  * <p>
- * 对应后端 ChatHistoryDO
+ * 对应后端 MetaChatHistoryDO
  */
-export interface ChatHistory {
+export interface MetaChatHistory {
     /** 历史消息主键 */
     id: string
-    /** 会话主键 */
-    chatId?: string
+    /** 会话主表 ID */
+    fkId?: string
     /** 会话 ID，建议格式 tenantId:userId:sessionId */
-    conversationId: string
+    chatId: string
     /** 对话类型，CHAT / RAG / RAG_DETAILS */
     chatType: string
     /** 消息角色，USER / ASSISTANT */
@@ -208,7 +208,7 @@ export interface MetaChat {
     /** 用户 ID */
     userId: string
     /** 会话 ID */
-    conversationId: string
+    chatId: string
     /** 会话标题 */
     title: string
     /** 最后一条消息预览 */
@@ -299,7 +299,7 @@ export interface RetrievalChatResponse {
     /** 模型最终回答 */
     answer?: string
     /** 后端解析后的会话 ID */
-    conversationId: string
+    chatId: string
     /** 引用来源列表 */
     references?: RetrievalCitation[]
     /** 检索链路 Trace */
@@ -311,7 +311,7 @@ export interface RetrievalChatResponse {
  */
 export interface ChatStreamMeta {
     /** 后端解析后的会话 ID */
-    conversationId: string
+    chatId: string
 }
 
 /**
@@ -329,7 +329,7 @@ export interface ChatStreamDone {
     /** 模型最终回答 */
     answer?: string
     /** 后端解析后的会话 ID */
-    conversationId: string
+    chatId: string
     /** RAG 引用来源列表 */
     references?: RetrievalCitation[]
 }
@@ -348,12 +348,12 @@ export type ChatStreamEventName = 'meta' | 'delta' | 'done' | 'error'
  * 聊天请求参数
  *
  * <p>
- * 普通聊天只使用 conversationId 和 msg
+ * 普通聊天只使用 chatId 和 msg
  * RAG 聊天会额外使用 tenantId、knowledgeBaseId 和可选检索范围
  */
 export interface ChatOptions {
     /** 会话 ID */
-    conversationId: string
+    chatId: string
     /** 用户消息 */
     msg: string
     /** 租户 ID */

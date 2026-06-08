@@ -142,7 +142,7 @@
  * 普通 RAG 查询必须传 tenantId 和 knowledgeBaseId，避免无过滤全库检索
  * ChatModel、EmbeddingModel 和 VectorStore 都由配置文件选择
  * 默认 ChatClient 显式绑定 redisChatMemory 作为模型上下文窗口
- * 完整用户历史由 ChatHistory 独立归档，不能从 ChatMemory 读取完整历史
+ * 完整用户历史由 MetaChatHistory 独立归档，不能从 ChatMemory 读取完整历史
  *
  * <p>
  * 13、检索参数组装阶段
@@ -199,7 +199,7 @@
  * <p>
  * 19、回答与引用返回阶段
  * ChatClient 把增强后的 prompt 发送给 ChatModel
- * 普通 RAG 接口返回 answer、conversationId 和 references，适合业务对话并展示引用来源
+ * 普通 RAG 接口返回 answer、chatId 和 references，适合业务对话并展示引用来源
  * details RAG 接口额外返回 trace，适合调试召回质量
  * RetrievalResponseAssembler 从 ChatClientResponse 中提取 answer、命中文档上下文和 RetrievalTrace
  *

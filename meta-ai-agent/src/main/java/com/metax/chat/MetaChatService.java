@@ -35,34 +35,34 @@ public interface MetaChatService extends IService<MetaChatDO> {
     /**
      * 更新会话最后消息
      *
-     * @param chatId  会话主键
+     * @param id      会话主键
      * @param role    消息角色
      * @param content 消息内容
      */
-    void updateLastMessage(Long chatId, MetaChatHistoryRole role, String content);
+    void updateLastMessage(Long id, MetaChatHistoryRole role, String content);
 
     /**
      * 重命名会话
      *
-     * @param chatId 会话主键
+     * @param id    会话主键
      * @param title  标题
      * @return 会话实体
      */
-    MetaChatDO rename(Long chatId, String title);
+    MetaChatDO rename(Long id, String title);
 
     /**
      * 更新会话状态
      *
-     * @param chatId  会话主键
+     * @param id      会话主键
      * @param request 状态更新请求
      * @return 会话实体
      */
-    MetaChatDO updateFlags(Long chatId, MetaChatFlagsRequest request);
+    MetaChatDO updateFlags(Long id, MetaChatFlagsRequest request);
 
     /**
      * 软删除会话
      *
-     * @param chatId 会话主键
+     * @param id 会话主键
      */
-    void softDelete(Long chatId);
+    void softDelete(Long id);
 }

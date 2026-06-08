@@ -10,7 +10,7 @@ import com.metax.chat.history.MetaChatHistoryType;
  *
  * @param tenantId        租户 ID
  * @param userId          用户 ID
- * @param conversationId  会话 ID
+ * @param chatId  会话 ID
  * @param chatMode        会话模式
  * @param firstMessage    首条用户消息
  * @param knowledgeBaseId 知识库 ID
@@ -24,7 +24,7 @@ import com.metax.chat.history.MetaChatHistoryType;
 public record MetaChatUpsertRequest(
         String tenantId,
         String userId,
-        String conversationId,
+        String chatId,
         MetaChatHistoryType chatMode,
         String firstMessage,
         String knowledgeBaseId,

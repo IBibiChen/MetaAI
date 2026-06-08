@@ -25,7 +25,7 @@ public final class MetaContextFileKeys {
     /**
      * 会话 ID
      */
-    public static final String CONVERSATION_ID = "metax.contextFile.conversationId";
+    public static final String CHAT_ID = "metax.contextFile.chatId";
 
     /**
      * 原始用户问题

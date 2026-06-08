@@ -23,70 +23,60 @@ public interface MetaChatHistoryService extends IService<MetaChatHistoryDO> {
     /**
      * 保存用户消息
      *
-     * @param conversationId 会话 ID
-     * @param type           对话类型
-     * @param content        消息内容
+     * @param chatId  会话 ID
+     * @param type    对话类型
+     * @param content 消息内容
      */
-    void saveUserMessage(String conversationId, MetaChatHistoryType type, String content);
+    void saveUserMessage(String chatId, MetaChatHistoryType type, String content);
 
     /**
      * 保存用户消息
      *
-     * @param chatId         会话主键
-     * @param conversationId 会话 ID
-     * @param type           对话类型
-     * @param content        消息内容
+     * @param fkId    会话主表 ID
+     * @param chatId  会话 ID
+     * @param type    对话类型
+     * @param content 消息内容
      */
-    void saveUserMessage(Long chatId, String conversationId, MetaChatHistoryType type, String content);
+    void saveUserMessage(Long fkId, String chatId, MetaChatHistoryType type, String content);
 
     /**
      * 保存模型回答
      *
-     * @param conversationId 会话 ID
-     * @param type           对话类型
-     * @param content        消息内容
+     * @param chatId  会话 ID
+     * @param type    对话类型
+     * @param content 消息内容
      */
-    void saveAssistantMessage(String conversationId, MetaChatHistoryType type, String content);
+    void saveAssistantMessage(String chatId, MetaChatHistoryType type, String content);
 
     /**
      * 保存模型回答
      *
-     * @param chatId         会话主键
-     * @param conversationId 会话 ID
-     * @param type           对话类型
-     * @param content        消息内容
+     * @param fkId    会话主表 ID
+     * @param chatId  会话 ID
+     * @param type    对话类型
+     * @param content 消息内容
      */
-    void saveAssistantMessage(Long chatId, String conversationId, MetaChatHistoryType type, String content);
+    void saveAssistantMessage(Long fkId, String chatId, MetaChatHistoryType type, String content);
 
     /**
      * 保存模型回答
      *
-     * @param chatId         会话主键
-     * @param conversationId 会话 ID
-     * @param type           对话类型
-     * @param content        消息内容
-     * @param references     RAG 引用文件列表
+     * @param fkId       会话主表 ID
+     * @param chatId     会话 ID
+     * @param type       对话类型
+     * @param content    消息内容
+     * @param references RAG 引用文件列表
      */
-    void saveAssistantMessage(Long chatId, String conversationId, MetaChatHistoryType type, String content,
+    void saveAssistantMessage(Long fkId, String chatId, MetaChatHistoryType type, String content,
                               List<RetrievalCitation> references);
 
     /**
      * 分页查询完整历史
      *
-     * @param conversationId 会话 ID
-     * @param current        页码，从 1 开始
-     * @param size           每页数量
-     * @return 历史消息分页
-     */
-    Page<MetaChatHistoryDO> pageByConversationId(String conversationId, Long current, Long size);
-
-    /**
-     * 分页查询完整历史
-     *
-     * @param chatId  会话主键
+     * @param chatId  会话 ID
      * @param current 页码，从 1 开始
      * @param size    每页数量
      * @return 历史消息分页
      */
-    Page<MetaChatHistoryDO> pageByChatId(Long chatId, Long current, Long size);
+    Page<MetaChatHistoryDO> pageByChatId(String chatId, Long current, Long size);
 }

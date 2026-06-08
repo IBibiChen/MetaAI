@@ -32,7 +32,7 @@ public class MetaDocumentTransformerFactory {
             MetadataKeys.VISIBILITY,
             MetadataKeys.DEPT_ID,
             MetadataKeys.USER_ID,
-            MetadataKeys.CONVERSATION_ID,
+            MetadataKeys.CHAT_ID,
             MetadataKeys.FILE_ID,
             MetadataKeys.DOCUMENT_ID,
             MetadataKeys.DOCUMENT_TYPE,

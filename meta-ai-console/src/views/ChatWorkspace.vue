@@ -9,7 +9,7 @@
       <div class="panel-head">
         <div>
           <strong>历史对话</strong>
-          <span>{{ activeChat?.title || workspace.conversationId }}</span>
+          <span>{{ activeChat?.title || workspace.chatId }}</span>
         </div>
         <n-button class="history-refresh-button" size="tiny" tertiary :loading="chatListLoading" @click="loadChats">
           <template #icon>
@@ -652,9 +652,9 @@ async function sendMessageContent(content: string) {
   stopActiveTyping = typingRenderer.stop
 
   const handlers = {
-    onMeta: (payload: { conversationId: string }) => {
+    onMeta: (payload: { chatId: string }) => {
       if (streamStoppedByUser) return
-      workspace.selectConversation(payload.conversationId)
+      workspace.selectChat(payload.chatId)
     },
     onDelta: (payload: { content: string }) => {
       if (streamStoppedByUser) return
@@ -676,11 +676,11 @@ async function sendMessageContent(content: string) {
   }
 
   if (chatMode.value === 'plain') {
-    activeStream = streamPlainChat(workspace.conversationId, workspace.tenantId, workspace.userId, content, handlers)
+    activeStream = streamPlainChat(workspace.chatId, workspace.tenantId, workspace.userId, content, handlers)
   } else {
     activeStream = streamRagChat(
         {
-          conversationId: workspace.conversationId,
+          chatId: workspace.chatId,
           msg: content,
           tenantId: workspace.tenantId,
           knowledgeBaseId: workspace.knowledgeBaseId,
@@ -757,19 +757,20 @@ function stopStreaming() {
 }
 
 /**
- * 加载当前 conversationId 的历史记录
+ * 加载当前 chatId 的历史记录
  *
  * <p>
- * 历史记录来自后端 ChatHistory
+ * 历史记录来自后端 MetaChatHistory
  * 加载后会同步转换成当前页面消息列表
  */
 async function loadHistory() {
-  if (!activeChatId.value) return
+  const chat = activeChat.value
+  if (!chat) return
   historyLoading.value = true
   messageTransitioning.value = true
   try {
     await waitForMessageTransition()
-    const page = await fetchChatHistoryByChatId(activeChatId.value)
+    const page = await fetchChatHistoryByChatId(chat.chatId)
     messages.value = page.records.map((item) =>
         createMessage(
             item.role.toLowerCase() === 'user' ? 'user' : 'assistant',
@@ -810,7 +811,7 @@ async function loadChats() {
     const page = await fetchChats(workspace.tenantId, workspace.userId)
     chats.value = page.records
     sortChats()
-    const current = chats.value.find((item) => item.conversationId === workspace.conversationId)
+    const current = chats.value.find((item) => item.chatId === workspace.chatId)
     if (current) {
       activeChatId.value = current.id
     }
@@ -824,7 +825,7 @@ async function loadChats() {
 async function selectChat(chat: MetaChat) {
   stopStreaming()
   activeChatId.value = chat.id
-  workspace.selectConversation(chat.conversationId)
+  workspace.selectChat(chat.chatId)
   await loadHistory()
 }
 

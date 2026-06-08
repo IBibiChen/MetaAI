@@ -57,7 +57,7 @@ class MetaDocumentTransformerFactoryTest {
                         Map.entry(MetadataKeys.TENANT_ID, "tenant-1"),
                         Map.entry(MetadataKeys.KB_ID, "kb-1"),
                         Map.entry(MetadataKeys.DOCUMENT_ID, "doc-1"),
-                        Map.entry(MetadataKeys.CONVERSATION_ID, "c1"),
+                        Map.entry(MetadataKeys.CHAT_ID, "c1"),
                         Map.entry(MetadataKeys.FILE_ID, "file-1"),
                         Map.entry(MetadataKeys.DOCUMENT_TYPE, "markdown"),
                         Map.entry(MetadataKeys.SOURCE, "docs/demo.md"),
@@ -77,7 +77,7 @@ class MetaDocumentTransformerFactoryTest {
                 .doesNotContain("tenantId")
                 .doesNotContain("kbId")
                 .doesNotContain("documentId")
-                .doesNotContain("conversationId")
+                .doesNotContain("chatId")
                 .doesNotContain("fileId")
                 .doesNotContain("documentType")
                 .doesNotContain("source")

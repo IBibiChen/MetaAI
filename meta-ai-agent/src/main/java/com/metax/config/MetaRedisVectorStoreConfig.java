@@ -93,7 +93,7 @@ public class MetaRedisVectorStoreConfig {
                 MetadataField.tag(MetadataKeys.VISIBILITY),
                 MetadataField.tag(MetadataKeys.DEPT_ID),
                 MetadataField.tag(MetadataKeys.USER_ID),
-                MetadataField.tag(MetadataKeys.CONVERSATION_ID),
+                MetadataField.tag(MetadataKeys.CHAT_ID),
                 MetadataField.tag(MetadataKeys.FILE_ID),
                 MetadataField.tag(MetadataKeys.DOCUMENT_ID),
                 MetadataField.tag(MetadataKeys.DOCUMENT_TYPE),

@@ -73,14 +73,14 @@ public class MetaChatServiceImpl extends ServiceImpl<MetaChatMapper, MetaChatDO>
         Assert.notNull(request, "MetaChatUpsertRequest must not be null");
         Assert.hasText(request.tenantId(), "tenantId must not be blank");
         Assert.hasText(request.userId(), "userId must not be blank");
-        Assert.hasText(request.conversationId(), "conversationId must not be blank");
+        Assert.hasText(request.chatId(), "chatId must not be blank");
         Assert.notNull(request.chatMode(), "chatMode must not be null");
 
         MetaChatDO existing = getOne(new LambdaQueryWrapper<MetaChatDO>()
-                .eq(MetaChatDO::getConversationId, request.conversationId()), false);
+                .eq(MetaChatDO::getChatId, request.chatId()), false);
         if (existing != null) {
             reviveIfDeleted(existing);
-            fillConversationBinding(existing, request);
+            fillChatBinding(existing, request);
             updateById(existing);
             return existing;
         }
@@ -89,7 +89,7 @@ public class MetaChatServiceImpl extends ServiceImpl<MetaChatMapper, MetaChatDO>
         MetaChatDO entity = new MetaChatDO();
         entity.setTenantId(request.tenantId());
         entity.setUserId(request.userId());
-        entity.setConversationId(request.conversationId());
+        entity.setChatId(request.chatId());
         entity.setTitle(defaultTitle(request.firstMessage()));
         entity.setTitleEdited(false);
         entity.setSummary(null);
@@ -116,15 +116,15 @@ public class MetaChatServiceImpl extends ServiceImpl<MetaChatMapper, MetaChatDO>
     /**
      * 更新会话最后消息
      *
-     * @param chatId  会话主键
+     * @param id      会话主键
      * @param role    消息角色
      * @param content 消息内容
      */
     @Override
-    public void updateLastMessage(Long chatId, MetaChatHistoryRole role, String content) {
-        Assert.notNull(chatId, "chatId must not be null");
+    public void updateLastMessage(Long id, MetaChatHistoryRole role, String content) {
+        Assert.notNull(id, "id must not be null");
         Assert.notNull(role, "MetaChatHistoryRole must not be null");
-        MetaChatDO entity = requireChat(chatId);
+        MetaChatDO entity = requireChat(id);
         Instant now = Instant.now();
         entity.setLastMessage(truncate(content, LAST_MESSAGE_LENGTH));
         entity.setLastRole(role.value());
@@ -137,14 +137,14 @@ public class MetaChatServiceImpl extends ServiceImpl<MetaChatMapper, MetaChatDO>
     /**
      * 重命名会话
      *
-     * @param chatId 会话主键
+     * @param id    会话主键
      * @param title  标题
      * @return 会话实体
      */
     @Override
-    public MetaChatDO rename(Long chatId, String title) {
+    public MetaChatDO rename(Long id, String title) {
         Assert.hasText(title, "title must not be blank");
-        MetaChatDO entity = requireChat(chatId);
+        MetaChatDO entity = requireChat(id);
         entity.setTitle(truncate(title.trim(), 255));
         entity.setTitleEdited(true);
         entity.setUpdatedAt(Instant.now());
@@ -155,14 +155,14 @@ public class MetaChatServiceImpl extends ServiceImpl<MetaChatMapper, MetaChatDO>
     /**
      * 更新会话状态
      *
-     * @param chatId  会话主键
+     * @param id      会话主键
      * @param request 状态更新请求
      * @return 会话实体
      */
     @Override
-    public MetaChatDO updateFlags(Long chatId, MetaChatFlagsRequest request) {
+    public MetaChatDO updateFlags(Long id, MetaChatFlagsRequest request) {
         Assert.notNull(request, "MetaChatFlagsRequest must not be null");
-        MetaChatDO entity = requireChat(chatId);
+        MetaChatDO entity = requireChat(id);
         if (request.getPinned() != null) {
             entity.setPinned(request.getPinned());
         }
@@ -180,11 +180,11 @@ public class MetaChatServiceImpl extends ServiceImpl<MetaChatMapper, MetaChatDO>
     /**
      * 软删除会话
      *
-     * @param chatId 会话主键
+     * @param id 会话主键
      */
     @Override
-    public void softDelete(Long chatId) {
-        MetaChatDO entity = requireChat(chatId);
+    public void softDelete(Long id) {
+        MetaChatDO entity = requireChat(id);
         Instant now = Instant.now();
         entity.setDeleted(true);
         entity.setDeletedAt(now);
@@ -192,9 +192,9 @@ public class MetaChatServiceImpl extends ServiceImpl<MetaChatMapper, MetaChatDO>
         updateById(entity);
     }
 
-    private MetaChatDO requireChat(Long chatId) {
-        Assert.notNull(chatId, "chatId must not be null");
-        MetaChatDO entity = getById(chatId);
+    private MetaChatDO requireChat(Long id) {
+        Assert.notNull(id, "id must not be null");
+        MetaChatDO entity = getById(id);
         if (entity == null || Boolean.TRUE.equals(entity.getDeleted())) {
             throw new IllegalArgumentException("会话不存在");
         }
@@ -209,7 +209,7 @@ public class MetaChatServiceImpl extends ServiceImpl<MetaChatMapper, MetaChatDO>
         }
     }
 
-    private void fillConversationBinding(MetaChatDO entity, MetaChatUpsertRequest request) {
+    private void fillChatBinding(MetaChatDO entity, MetaChatUpsertRequest request) {
         entity.setChatMode(request.chatMode().value());
         if (StringUtils.hasText(request.knowledgeBaseId())) {
             entity.setKnowledgeBaseId(request.knowledgeBaseId());

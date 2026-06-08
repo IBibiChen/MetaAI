@@ -9,7 +9,7 @@ const DEFAULT_DEPT_IDS = ''
  * 创建短会话 ID
  *
  * <p>
- * conversationId 采用 tenantId:userId:sessionId
+ * chatId 采用 tenantId:userId:sessionId
  * sessionId 用于区分同一用户的多次独立对话
  */
 function createSessionId() {
@@ -39,7 +39,7 @@ export const useWorkspaceStore = defineStore('workspace', {
          * @example
          * t1:u1:9a8b7c6d
          */
-        conversationId(state) {
+        chatId(state) {
             return `${state.tenantId}:${state.userId}:${state.sessionId}`
         },
     },
@@ -101,11 +101,11 @@ export const useWorkspaceStore = defineStore('workspace', {
          * 选择已有聊天会话
          *
          * <p>
-         * conversationId 格式保持 tenantId:userId:sessionId
+         * chatId 格式保持 tenantId:userId:sessionId
          * 点击左侧历史会话时同步工作区上下文
          */
-        selectConversation(conversationId: string) {
-            const [tenantId, userId, sessionId] = conversationId.split(':')
+        selectChat(chatId: string) {
+            const [tenantId, userId, sessionId] = chatId.split(':')
             if (tenantId) this.tenantId = tenantId
             if (userId) this.userId = userId
             if (sessionId) this.sessionId = sessionId

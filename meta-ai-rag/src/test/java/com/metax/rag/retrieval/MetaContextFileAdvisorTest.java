@@ -48,7 +48,7 @@ class MetaContextFileAdvisorTest {
                 .advisors(spec -> {
                     spec.param(MetaContextFileKeys.TENANT_ID, "t1");
                     spec.param(MetaContextFileKeys.USER_ID, "u1");
-                    spec.param(MetaContextFileKeys.CONVERSATION_ID, "c1");
+                    spec.param(MetaContextFileKeys.CHAT_ID, "c1");
                     spec.param(MetaContextFileKeys.ORIGINAL_USER_QUERY, "原始问题");
                     spec.param(MetaContextFileKeys.INCOMING_FILES, List.of(file));
                     spec.advisors(new MetaContextFileAdvisor(contextFileService));

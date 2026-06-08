@@ -64,7 +64,7 @@ class MetaChatFileServiceImplTest {
                 .containsEntry(MetadataKeys.SCOPE, MetadataKeys.SCOPE_SESSION)
                 .containsEntry(MetadataKeys.TENANT_ID, "t1")
                 .containsEntry(MetadataKeys.USER_ID, "u1")
-                .containsEntry(MetadataKeys.CONVERSATION_ID, "c1")
+                .containsEntry(MetadataKeys.CHAT_ID, "c1")
                 .containsEntry(MetadataKeys.FILE_NAME, "demo.pdf")
                 .containsKey(MetadataKeys.FILE_ID)
                 .doesNotContainKey(MetadataKeys.DOCUMENT_ID);

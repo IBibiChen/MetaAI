@@ -103,7 +103,7 @@ public class MetaChatFileServiceImpl extends ServiceImpl<MetaChatFileMapper, Met
      *
      * @param tenantId       租户 ID
      * @param userId         用户 ID
-     * @param conversationId 会话 ID
+     * @param chatId 会话 ID
      * @param files          上传文件
      * @return 已解析文件列表
      */
@@ -111,15 +111,15 @@ public class MetaChatFileServiceImpl extends ServiceImpl<MetaChatFileMapper, Met
     @Transactional(rollbackFor = Exception.class)
     public List<MetaContextFile> uploadAndIndex(String tenantId,
                                                 String userId,
-                                                String conversationId,
+                                                String chatId,
                                                 MultipartFile[] files) {
         if (files == null || files.length == 0) {
             return List.of();
         }
-        validateScope(tenantId, userId, conversationId);
+        validateScope(tenantId, userId, chatId);
         return Arrays.stream(files)
                 .filter(Objects::nonNull)
-                .map(file -> uploadAndIndexOne(tenantId, userId, conversationId, file))
+                .map(file -> uploadAndIndexOne(tenantId, userId, chatId, file))
                 .map(this::contextFile)
                 .toList();
     }
@@ -129,16 +129,16 @@ public class MetaChatFileServiceImpl extends ServiceImpl<MetaChatFileMapper, Met
      *
      * @param tenantId       租户 ID
      * @param userId         用户 ID
-     * @param conversationId 会话 ID
+     * @param chatId 会话 ID
      * @return 文件列表
      */
     @Override
-    public List<MetaContextFile> readyFiles(String tenantId, String userId, String conversationId) {
-        validateScope(tenantId, userId, conversationId);
+    public List<MetaContextFile> readyFiles(String tenantId, String userId, String chatId) {
+        validateScope(tenantId, userId, chatId);
         return list(new LambdaQueryWrapper<MetaChatFileDO>()
                 .eq(MetaChatFileDO::getTenantId, tenantId)
                 .eq(MetaChatFileDO::getUserId, userId)
-                .eq(MetaChatFileDO::getConversationId, conversationId)
+                .eq(MetaChatFileDO::getChatId, chatId)
                 .eq(MetaChatFileDO::getParseStatus, MetaChatFileStatus.READY.name())
                 .eq(MetaChatFileDO::getDeleted, Boolean.FALSE)
                 .orderByDesc(MetaChatFileDO::getCreatedAt))
@@ -152,7 +152,7 @@ public class MetaChatFileServiceImpl extends ServiceImpl<MetaChatFileMapper, Met
      *
      * @param tenantId       租户 ID
      * @param userId         用户 ID
-     * @param conversationId 会话 ID
+     * @param chatId 会话 ID
      * @param files          文件列表
      * @param query          用户问题
      * @return 命中的 chunk
@@ -160,10 +160,10 @@ public class MetaChatFileServiceImpl extends ServiceImpl<MetaChatFileMapper, Met
     @Override
     public List<Document> retrieve(String tenantId,
                                    String userId,
-                                   String conversationId,
+                                   String chatId,
                                    List<MetaContextFile> files,
                                    String query) {
-        validateScope(tenantId, userId, conversationId);
+        validateScope(tenantId, userId, chatId);
         Assert.hasText(query, "query must not be blank");
         if (files == null || files.isEmpty()) {
             return List.of();
@@ -172,7 +172,7 @@ public class MetaChatFileServiceImpl extends ServiceImpl<MetaChatFileMapper, Met
                 .query(query)
                 .topK(DEFAULT_TOP_K)
                 .similarityThreshold(DEFAULT_SIMILARITY_THRESHOLD)
-                .filterExpression(fileFilter(tenantId, userId, conversationId, files))
+                .filterExpression(fileFilter(tenantId, userId, chatId, files))
                 .build();
         return vectorStore.similaritySearch(request);
     }
@@ -186,13 +186,13 @@ public class MetaChatFileServiceImpl extends ServiceImpl<MetaChatFileMapper, Met
      *
      * @param tenantId       租户 ID
      * @param userId         用户 ID
-     * @param conversationId 会话 ID
+     * @param chatId 会话 ID
      * @param file           上传文件
      * @return 已完成索引的文件元数据
      */
     private MetaChatFileDO uploadAndIndexOne(String tenantId,
                                              String userId,
-                                             String conversationId,
+                                             String chatId,
                                              MultipartFile file) {
         validateFile(file);
         String fileId = IdWorker.getIdStr();
@@ -200,7 +200,7 @@ public class MetaChatFileServiceImpl extends ServiceImpl<MetaChatFileMapper, Met
         String documentType = documentTypeResolver.resolve(null, originalFilename);
         String fileSha256 = fileSha256(file);
         String bucket = objectStorageClient.defaultBucket();
-        String objectKey = objectKey(tenantId, userId, conversationId, fileId, fileSha256, originalFilename);
+        String objectKey = objectKey(tenantId, userId, chatId, fileId, fileSha256, originalFilename);
         String contentType = resolveContentType(file);
         putObject(bucket, objectKey, file, contentType);
 
@@ -208,7 +208,7 @@ public class MetaChatFileServiceImpl extends ServiceImpl<MetaChatFileMapper, Met
         entity.setFileId(fileId);
         entity.setTenantId(tenantId);
         entity.setUserId(userId);
-        entity.setConversationId(conversationId);
+        entity.setChatId(chatId);
         entity.setOriginalFilename(originalFilename);
         entity.setDocumentType(documentType);
         entity.setBucket(bucket);
@@ -264,8 +264,8 @@ public class MetaChatFileServiceImpl extends ServiceImpl<MetaChatFileMapper, Met
         documents = documentTransformerFactory.contentFormatTransformer().transform(documents);
         vectorStore.delete(fileDeleteFilter(file));
         vectorStore.write(documents);
-        log.info("聊天文件临时索引完成：conversationId = {}，fileId = {}，fileName = {}，chunks = {}",
-                file.getConversationId(), file.getFileId(), file.getOriginalFilename(),
+        log.info("聊天文件临时索引完成：chatId = {}，fileId = {}，fileName = {}，chunks = {}",
+                file.getChatId(), file.getFileId(), file.getOriginalFilename(),
                 documents.size());
         return documents.size();
     }
@@ -289,7 +289,7 @@ public class MetaChatFileServiceImpl extends ServiceImpl<MetaChatFileMapper, Met
      * 为单个会话文件 chunk 补齐临时索引 metadata
      *
      * <p>
-     * scope = session 表示会话文件上下文，fileId 是文件边界，conversationId 是会话隔离边界
+     * scope = session 表示会话文件上下文，fileId 是文件边界，chatId 是会话隔离边界
      * 这些字段必须同时写入，后续 Advisor 检索时才不会跨用户、跨会话或跨文件召回
      *
      * @param document Reader / Splitter 输出的 Document
@@ -303,7 +303,7 @@ public class MetaChatFileServiceImpl extends ServiceImpl<MetaChatFileMapper, Met
         metadata.put(MetadataKeys.SCOPE, MetadataKeys.SCOPE_SESSION);
         metadata.put(MetadataKeys.TENANT_ID, file.getTenantId());
         metadata.put(MetadataKeys.USER_ID, file.getUserId());
-        metadata.put(MetadataKeys.CONVERSATION_ID, file.getConversationId());
+        metadata.put(MetadataKeys.CHAT_ID, file.getChatId());
         metadata.put(MetadataKeys.FILE_ID, file.getFileId());
         metadata.put(MetadataKeys.DOCUMENT_TYPE, file.getDocumentType());
         metadata.put(MetadataKeys.SOURCE, file.getObjectKey());
@@ -343,18 +343,18 @@ public class MetaChatFileServiceImpl extends ServiceImpl<MetaChatFileMapper, Met
      * 构造会话文件检索过滤表达式
      *
      * <p>
-     * 会话文件检索必须同时限定 scope、tenantId、userId、conversationId 和 fileId
+     * 会话文件检索必须同时限定 scope、tenantId、userId、chatId 和 fileId
      * 这里的 fileId 来自本次上传文件或当前会话 READY 文件，不能用知识库 documentId 替代
      *
      * @param tenantId       租户 ID
      * @param userId         用户 ID
-     * @param conversationId 会话 ID
+     * @param chatId 会话 ID
      * @param files          本次允许检索的会话文件
      * @return 会话文件检索过滤表达式
      */
     private Filter.Expression fileFilter(String tenantId,
                                          String userId,
-                                         String conversationId,
+                                         String chatId,
                                          List<MetaContextFile> files) {
         FilterExpressionBuilder builder = new FilterExpressionBuilder();
         List<Object> fileIds = files.stream()
@@ -368,7 +368,7 @@ public class MetaChatFileServiceImpl extends ServiceImpl<MetaChatFileMapper, Met
                         builder.eq(MetadataKeys.TENANT_ID, tenantId)),
                 builder.and(
                         builder.eq(MetadataKeys.USER_ID, userId),
-                        builder.and(builder.eq(MetadataKeys.CONVERSATION_ID, conversationId),
+                        builder.and(builder.eq(MetadataKeys.CHAT_ID, chatId),
                                 builder.in(MetadataKeys.FILE_ID, fileIds)))
         ).build();
     }
@@ -377,7 +377,7 @@ public class MetaChatFileServiceImpl extends ServiceImpl<MetaChatFileMapper, Met
      * 生成向量库稳定 Document ID
      *
      * <p>
-     * 使用 scope、tenantId、conversationId 和 chunkId 生成确定性 UUID
+     * 使用 scope、tenantId、chatId 和 chunkId 生成确定性 UUID
      * 同一会话文件重复索引时 ID 稳定，Qdrant 等向量库也能接受标准 UUID 形式
      *
      * @param file    会话文件元数据
@@ -386,7 +386,7 @@ public class MetaChatFileServiceImpl extends ServiceImpl<MetaChatFileMapper, Met
      */
     private String vectorStoreId(MetaChatFileDO file, String chunkId) {
         String seed = "%s:%s:%s:%s".formatted(MetadataKeys.SCOPE_SESSION, file.getTenantId(),
-                file.getConversationId(), chunkId);
+                file.getChatId(), chunkId);
         return UUID.nameUUIDFromBytes(seed.getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString();
     }
 
@@ -444,11 +444,11 @@ public class MetaChatFileServiceImpl extends ServiceImpl<MetaChatFileMapper, Met
      * 构造会话文件对象存储路径
      *
      * <p>
-     * 路径中包含 tenantId、userId、conversationId、fileId 和 hash，便于排查和人工定位
+     * 路径中包含 tenantId、userId、chatId、fileId 和 hash，便于排查和人工定位
      *
      * @param tenantId         租户 ID
      * @param userId           用户 ID
-     * @param conversationId   会话 ID
+     * @param chatId   会话 ID
      * @param fileId           文件 ID
      * @param fileSha256       文件 SHA-256
      * @param originalFilename 原始文件名
@@ -456,14 +456,14 @@ public class MetaChatFileServiceImpl extends ServiceImpl<MetaChatFileMapper, Met
      */
     private String objectKey(String tenantId,
                              String userId,
-                             String conversationId,
+                             String chatId,
                              String fileId,
                              String fileSha256,
                              String originalFilename) {
         String datePath = OBJECT_DATE_FORMATTER.format(Instant.now());
         String extension = fileExtension(originalFilename);
         return "chat-files/%s/%s/%s/%s/%s/%s%s".formatted(tenantId, userId, datePath,
-                safePath(conversationId), fileId, fileSha256, extension);
+                safePath(chatId), fileId, fileSha256, extension);
     }
 
     /**
@@ -512,12 +512,12 @@ public class MetaChatFileServiceImpl extends ServiceImpl<MetaChatFileMapper, Met
      *
      * @param tenantId       租户 ID
      * @param userId         用户 ID
-     * @param conversationId 会话 ID
+     * @param chatId 会话 ID
      */
-    private void validateScope(String tenantId, String userId, String conversationId) {
+    private void validateScope(String tenantId, String userId, String chatId) {
         Assert.hasText(tenantId, "tenantId must not be blank");
         Assert.hasText(userId, "userId must not be blank");
-        Assert.hasText(conversationId, "conversationId must not be blank");
+        Assert.hasText(chatId, "chatId must not be blank");
     }
 
     /**

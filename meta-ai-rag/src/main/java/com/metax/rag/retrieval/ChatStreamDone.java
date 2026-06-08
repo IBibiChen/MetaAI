@@ -11,7 +11,7 @@ import java.util.List;
  * 流式对话完成事件数据
  *
  * @param answer         完整回答
- * @param conversationId 会话 ID
+ * @param chatId 会话 ID
  * @param references     RAG 引用文件列表
  * @param files          本次参与文件上下文的临时文件列表
  * @author IBibiChen
@@ -29,7 +29,7 @@ public record ChatStreamDone(
          * 会话 ID
          */
         @Schema(description = "会话 ID", example = "t1:u1:s1")
-        String conversationId,
+        String chatId,
         /**
          * RAG 引用文件列表
          */
@@ -42,7 +42,7 @@ public record ChatStreamDone(
         List<MetaContextFile> files
 ) {
 
-    public ChatStreamDone(String answer, String conversationId, List<RetrievalCitation> references) {
-        this(answer, conversationId, references, List.of());
+    public ChatStreamDone(String answer, String chatId, List<RetrievalCitation> references) {
+        this(answer, chatId, references, List.of());
     }
 }

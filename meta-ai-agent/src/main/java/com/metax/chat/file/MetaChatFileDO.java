@@ -22,7 +22,7 @@ import java.time.Instant;
  *
  * <p>
  * 聊天文件元数据实体
- * 聊天文件只绑定当前 conversation，不进入知识库文档表，也不被普通 RAG 检索
+ * 聊天文件只绑定当前 chatId，不进入知识库文档表，也不被普通 RAG 检索
  *
  * @author IBibiChen
  * @version v1.0
@@ -33,7 +33,7 @@ import java.time.Instant;
 @NoArgsConstructor
 @Entity
 @Table(name = "meta_chat_file", indexes = {
-        @Index(name = "idx_chat_file_conversation", columnList = "tenant_id, user_id, conversation_id, created_at"),
+        @Index(name = "idx_chat_file_chat_id", columnList = "tenant_id, user_id, chat_id, created_at"),
         @Index(name = "idx_chat_file_status", columnList = "parse_status")
 }, uniqueConstraints = {
         @UniqueConstraint(name = "uk_chat_file", columnNames = {"file_id"})
@@ -76,9 +76,9 @@ public class MetaChatFileDO {
     /**
      * 会话 ID
      */
-    @Column(name = "conversation_id", length = 128, nullable = false)
+    @Column(name = "chat_id", length = 128, nullable = false)
     @Comment("会话 ID")
-    private String conversationId;
+    private String chatId;
 
     /**
      * 原始文件名

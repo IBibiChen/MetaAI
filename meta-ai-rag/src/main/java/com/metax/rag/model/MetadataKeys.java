@@ -18,7 +18,7 @@ package com.metax.rag.model;
  * tenantId / kbId 是租户和知识库边界
  * visibility / deptId / userId 是权限过滤边界
  * documentId / documentType 是知识库文档级收窄过滤
- * conversationId / fileId 是会话级文件上下文过滤边界
+ * chatId / fileId 是会话级文件上下文过滤边界
  * chunkId / chunkIndex / contentHash 是 chunk 级定位和幂等辅助信息
  *
  * <p>
@@ -76,7 +76,7 @@ public final class MetadataKeys {
     /**
      * 会话 ID，用于会话级文件上下文临时索引隔离
      */
-    public static final String CONVERSATION_ID = "conversationId";
+    public static final String CHAT_ID = "chatId";
 
     /**
      * 会话级文件 ID，用于限定当前会话可检索的临时文件范围

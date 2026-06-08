@@ -28,7 +28,7 @@
             <n-layout-header class="app-header">
               <div>
                 <div class="page-title">{{ routeTitle }}</div>
-                <div class="page-subtitle">{{ workspace.conversationId }}</div>
+                <div class="page-subtitle">{{ workspace.chatId }}</div>
               </div>
               <div class="workspace-bar">
                 <n-input

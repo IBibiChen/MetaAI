@@ -24,7 +24,8 @@ import java.util.List;
  * @since 2026/6/3
  */
 @Service
-public class MetaChatHistoryServiceImpl extends ServiceImpl<MetaChatHistoryMapper, MetaChatHistoryDO> implements MetaChatHistoryService {
+public class MetaChatHistoryServiceImpl extends ServiceImpl<MetaChatHistoryMapper, MetaChatHistoryDO>
+        implements MetaChatHistoryService {
 
     private static final long DEFAULT_CURRENT = 1L;
 
@@ -39,116 +40,95 @@ public class MetaChatHistoryServiceImpl extends ServiceImpl<MetaChatHistoryMappe
     /**
      * 保存用户消息
      *
-     * @param conversationId 会话 ID
-     * @param type           对话类型
-     * @param content        消息内容
+     * @param chatId  会话 ID
+     * @param type    对话类型
+     * @param content 消息内容
      */
     @Override
-    public void saveUserMessage(String conversationId, MetaChatHistoryType type, String content) {
-        saveUserMessage(null, conversationId, type, content);
+    public void saveUserMessage(String chatId, MetaChatHistoryType type, String content) {
+        saveUserMessage(null, chatId, type, content);
     }
 
     /**
      * 保存用户消息
      *
-     * @param chatId         会话主键
-     * @param conversationId 会话 ID
-     * @param type           对话类型
-     * @param content        消息内容
+     * @param fkId    会话主表 ID
+     * @param chatId  会话 ID
+     * @param type    对话类型
+     * @param content 消息内容
      */
     @Override
-    public void saveUserMessage(Long chatId, String conversationId, MetaChatHistoryType type, String content) {
-        save(chatId, conversationId, type, MetaChatHistoryRole.USER, content, null);
+    public void saveUserMessage(Long fkId, String chatId, MetaChatHistoryType type, String content) {
+        save(fkId, chatId, type, MetaChatHistoryRole.USER, content, null);
     }
 
     /**
      * 保存模型回答
      *
-     * @param conversationId 会话 ID
-     * @param type           对话类型
-     * @param content        消息内容
+     * @param chatId  会话 ID
+     * @param type    对话类型
+     * @param content 消息内容
      */
     @Override
-    public void saveAssistantMessage(String conversationId, MetaChatHistoryType type, String content) {
-        saveAssistantMessage(null, conversationId, type, content);
+    public void saveAssistantMessage(String chatId, MetaChatHistoryType type, String content) {
+        saveAssistantMessage(null, chatId, type, content);
     }
 
     /**
      * 保存模型回答
      *
-     * @param chatId         会话主键
-     * @param conversationId 会话 ID
-     * @param type           对话类型
-     * @param content        消息内容
+     * @param fkId    会话主表 ID
+     * @param chatId  会话 ID
+     * @param type    对话类型
+     * @param content 消息内容
      */
     @Override
-    public void saveAssistantMessage(Long chatId, String conversationId, MetaChatHistoryType type, String content) {
-        saveAssistantMessage(chatId, conversationId, type, content, List.of());
+    public void saveAssistantMessage(Long fkId, String chatId, MetaChatHistoryType type, String content) {
+        saveAssistantMessage(fkId, chatId, type, content, List.of());
     }
 
     /**
      * 保存模型回答
      *
-     * @param chatId         会话主键
-     * @param conversationId 会话 ID
-     * @param type           对话类型
-     * @param content        消息内容
-     * @param references     RAG 引用文件列表
+     * @param fkId       会话主表 ID
+     * @param chatId     会话 ID
+     * @param type       对话类型
+     * @param content    消息内容
+     * @param references RAG 引用文件列表
      */
     @Override
-    public void saveAssistantMessage(Long chatId, String conversationId, MetaChatHistoryType type, String content,
+    public void saveAssistantMessage(Long fkId, String chatId, MetaChatHistoryType type, String content,
                                      List<RetrievalCitation> references) {
-        save(chatId, conversationId, type, MetaChatHistoryRole.ASSISTANT, content, referencesJson(references));
+        save(fkId, chatId, type, MetaChatHistoryRole.ASSISTANT, content, referencesJson(references));
     }
 
     /**
      * 分页查询完整历史
      *
-     * @param conversationId 会话 ID
-     * @param current        页码，从 1 开始
-     * @param size           每页数量
-     * @return MyBatis-Plus 分页结果
-     */
-    @Override
-    public Page<MetaChatHistoryDO> pageByConversationId(String conversationId, Long current, Long size) {
-        Assert.hasText(conversationId, "conversationId must not be blank");
-        return page(Page.of(resolveCurrent(current), resolveSize(size)), query(conversationId));
-    }
-
-    /**
-     * 分页查询完整历史
-     *
-     * @param chatId  会话主键
+     * @param chatId  会话 ID
      * @param current 页码，从 1 开始
      * @param size    每页数量
      * @return MyBatis-Plus 分页结果
      */
     @Override
-    public Page<MetaChatHistoryDO> pageByChatId(Long chatId, Long current, Long size) {
-        Assert.notNull(chatId, "chatId must not be null");
+    public Page<MetaChatHistoryDO> pageByChatId(String chatId, Long current, Long size) {
+        Assert.hasText(chatId, "chatId must not be blank");
         return page(Page.of(resolveCurrent(current), resolveSize(size)), query(chatId));
     }
 
-    private void save(Long chatId, String conversationId, MetaChatHistoryType type, MetaChatHistoryRole role, String content,
+    private void save(Long fkId, String chatId, MetaChatHistoryType type, MetaChatHistoryRole role, String content,
                       String referencesJson) {
-        Assert.hasText(conversationId, "conversationId must not be blank");
+        Assert.hasText(chatId, "chatId must not be blank");
         Assert.notNull(type, "MetaChatHistoryType must not be null");
         Assert.notNull(role, "MetaChatHistoryRole must not be null");
         Assert.hasText(content, "content must not be blank");
 
-        MetaChatHistoryDO entity = new MetaChatHistoryDO(null, chatId, conversationId,
+        MetaChatHistoryDO entity = new MetaChatHistoryDO(null, fkId, chatId,
                 type.value(), role.value(), content, referencesJson, Instant.now());
         save(entity);
     }
 
-    private LambdaQueryWrapper<MetaChatHistoryDO> query(String conversationId) {
-        return new LambdaQueryWrapper<MetaChatHistoryDO>()
-                .eq(MetaChatHistoryDO::getConversationId, conversationId)
-                .orderByAsc(MetaChatHistoryDO::getCreatedAt)
-                .orderByAsc(MetaChatHistoryDO::getId);
-    }
-
-    private LambdaQueryWrapper<MetaChatHistoryDO> query(Long chatId) {
+    private LambdaQueryWrapper<MetaChatHistoryDO> query(String chatId) {
         return new LambdaQueryWrapper<MetaChatHistoryDO>()
                 .eq(MetaChatHistoryDO::getChatId, chatId)
                 .orderByAsc(MetaChatHistoryDO::getCreatedAt)

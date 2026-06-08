@@ -52,7 +52,7 @@ class MetaRedisVectorStoreConfigTest {
                 .contains(MetadataKeys.DEPT_ID)
                 .contains(MetadataKeys.USER_ID)
                 .contains(MetadataKeys.SCOPE)
-                .contains(MetadataKeys.CONVERSATION_ID)
+                .contains(MetadataKeys.CHAT_ID)
                 .contains(MetadataKeys.FILE_ID);
     }
 }

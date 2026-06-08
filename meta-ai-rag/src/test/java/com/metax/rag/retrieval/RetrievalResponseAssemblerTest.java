@@ -37,7 +37,7 @@ class RetrievalResponseAssemblerTest {
         RetrievalChatResponse chatResponse = assembler.chat(response, "c1");
 
         assertThat(chatResponse.answer()).isEqualTo("answer");
-        assertThat(chatResponse.conversationId()).isEqualTo("c1");
+        assertThat(chatResponse.chatId()).isEqualTo("c1");
         assertThat(chatResponse.references()).containsExactly(
                 new RetrievalCitation("doc1", "demo.docx"),
                 new RetrievalCitation("doc2", "demo.docx"));
@@ -82,7 +82,7 @@ class RetrievalResponseAssemblerTest {
         RetrievalChatDetailsResponse detailsResponse = assembler.details(response, "c1");
 
         assertThat(detailsResponse.answer()).isEqualTo("answer");
-        assertThat(detailsResponse.conversationId()).isEqualTo("c1");
+        assertThat(detailsResponse.chatId()).isEqualTo("c1");
         assertThat(detailsResponse.references()).hasSize(2);
         assertThat(detailsResponse.references().get(0).text()).isEqualTo("chunk-1");
         assertThat(detailsResponse.references().get(0).metadata()).containsEntry(MetadataKeys.DOCUMENT_ID, "doc1");
@@ -96,7 +96,7 @@ class RetrievalResponseAssemblerTest {
         RetrievalChatResponse chatResponse = assembler.chatWithoutReferences(response, "c1");
 
         assertThat(chatResponse.answer()).isEqualTo("answer");
-        assertThat(chatResponse.conversationId()).isEqualTo("c1");
+        assertThat(chatResponse.chatId()).isEqualTo("c1");
         assertThat(chatResponse.references()).isEmpty();
     }
 

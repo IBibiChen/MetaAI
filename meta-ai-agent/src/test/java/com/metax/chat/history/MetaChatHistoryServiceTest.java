@@ -55,7 +55,7 @@ class MetaChatHistoryServiceTest {
         mapperPage.setTotal(1);
         when(mapper.selectPage(any(PAGE_CLASS), any(WRAPPER_CLASS))).thenReturn(mapperPage);
 
-        Page<MetaChatHistoryDO> page = service.pageByConversationId("c1", 2L, 10L);
+        Page<MetaChatHistoryDO> page = service.pageByChatId("c1", 2L, 10L);
 
         assertThat(page.getCurrent()).isEqualTo(2);
         assertThat(page.getSize()).isEqualTo(10);
@@ -74,7 +74,7 @@ class MetaChatHistoryServiceTest {
         MetaChatHistoryServiceImpl service = service(mapper);
         when(mapper.selectPage(any(PAGE_CLASS), any(WRAPPER_CLASS))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        Page<MetaChatHistoryDO> page = service.pageByConversationId("c1", null, null);
+        Page<MetaChatHistoryDO> page = service.pageByChatId("c1", null, null);
 
         assertThat(page.getCurrent()).isEqualTo(1);
         assertThat(page.getSize()).isEqualTo(20);
@@ -86,8 +86,8 @@ class MetaChatHistoryServiceTest {
         return service;
     }
 
-    private MetaChatHistoryDO entity(String conversationId, MetaChatHistoryRole role) {
-        return new MetaChatHistoryDO(1L, null, conversationId, MetaChatHistoryType.CHAT.value(),
+    private MetaChatHistoryDO entity(String chatId, MetaChatHistoryRole role) {
+        return new MetaChatHistoryDO(1L, null, chatId, MetaChatHistoryType.CHAT.value(),
                 role.value(), "content", null, Instant.now());
     }
 }

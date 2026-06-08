@@ -97,7 +97,7 @@ deptIds
 - 手动索引
 - RAG 聊天
 
-conversationId 会自动生成：
+chatId 会自动生成：
 
 ```text
 tenantId:userId:sessionId

@@ -46,13 +46,13 @@ public class MetaChatController {
     /**
      * 查询聊天会话
      *
-     * @param chatId 会话主键
+     * @param id 会话主键
      * @return 会话实体
      */
-    @GetMapping(value = "/v1/chats/{chatId}")
-    @Operation(summary = "查询聊天会话", description = "按 chatId 查询聊天会话")
-    public CommonResult<MetaChatDO> get(@PathVariable Long chatId) {
-        MetaChatDO chat = metaChatService.getById(chatId);
+    @GetMapping(value = "/v1/chats/{id}")
+    @Operation(summary = "查询聊天会话", description = "按会话主键查询聊天会话")
+    public CommonResult<MetaChatDO> get(@PathVariable Long id) {
+        MetaChatDO chat = metaChatService.getById(id);
         if (chat == null || Boolean.TRUE.equals(chat.getDeleted())) {
             throw new IllegalArgumentException("会话不存在");
         }
@@ -62,41 +62,41 @@ public class MetaChatController {
     /**
      * 重命名聊天会话
      *
-     * @param chatId  会话主键
+     * @param id      会话主键
      * @param request 重命名请求
      * @return 会话实体
      */
-    @PatchMapping(value = "/v1/chats/{chatId}/title")
+    @PatchMapping(value = "/v1/chats/{id}/title")
     @Operation(summary = "重命名聊天会话", description = "修改会话标题，后续消息不会覆盖用户编辑标题")
-    public CommonResult<MetaChatDO> rename(@PathVariable Long chatId,
+    public CommonResult<MetaChatDO> rename(@PathVariable Long id,
                                            @Valid @RequestBody MetaChatRenameRequest request) {
-        return CommonResult.success(metaChatService.rename(chatId, request.getTitle()));
+        return CommonResult.success(metaChatService.rename(id, request.getTitle()));
     }
 
     /**
      * 更新聊天会话状态
      *
-     * @param chatId  会话主键
+     * @param id      会话主键
      * @param request 状态更新请求
      * @return 会话实体
      */
-    @PatchMapping(value = "/v1/chats/{chatId}/flags")
+    @PatchMapping(value = "/v1/chats/{id}/flags")
     @Operation(summary = "更新聊天会话状态", description = "更新置顶、收藏和归档状态")
-    public CommonResult<MetaChatDO> updateFlags(@PathVariable Long chatId,
+    public CommonResult<MetaChatDO> updateFlags(@PathVariable Long id,
                                                 @RequestBody MetaChatFlagsRequest request) {
-        return CommonResult.success(metaChatService.updateFlags(chatId, request));
+        return CommonResult.success(metaChatService.updateFlags(id, request));
     }
 
     /**
      * 软删除聊天会话
      *
-     * @param chatId 会话主键
+     * @param id 会话主键
      * @return 成功响应
      */
-    @DeleteMapping(value = "/v1/chats/{chatId}")
+    @DeleteMapping(value = "/v1/chats/{id}")
     @Operation(summary = "软删除聊天会话", description = "只软删除会话主表，不删除完整历史消息")
-    public CommonResult<Void> delete(@PathVariable Long chatId) {
-        metaChatService.softDelete(chatId);
+    public CommonResult<Void> delete(@PathVariable Long id) {
+        metaChatService.softDelete(id);
         return CommonResult.success();
     }
 }

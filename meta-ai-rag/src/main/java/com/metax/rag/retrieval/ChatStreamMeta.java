@@ -8,7 +8,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
  * <p>
  * 流式对话开始事件数据
  *
- * @param conversationId 会话 ID
+ * @param chatId 会话 ID
  * @author IBibiChen
  * @version v1.0
  * @since 2026/6/4
@@ -19,6 +19,6 @@ public record ChatStreamMeta(
          * 会话 ID
          */
         @Schema(description = "会话 ID", example = "t1:u1:s1")
-        String conversationId
+        String chatId
 ) {
 }
