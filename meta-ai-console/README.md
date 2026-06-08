@@ -84,7 +84,7 @@ server: {
 
 ```text
 tenantId
-knowledgeBaseId
+kbId
 userId
 deptIds
 ```
@@ -135,7 +135,7 @@ GET  /v1/chat/history/page
 后端补齐后，建议接入：
 
 ```text
-DELETE /v1/storage/documents/{documentId}?tenantId=t1&knowledgeBaseId=kb1
+DELETE /v1/storage/documents/{documentId}?tenantId=t1&kbId=kb1
 ```
 
 ## 常用命令

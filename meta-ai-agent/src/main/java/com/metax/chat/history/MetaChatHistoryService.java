@@ -2,7 +2,7 @@ package com.metax.chat.history;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
-import com.metax.rag.retrieval.RetrievalCitation;
+import com.metax.rag.retrieval.model.RetrievalDocumentReference;
 
 import java.util.List;
 
@@ -65,10 +65,10 @@ public interface MetaChatHistoryService extends IService<MetaChatHistoryDO> {
      * @param chatId     会话 ID
      * @param type       对话类型
      * @param content    消息内容
-     * @param references RAG 引用文件列表
+     * @param references 回答引用的来源文档
      */
     void saveAssistantMessage(Long fkId, String chatId, MetaChatHistoryType type, String content,
-                              List<RetrievalCitation> references);
+                              List<RetrievalDocumentReference> references);
 
     /**
      * 分页查询完整历史

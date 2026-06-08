@@ -79,7 +79,7 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
      * 上传对象存储文档
      *
      * @param tenantId        租户 ID
-     * @param knowledgeBaseId 知识库 ID
+     * @param kbId 知识库 ID
      * @param visibility      文档可见性
      * @param deptId          部门 ID
      * @param userId          用户 ID
@@ -91,14 +91,14 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
     @Override
     @Transactional(rollbackFor = Exception.class)
     public StorageDocumentUploadResponse upload(String tenantId,
-                                                String knowledgeBaseId,
+                                                String kbId,
                                                 String visibility,
                                                 String deptId,
                                                 String userId,
                                                 String documentType,
                                                 Boolean autoIndex,
                                                 MultipartFile file) {
-        validateScope(tenantId, knowledgeBaseId);
+        validateScope(tenantId, kbId);
         DocumentVisibility resolvedVisibility = resolveVisibility(visibility, deptId, userId);
         Assert.notNull(file, "file must not be null");
         if (file.isEmpty()) {
@@ -112,14 +112,14 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
         String resolvedDocumentType = documentTypeResolver.resolve(documentType, originalFilename);
         String documentId = newDocumentId();
         String fileSha256 = fileSha256(file);
-        String objectKey = objectKey(tenantId, knowledgeBaseId, documentId, fileSha256, originalFilename);
+        String objectKey = objectKey(tenantId, kbId, documentId, fileSha256, originalFilename);
         String bucket = objectStorageClient.defaultBucket();
         String contentType = resolveContentType(file);
         StoredObject storedObject = putObject(bucket, objectKey, file, contentType);
 
         StorageDocumentDO entity = new StorageDocumentDO();
         entity.setTenantId(tenantId);
-        entity.setKnowledgeBaseId(knowledgeBaseId);
+        entity.setKbId(kbId);
         entity.setVisibility(resolvedVisibility.name());
         entity.setDeptId(deptId);
         entity.setUserId(userId);
@@ -166,7 +166,7 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
      * 分页查询对象存储文档
      *
      * @param tenantId        租户 ID
-     * @param knowledgeBaseId 知识库 ID
+     * @param kbId 知识库 ID
      * @param visibility      文档可见性
      * @param deptId          部门 ID
      * @param userId          用户 ID
@@ -178,7 +178,7 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
      */
     @Override
     public Page<StorageDocumentDO> pageDocuments(String tenantId,
-                                                 String knowledgeBaseId,
+                                                 String kbId,
                                                  String visibility,
                                                  String deptId,
                                                  String userId,
@@ -186,9 +186,9 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
                                                  String keyword,
                                                  Long current,
                                                  Long size) {
-        validateScope(tenantId, knowledgeBaseId);
+        validateScope(tenantId, kbId);
         Page<StorageDocumentDO> result = page(Page.of(resolveCurrent(current), resolveSize(size)),
-                query(tenantId, knowledgeBaseId, visibility, deptId, userId, indexStatus, keyword));
+                query(tenantId, kbId, visibility, deptId, userId, indexStatus, keyword));
         result.getRecords().forEach(this::syncIndexStatus);
         return result;
     }
@@ -197,13 +197,13 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
      * 下载对象存储文档
      *
      * @param tenantId        租户 ID
-     * @param knowledgeBaseId 知识库 ID
+     * @param kbId 知识库 ID
      * @param documentId      文档 ID
      * @return 下载结果
      */
     @Override
-    public StorageDocumentDownload download(String tenantId, String knowledgeBaseId, String documentId) {
-        StorageDocumentDO entity = getByDocumentId(tenantId, knowledgeBaseId, documentId);
+    public StorageDocumentDownload download(String tenantId, String kbId, String documentId) {
+        StorageDocumentDO entity = getByDocumentId(tenantId, kbId, documentId);
         return download(entity);
     }
 
@@ -226,14 +226,14 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
      * 提交对象存储文档索引执行
      *
      * @param tenantId        租户 ID
-     * @param knowledgeBaseId 知识库 ID
+     * @param kbId 知识库 ID
      * @param documentId      文档 ID
      * @return 更新后的文档元数据
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public StorageDocumentDO index(String tenantId, String knowledgeBaseId, String documentId) {
-        StorageDocumentDO entity = getByDocumentId(tenantId, knowledgeBaseId, documentId);
+    public StorageDocumentDO index(String tenantId, String kbId, String documentId) {
+        StorageDocumentDO entity = getByDocumentId(tenantId, kbId, documentId);
         indexSavedDocument(entity);
         return entity;
     }
@@ -245,7 +245,7 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
         try {
             documentIndexingService.submit(DocumentIndexingRequest.builder()
                     .tenantId(entity.getTenantId())
-                    .knowledgeBaseId(entity.getKnowledgeBaseId())
+                    .kbId(entity.getKbId())
                     .documentId(entity.getDocumentId())
                     .visibility(entity.getVisibility())
                     .deptId(entity.getDeptId())
@@ -318,12 +318,12 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
         return IdWorker.getIdStr();
     }
 
-    private StorageDocumentDO getByDocumentId(String tenantId, String knowledgeBaseId, String documentId) {
-        validateScope(tenantId, knowledgeBaseId);
+    private StorageDocumentDO getByDocumentId(String tenantId, String kbId, String documentId) {
+        validateScope(tenantId, kbId);
         Assert.hasText(documentId, "documentId must not be blank");
         StorageDocumentDO entity = getOne(new LambdaQueryWrapper<StorageDocumentDO>()
                 .eq(StorageDocumentDO::getTenantId, tenantId)
-                .eq(StorageDocumentDO::getKnowledgeBaseId, knowledgeBaseId)
+                .eq(StorageDocumentDO::getKbId, kbId)
                 .eq(StorageDocumentDO::getDocumentId, documentId)
                 .eq(StorageDocumentDO::getDeleted, Boolean.FALSE));
         if (entity == null) {
@@ -344,7 +344,7 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
     }
 
     private LambdaQueryWrapper<StorageDocumentDO> query(String tenantId,
-                                                        String knowledgeBaseId,
+                                                        String kbId,
                                                         String visibility,
                                                         String deptId,
                                                         String userId,
@@ -352,7 +352,7 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
                                                         String keyword) {
         return new LambdaQueryWrapper<StorageDocumentDO>()
                 .eq(StorageDocumentDO::getTenantId, tenantId)
-                .eq(StorageDocumentDO::getKnowledgeBaseId, knowledgeBaseId)
+                .eq(StorageDocumentDO::getKbId, kbId)
                 .eq(StorageDocumentDO::getDeleted, Boolean.FALSE)
                 .eq(StringUtils.hasText(visibility), StorageDocumentDO::getVisibility, visibility)
                 .eq(StringUtils.hasText(deptId), StorageDocumentDO::getDeptId, deptId)
@@ -387,13 +387,13 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
     }
 
     private String objectKey(String tenantId,
-                             String knowledgeBaseId,
+                             String kbId,
                              String documentId,
                              String fileSha256,
                              String originalFilename) {
         String datePath = OBJECT_DATE_FORMATTER.format(Instant.now());
         String extension = fileExtension(originalFilename);
-        return "storage/%s/%s/%s/%s/%s%s".formatted(tenantId, knowledgeBaseId, datePath, documentId, fileSha256,
+        return "storage/%s/%s/%s/%s/%s%s".formatted(tenantId, kbId, datePath, documentId, fileSha256,
                 extension);
     }
 
@@ -435,9 +435,9 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
         return resolvedVisibility;
     }
 
-    private void validateScope(String tenantId, String knowledgeBaseId) {
+    private void validateScope(String tenantId, String kbId) {
         Assert.hasText(tenantId, "tenantId must not be blank");
-        Assert.hasText(knowledgeBaseId, "knowledgeBaseId must not be blank");
+        Assert.hasText(kbId, "kbId must not be blank");
     }
 
     private long resolveCurrent(Long current) {

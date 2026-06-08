@@ -110,7 +110,7 @@ public class MetaEtlPipelineFactory {
         FilterExpressionBuilder builder = new FilterExpressionBuilder();
         return builder.and(
                 builder.and(builder.eq(MetadataKeys.TENANT_ID, request.tenantId()),
-                        builder.eq(MetadataKeys.KB_ID, request.knowledgeBaseId())),
+                        builder.eq(MetadataKeys.KB_ID, request.kbId())),
                 builder.eq(MetadataKeys.DOCUMENT_ID, request.documentId())
         ).build();
     }

@@ -5,7 +5,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.metax.rag.retrieval.RetrievalCitation;
+import com.metax.rag.retrieval.model.RetrievalDocumentReference;
 import org.springframework.stereotype.Service;
 import org.springframework.util.Assert;
 
@@ -94,11 +94,11 @@ public class MetaChatHistoryServiceImpl extends ServiceImpl<MetaChatHistoryMappe
      * @param chatId     会话 ID
      * @param type       对话类型
      * @param content    消息内容
-     * @param references RAG 引用文件列表
+     * @param references 回答引用的来源文档
      */
     @Override
     public void saveAssistantMessage(Long fkId, String chatId, MetaChatHistoryType type, String content,
-                                     List<RetrievalCitation> references) {
+                                     List<RetrievalDocumentReference> references) {
         save(fkId, chatId, type, MetaChatHistoryRole.ASSISTANT, content, referencesJson(references));
     }
 
@@ -135,14 +135,14 @@ public class MetaChatHistoryServiceImpl extends ServiceImpl<MetaChatHistoryMappe
                 .orderByAsc(MetaChatHistoryDO::getId);
     }
 
-    private String referencesJson(List<RetrievalCitation> references) {
+    private String referencesJson(List<RetrievalDocumentReference> references) {
         if (references == null || references.isEmpty()) {
             return null;
         }
         try {
             return objectMapper.writeValueAsString(references);
         } catch (JsonProcessingException e) {
-            throw new IllegalStateException("RAG 引用来源序列化失败", e);
+            throw new IllegalStateException("回答引用来源序列化失败", e);
         }
     }
 

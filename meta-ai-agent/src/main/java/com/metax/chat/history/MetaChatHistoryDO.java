@@ -71,7 +71,7 @@ public class MetaChatHistoryDO {
      */
     @Column(name = "chat_type", length = 32, nullable = false)
     @Comment("对话类型")
-    @Schema(description = "对话类型", example = "RAG")
+    @Schema(description = "对话类型", example = "rag")
     private String chatType;
 
     /**
@@ -91,11 +91,11 @@ public class MetaChatHistoryDO {
     private String content;
 
     /**
-     * RAG 引用来源 JSON
+     * 回答引用来源 JSON
      */
     @Column(name = "references_json", columnDefinition = "text")
-    @Comment("RAG 引用来源 JSON")
-    @Schema(description = "RAG 引用来源 JSON")
+    @Comment("回答引用来源 JSON")
+    @Schema(description = "回答引用来源 JSON")
     private String referencesJson;
 
     /**

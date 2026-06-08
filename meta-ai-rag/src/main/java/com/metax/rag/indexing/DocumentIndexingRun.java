@@ -47,7 +47,7 @@ public record DocumentIndexingRun(
         /**
          * 知识库 ID
          */
-        String knowledgeBaseId,
+        String kbId,
         /**
          * 文档 ID
          */
@@ -95,7 +95,7 @@ public record DocumentIndexingRun(
     public static DocumentIndexingRun pending(DocumentIndexingRequest request) {
         Instant now = Instant.now();
         return new DocumentIndexingRun(UUID.randomUUID().toString(), DocumentIndexingStatus.PENDING,
-                request.tenantId(), request.knowledgeBaseId(), request.documentId(), request.documentType(),
+                request.tenantId(), request.kbId(), request.documentId(), request.documentType(),
                 request.bucket(), request.objectKey(), 0, "RAG document indexing submitted", now, now);
     }
 
@@ -109,7 +109,7 @@ public record DocumentIndexingRun(
      */
     public DocumentIndexingRun withStatus(DocumentIndexingStatus status, int chunkCount, String message) {
         // record 不可变，状态流转通过创建新快照完成，避免多线程异步执行修改同一个对象
-        return new DocumentIndexingRun(runId, status, tenantId, knowledgeBaseId, documentId, documentType,
+        return new DocumentIndexingRun(runId, status, tenantId, kbId, documentId, documentType,
                 bucket, objectKey, chunkCount, message, createdAt, Instant.now());
     }
 }

@@ -95,7 +95,7 @@ public class MetaDocumentSnapshotWriter implements DocumentWriter {
     private String fileName() {
         return String.join("_",
                 safeValue(request.tenantId()),
-                safeValue(request.knowledgeBaseId()),
+                safeValue(request.kbId()),
                 safeValue(request.documentId())) + ".txt";
     }
 

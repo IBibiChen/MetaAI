@@ -14,7 +14,7 @@ import type {
  * @example
  * fetchStorageDocuments({
  *   tenantId: 't1',
- *   knowledgeBaseId: 'kb1',
+ *   kbId: 'kb1',
  *   current: 1,
  *   size: 20
  * })
@@ -37,7 +37,7 @@ export interface UploadDocumentPayload {
     /** 租户 ID */
     tenantId: string
     /** 知识库 ID */
-    knowledgeBaseId: string
+    kbId: string
     /** 文档可见性 */
     visibility: string
     /** 部门 ID，visibility = DEPT 时填写 */
@@ -61,7 +61,7 @@ export interface UploadDocumentPayload {
  * @example
  * uploadDocument({
  *   tenantId: 't1',
- *   knowledgeBaseId: 'kb1',
+ *   kbId: 'kb1',
  *   visibility: 'PUBLIC',
  *   autoIndex: false,
  *   file
@@ -70,7 +70,7 @@ export interface UploadDocumentPayload {
 export async function uploadDocument(payload: UploadDocumentPayload) {
     const formData = new FormData()
     formData.append('tenantId', payload.tenantId)
-    formData.append('knowledgeBaseId', payload.knowledgeBaseId)
+    formData.append('kbId', payload.kbId)
     formData.append('visibility', payload.visibility)
     formData.append('autoIndex', String(payload.autoIndex))
     formData.append('file', payload.file)
@@ -93,14 +93,14 @@ export async function uploadDocument(payload: UploadDocumentPayload) {
  * 只提交异步索引任务
  * 最新状态仍然需要重新查询文件分页接口
  */
-export async function indexDocument(tenantId: string, knowledgeBaseId: string, documentId: string) {
+export async function indexDocument(tenantId: string, kbId: string, documentId: string) {
     const response = await request.post<CommonResult<StorageDocument>>(
         `/v1/storage/documents/${encodeURIComponent(documentId)}/index`,
         undefined,
         {
             params: {
                 tenantId,
-                knowledgeBaseId,
+                kbId,
             },
         },
     )
@@ -114,13 +114,13 @@ export async function indexDocument(tenantId: string, knowledgeBaseId: string, d
  * 浏览器端通过 Blob 临时地址触发下载
  * 文件名优先使用 originalFilename
  */
-export async function downloadDocument(tenantId: string, knowledgeBaseId: string, document: StorageDocument) {
+export async function downloadDocument(tenantId: string, kbId: string, document: StorageDocument) {
     const response = await request.get<Blob>(
         `/v1/storage/documents/${encodeURIComponent(document.documentId)}/download`,
         {
             params: {
                 tenantId,
-                knowledgeBaseId,
+                kbId,
             },
             responseType: 'blob',
         },

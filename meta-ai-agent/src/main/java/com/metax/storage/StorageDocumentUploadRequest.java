@@ -32,10 +32,10 @@ public class StorageDocumentUploadRequest {
     /**
      * 知识库 ID
      */
-    @NotBlank(message = "knowledgeBaseId 不能为空")
+    @NotBlank(message = "kbId 不能为空")
     @Parameter(description = "知识库 ID", example = "kb1", required = true)
     @Schema(description = "知识库 ID", example = "kb1")
-    private String knowledgeBaseId;
+    private String kbId;
 
     /**
      * 文档可见性
@@ -61,8 +61,8 @@ public class StorageDocumentUploadRequest {
     /**
      * 文档类型
      */
-    @Parameter(description = "文档类型，可为空，为空时 RAG 索引阶段根据文件名识别", example = "pdf")
-    @Schema(description = "文档类型，可为空，为空时 RAG 索引阶段根据文件名识别", example = "pdf")
+    @Parameter(description = "文档类型，可为空，为空时索引阶段根据文件名识别", example = "pdf")
+    @Schema(description = "文档类型，可为空，为空时索引阶段根据文件名识别", example = "pdf")
     private String documentType;
 
     /**

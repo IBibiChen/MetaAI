@@ -27,7 +27,7 @@ import java.time.Instant;
  *
  * @author IBibiChen
  * @version v1.0
- * @since 2026/6/4
+ * @since 2026/6/8
  */
 @Data
 @NoArgsConstructor
@@ -125,7 +125,7 @@ public class MetaChatDO {
      */
     @Column(name = "chat_mode", length = 32, nullable = false)
     @Comment("会话模式")
-    @Schema(description = "会话模式", example = "RAG")
+    @Schema(description = "会话模式", example = "rag")
     private String chatMode;
 
     /**
@@ -147,10 +147,10 @@ public class MetaChatDO {
     /**
      * 知识库 ID
      */
-    @Column(name = "knowledge_base_id", length = 128)
+    @Column(name = "kb_id", length = 128)
     @Comment("知识库 ID")
     @Schema(description = "知识库 ID", example = "kb1")
-    private String knowledgeBaseId;
+    private String kbId;
 
     /**
      * 会话来源

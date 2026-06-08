@@ -8,7 +8,7 @@ import com.metax.rag.etl.resource.MetaDocumentResource;
 import com.metax.rag.etl.resource.MetaDocumentTypeResolver;
 import com.metax.rag.etl.transformer.MetaDocumentTransformerFactory;
 import com.metax.rag.model.MetadataKeys;
-import com.metax.rag.retrieval.MetaContextFile;
+import com.metax.rag.retrieval.advisor.MetaContextFile;
 import com.metax.rag.storage.ObjectStorageClient;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;

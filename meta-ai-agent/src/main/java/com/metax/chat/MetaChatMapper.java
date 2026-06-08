@@ -11,7 +11,7 @@ import org.apache.ibatis.annotations.Mapper;
  *
  * @author IBibiChen
  * @version v1.0
- * @since 2026/6/4
+ * @since 2026/6/8
  */
 @Mapper
 public interface MetaChatMapper extends BaseMapper<MetaChatDO> {

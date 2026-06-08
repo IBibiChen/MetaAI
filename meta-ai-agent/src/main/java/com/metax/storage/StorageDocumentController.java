@@ -53,7 +53,7 @@ public class StorageDocumentController {
      * 上传对象存储文档
      *
      * @param tenantId        租户 ID
-     * @param knowledgeBaseId 知识库 ID
+     * @param kbId 知识库 ID
      * @param visibility      文档可见性
      * @param deptId          部门 ID
      * @param userId          用户 ID
@@ -68,21 +68,21 @@ public class StorageDocumentController {
             @Parameter(description = "租户 ID", example = "t1", required = true)
             @NotBlank(message = "tenantId 不能为空") @RequestParam(name = "tenantId") String tenantId,
             @Parameter(description = "知识库 ID", example = "kb1", required = true)
-            @NotBlank(message = "knowledgeBaseId 不能为空")
-            @RequestParam(name = "knowledgeBaseId") String knowledgeBaseId,
+            @NotBlank(message = "kbId 不能为空")
+            @RequestParam(name = "kbId") String kbId,
             @Parameter(description = "文档可见性，可选值：PUBLIC、DEPT、USER", example = "PUBLIC")
             @RequestParam(name = "visibility", defaultValue = "PUBLIC") String visibility,
             @Parameter(description = "部门 ID，visibility=DEPT 时必填", example = "d1")
             @RequestParam(name = "deptId", required = false) String deptId,
             @Parameter(description = "用户 ID，visibility=USER 时必填", example = "u1")
             @RequestParam(name = "userId", required = false) String userId,
-            @Parameter(description = "文档类型，可为空，为空时 RAG 索引阶段根据文件名识别", example = "pdf")
+            @Parameter(description = "文档类型，可为空，为空时索引阶段根据文件名识别", example = "pdf")
             @RequestParam(name = "documentType", required = false) String documentType,
             @Parameter(description = "是否上传后自动提交索引执行", example = "false")
             @RequestParam(name = "autoIndex", defaultValue = "false") Boolean autoIndex,
             @Parameter(description = "上传文件", required = true)
             @NotNull(message = "file 不能为空") @RequestPart(name = "file") MultipartFile file) {
-        return CommonResult.success(storageDocumentService.upload(tenantId, knowledgeBaseId, visibility, deptId,
+        return CommonResult.success(storageDocumentService.upload(tenantId, kbId, visibility, deptId,
                 userId, documentType, autoIndex, file));
     }
 
@@ -96,7 +96,7 @@ public class StorageDocumentController {
     @Operation(summary = "分页查询对象存储文档", description = "按租户、知识库、索引状态和文件名关键字分页查询文档元数据")
     public CommonResult<Page<StorageDocumentDO>> page(@Valid @ParameterObject StorageDocumentPageRequest request) {
         return CommonResult.success(storageDocumentService.pageDocuments(request.getTenantId(),
-                request.getKnowledgeBaseId(), request.getVisibility(), request.getDeptId(), request.getUserId(),
+                request.getKbId(), request.getVisibility(), request.getDeptId(), request.getUserId(),
                 request.getIndexStatus(), request.getKeyword(), request.getCurrent(), request.getSize()));
     }
 
@@ -120,7 +120,7 @@ public class StorageDocumentController {
                     in = ParameterIn.PATH)
             @NotBlank(message = "documentId 不能为空") @PathVariable String documentId) {
         StorageDocumentDownload download = storageDocumentService.download(request.getTenantId(),
-                request.getKnowledgeBaseId(), documentId);
+                request.getKbId(), documentId);
         return downloadResponse(download);
     }
 
@@ -128,7 +128,7 @@ public class StorageDocumentController {
      * 按全局 documentId 下载对象存储文档
      *
      * <p>
-     * 普通 RAG 响应 references 只返回 documentId，前端点击文件名时调用该接口下载原始文件
+     * 普通知识库问答响应 references 只返回 documentId，前端点击文件名时调用该接口下载原始文件
      *
      * @param documentId 文档 ID
      * @return 文件流响应
@@ -178,13 +178,13 @@ public class StorageDocumentController {
      * @return 文档元数据
      */
     @PostMapping(value = "/v1/storage/documents/{documentId}/index")
-    @Operation(summary = "提交对象存储文档索引执行", description = "根据 documentId 读取对象存储元数据并提交 RAG 异步索引执行")
+    @Operation(summary = "提交对象存储文档索引执行", description = "根据 documentId 读取对象存储元数据并提交异步索引执行")
     public CommonResult<StorageDocumentDO> index(
             @Valid @ParameterObject StorageDocumentScopeRequest request,
             @Parameter(description = "文档 ID", example = "1938200000000000001", required = true,
                     in = ParameterIn.PATH)
             @NotBlank(message = "documentId 不能为空") @PathVariable String documentId) {
-        return CommonResult.success(storageDocumentService.index(request.getTenantId(), request.getKnowledgeBaseId(),
+        return CommonResult.success(storageDocumentService.index(request.getTenantId(), request.getKbId(),
                 documentId));
     }
 }

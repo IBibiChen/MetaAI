@@ -100,7 +100,7 @@ class StorageDocumentServiceTest {
         ArgumentCaptor<DocumentIndexingRequest> captor = ArgumentCaptor.forClass(DocumentIndexingRequest.class);
         verify(documentIndexingService).submit(captor.capture(), any());
         assertThat(captor.getValue().tenantId()).isEqualTo("t1");
-        assertThat(captor.getValue().knowledgeBaseId()).isEqualTo("kb1");
+        assertThat(captor.getValue().kbId()).isEqualTo("kb1");
         assertThat(captor.getValue().visibility()).isEqualTo("DEPT");
         assertThat(captor.getValue().deptId()).isEqualTo("dept-1");
         assertThat(captor.getValue().bucket()).isEqualTo("meta-ai-knowledge");
@@ -138,7 +138,7 @@ class StorageDocumentServiceTest {
     private StorageDocumentDO document(String documentId) {
         StorageDocumentDO entity = new StorageDocumentDO();
         entity.setTenantId("t1");
-        entity.setKnowledgeBaseId("kb1");
+        entity.setKbId("kb1");
         entity.setDocumentId(documentId);
         entity.setOriginalFilename("demo.txt");
         entity.setBucket("meta-ai-knowledge");

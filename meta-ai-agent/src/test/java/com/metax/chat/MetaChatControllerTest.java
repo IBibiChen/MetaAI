@@ -19,7 +19,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *
  * @author IBibiChen
  * @version v1.0
- * @since 2026/6/4
+ * @since 2026/6/8
  */
 @WebMvcTest(MetaChatController.class)
 class MetaChatControllerTest {

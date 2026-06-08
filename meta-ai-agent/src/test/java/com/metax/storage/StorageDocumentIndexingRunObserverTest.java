@@ -93,7 +93,7 @@ class StorageDocumentIndexingRunObserverTest {
     private DocumentIndexingRun run(DocumentIndexingStatus status, int chunkCount) {
         DocumentIndexingRequest request = DocumentIndexingRequest.builder()
                 .tenantId("t1")
-                .knowledgeBaseId("kb1")
+                .kbId("kb1")
                 .documentId("doc-1")
                 .visibility("PUBLIC")
                 .documentType("txt")

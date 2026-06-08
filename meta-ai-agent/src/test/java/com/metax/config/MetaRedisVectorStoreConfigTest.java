@@ -2,8 +2,8 @@ package com.metax.config;
 
 import com.metax.rag.config.RagProperties;
 import com.metax.rag.model.MetadataKeys;
-import com.metax.rag.retrieval.RetrievalFilterExpressionFactory;
-import com.metax.rag.retrieval.RetrievalOptions;
+import com.metax.rag.retrieval.filter.RetrievalFilterExpressionFactory;
+import com.metax.rag.retrieval.model.RetrievalOptions;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.vectorstore.redis.RedisFilterExpressionConverter;
 
@@ -32,7 +32,7 @@ class MetaRedisVectorStoreConfigTest {
         String filter = converter.convertExpression(new RetrievalFilterExpressionFactory(new RagProperties()).create(
                 RetrievalOptions.builder()
                         .tenantId("t1")
-                        .knowledgeBaseId("kb1")
+                        .kbId("kb1")
                         .documentId("doc1")
                         .documentType("doc")
                         .topK(5)

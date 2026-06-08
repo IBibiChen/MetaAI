@@ -18,7 +18,7 @@ import lombok.experimental.Accessors;
  * 字段说明：文档索引请求不再决定模型和向量库
  * EmbeddingModel 由 spring.ai.model.embedding 选择
  * VectorStore 由 spring.ai.vectorstore.type 选择
- * tenantId 和 knowledgeBaseId 决定后续检索过滤边界
+ * tenantId 和 kbId 决定后续检索过滤边界
  * documentId 决定重复上传时覆盖哪份文档的旧 chunk
  * sourceType 决定文件来自对象存储文件流还是受控本地目录
  *
@@ -27,7 +27,7 @@ import lombok.experimental.Accessors;
  * <pre>{@code
  * DocumentIndexingRequest.builder()
  *         .tenantId("t1")
- *         .knowledgeBaseId("kb1")
+ *         .kbId("kb1")
  *         .documentId("doc-001")
  *         .documentType("markdown")
  *         .sourceType(DocumentSourceType.OBJECT_STORAGE)
@@ -56,7 +56,7 @@ public final class DocumentIndexingRequest {
     /**
      * 知识库 ID，后续检索必须用它限定知识范围
      */
-    private final String knowledgeBaseId;
+    private final String kbId;
 
     /**
      * 文档 ID，重复索引时按它删除旧 chunk
@@ -144,7 +144,7 @@ public final class DocumentIndexingRequest {
     public DocumentIndexingRequest withResolvedDocument(String resolvedDocumentType, String resolvedSource) {
         return DocumentIndexingRequest.builder()
                 .tenantId(tenantId)
-                .knowledgeBaseId(knowledgeBaseId)
+                .kbId(kbId)
                 .documentId(documentId)
                 .visibility(visibility)
                 .deptId(deptId)

@@ -1,6 +1,6 @@
 package com.metax.chat.file;
 
-import com.metax.rag.retrieval.MetaContextFile;
+import com.metax.rag.retrieval.advisor.MetaContextFile;
 
 import java.util.List;
 

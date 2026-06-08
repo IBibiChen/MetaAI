@@ -54,7 +54,7 @@ export interface StorageDocument {
     /** 租户 ID */
     tenantId: string
     /** 知识库 ID */
-    knowledgeBaseId: string
+    kbId: string
     /** 文档可见性，PUBLIC / DEPT / USER */
     visibility: string
     /** 部门 ID，visibility = DEPT 时可能存在 */
@@ -77,7 +77,7 @@ export interface StorageDocument {
     fileSha256: string
     /** 文档类型，通常来自文件后缀或上传参数 */
     documentType?: string
-    /** 来源标识，用于 RAG 引用来源展示 */
+    /** 来源标识，用于回答引用来源展示 */
     source?: string
     /** 存储 provider，例如 object */
     storageProvider: string
@@ -142,7 +142,7 @@ export interface StorageDocumentUploadResponse {
  * @example
  * {
  *   tenantId: 't1',
- *   knowledgeBaseId: 'kb1',
+ *   kbId: 'kb1',
  *   keyword: 'Spring AI',
  *   current: 1,
  *   size: 20
@@ -152,7 +152,7 @@ export interface StorageDocumentQuery {
     /** 租户 ID，后端必填 */
     tenantId: string
     /** 知识库 ID，后端必填 */
-    knowledgeBaseId: string
+    kbId: string
     /** 文档可见性筛选 */
     visibility?: string
     /** 部门 ID 筛选 */
@@ -182,13 +182,13 @@ export interface MetaChatHistory {
     fkId?: string
     /** 会话 ID，建议格式 tenantId:userId:sessionId */
     chatId: string
-    /** 对话类型，CHAT / RAG / RAG_DETAILS */
+    /** 对话类型，chat / rag / rag_details */
     chatType: string
     /** 消息角色，USER / ASSISTANT */
     role: string
     /** 消息正文 */
     content: string
-    /** RAG 引用来源 JSON */
+    /** 回答引用来源 JSON */
     referencesJson?: string
     /** 消息创建时间 */
     createdAt: string
@@ -218,7 +218,7 @@ export interface MetaChat {
     /** 会话模式 */
     chatMode: string
     /** 知识库 ID */
-    knowledgeBaseId?: string
+    kbId?: string
     /** 消息数量 */
     messageCount: number
     /** 是否置顶 */
@@ -238,12 +238,12 @@ export interface MetaChat {
 }
 
 /**
- * RAG 引用来源
+ * 命中片段
  *
  * <p>
- * 用于展示模型回答引用了哪些知识库片段
+ * 用于调试模型回答引用了哪些知识库片段
  */
-export interface RetrievalReference {
+export interface RetrievalChunkReference {
     /** 命中的文本片段 */
     text?: string
     /** 相似度分数或重排分数 */
@@ -255,20 +255,20 @@ export interface RetrievalReference {
 }
 
 /**
- * RAG 文件引用
+ * 来源文档
  *
  * <p>
- * 普通 /v1/rag 只返回聊天窗口需要展示和下载的文件信息
+ * 普通知识库问答只返回聊天窗口需要展示和下载的文件信息
  */
-export interface RetrievalCitation {
-    /** 原始文件名 */
-    filename: string
+export interface RetrievalDocumentReference {
     /** 文档 ID */
     documentId: string
+    /** 文档名称 */
+    documentName: string
 }
 
 /**
- * RAG 检索链路 Trace
+ * 检索链路 Trace
  *
  * <p>
  * 用于排查 query 改写、过滤条件、召回数量和阶段耗时
@@ -293,7 +293,7 @@ export interface RetrievalTrace {
 }
 
 /**
- * RAG 聊天响应
+ * 知识库问答响应
  */
 export interface RetrievalChatResponse {
     /** 模型最终回答 */
@@ -301,7 +301,7 @@ export interface RetrievalChatResponse {
     /** 后端解析后的会话 ID */
     chatId: string
     /** 引用来源列表 */
-    references?: RetrievalCitation[]
+    references?: RetrievalDocumentReference[]
     /** 检索链路 Trace */
     trace?: RetrievalTrace
 }
@@ -330,8 +330,8 @@ export interface ChatStreamDone {
     answer?: string
     /** 后端解析后的会话 ID */
     chatId: string
-    /** RAG 引用来源列表 */
-    references?: RetrievalCitation[]
+    /** 回答引用的来源文档 */
+    references?: RetrievalDocumentReference[]
 }
 
 /**
@@ -349,7 +349,7 @@ export type ChatStreamEventName = 'meta' | 'delta' | 'done' | 'error'
  *
  * <p>
  * 普通聊天只使用 chatId 和 msg
- * RAG 聊天会额外使用 tenantId、knowledgeBaseId 和可选检索范围
+ * 知识库问答会额外使用 tenantId、kbId 和可选检索范围
  */
 export interface ChatOptions {
     /** 会话 ID */
@@ -361,7 +361,7 @@ export interface ChatOptions {
     /** 用户 ID */
     userId: string
     /** 知识库 ID */
-    knowledgeBaseId: string
+    kbId: string
     /** 可选文档 ID，用于限制只检索某个文档 */
     documentId?: string
     /** 可选文档类型，例如 md、pdf、txt、json */

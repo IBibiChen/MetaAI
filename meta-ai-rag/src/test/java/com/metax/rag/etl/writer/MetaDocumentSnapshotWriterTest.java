@@ -60,7 +60,7 @@ class MetaDocumentSnapshotWriterTest {
     private DocumentIndexingRequest request() {
         return DocumentIndexingRequest.builder()
                 .tenantId("tenant-1")
-                .knowledgeBaseId("kb-1")
+                .kbId("kb-1")
                 .documentId("doc-1")
                 .visibility("PUBLIC")
                 .documentType("markdown")
@@ -75,7 +75,7 @@ class MetaDocumentSnapshotWriterTest {
     private DocumentIndexingRequest unsafeRequest() {
         return DocumentIndexingRequest.builder()
                 .tenantId("../tenant")
-                .knowledgeBaseId("kb/1")
+                .kbId("kb/1")
                 .documentId("doc:1")
                 .visibility("PUBLIC")
                 .documentType("markdown")

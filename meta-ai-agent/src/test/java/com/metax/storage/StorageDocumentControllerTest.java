@@ -45,7 +45,7 @@ class StorageDocumentControllerTest {
     void shouldReturnCommonResultWhenUploadFileMissing() throws Exception {
         mockMvc.perform(multipart("/v1/storage/documents/upload")
                         .param("tenantId", "t1")
-                        .param("knowledgeBaseId", "kb1"))
+                        .param("kbId", "kb1"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value(400))
                 .andExpect(jsonPath("$.message").value("file 不能为空"));
@@ -59,7 +59,7 @@ class StorageDocumentControllerTest {
     @Test
     void shouldReturnCommonResultWhenTenantIdMissing() throws Exception {
         mockMvc.perform(get("/v1/storage/documents/page")
-                        .param("knowledgeBaseId", "kb1"))
+                        .param("kbId", "kb1"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value(400))
                 .andExpect(jsonPath("$.message").value("tenantId 不能为空"));
@@ -71,12 +71,12 @@ class StorageDocumentControllerTest {
      * @throws Exception MVC 调用异常
      */
     @Test
-    void shouldReturnCommonResultWhenKnowledgeBaseIdMissing() throws Exception {
+    void shouldReturnCommonResultWhenKbIdMissing() throws Exception {
         mockMvc.perform(post("/v1/storage/documents/doc-1/index")
                         .param("tenantId", "t1"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value(400))
-                .andExpect(jsonPath("$.message").value("knowledgeBaseId 不能为空"));
+                .andExpect(jsonPath("$.message").value("kbId 不能为空"));
     }
 
     /**

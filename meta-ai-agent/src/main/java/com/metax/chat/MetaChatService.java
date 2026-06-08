@@ -12,7 +12,7 @@ import com.metax.chat.history.MetaChatHistoryRole;
  *
  * @author IBibiChen
  * @version v1.0
- * @since 2026/6/4
+ * @since 2026/6/8
  */
 public interface MetaChatService extends IService<MetaChatDO> {
 

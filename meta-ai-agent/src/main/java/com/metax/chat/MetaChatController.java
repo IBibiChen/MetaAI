@@ -22,7 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * @author IBibiChen
  * @version v1.0
- * @since 2026/6/4
+ * @since 2026/6/8
  */
 @RestController
 @RequiredArgsConstructor

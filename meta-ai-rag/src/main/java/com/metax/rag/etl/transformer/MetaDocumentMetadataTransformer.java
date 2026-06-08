@@ -73,7 +73,7 @@ public class MetaDocumentMetadataTransformer implements DocumentTransformer {
         metadata.put(MetadataKeys.SCOPE, MetadataKeys.SCOPE_KNOWLEDGE);
         // tenantId 和 kbId 是检索强过滤边界，缺失会导致跨租户或跨知识库召回
         metadata.put(MetadataKeys.TENANT_ID, request.tenantId());
-        metadata.put(MetadataKeys.KB_ID, request.knowledgeBaseId());
+        metadata.put(MetadataKeys.KB_ID, request.kbId());
         DocumentVisibility visibility = request.resolvedVisibility();
         metadata.put(MetadataKeys.VISIBILITY, visibility.name());
         metadata.put(MetadataKeys.DEPT_ID, blankToEmpty(request.deptId()));
@@ -124,8 +124,8 @@ public class MetaDocumentMetadataTransformer implements DocumentTransformer {
         if (!StringUtils.hasText(request.tenantId())) {
             throw new IllegalArgumentException("tenantId must not be blank");
         }
-        if (!StringUtils.hasText(request.knowledgeBaseId())) {
-            throw new IllegalArgumentException("knowledgeBaseId must not be blank");
+        if (!StringUtils.hasText(request.kbId())) {
+            throw new IllegalArgumentException("kbId must not be blank");
         }
         DocumentVisibility visibility = request.resolvedVisibility();
         if (visibility == DocumentVisibility.DEPT && !StringUtils.hasText(request.deptId())) {

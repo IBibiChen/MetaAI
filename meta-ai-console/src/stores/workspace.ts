@@ -1,7 +1,7 @@
 import {defineStore} from 'pinia'
 
 const DEFAULT_TENANT_ID = 't1'
-const DEFAULT_KNOWLEDGE_BASE_ID = 'kb1'
+const DEFAULT_KB_ID = 'kb1'
 const DEFAULT_USER_ID = 'u1'
 const DEFAULT_DEPT_IDS = ''
 
@@ -20,13 +20,13 @@ function createSessionId() {
  * 全局工作区上下文
  *
  * <p>
- * tenantId、knowledgeBaseId、userId 和 deptIds 会被文件管理与 RAG 聊天复用
+ * tenantId、kbId、userId 和 deptIds 会被文件管理与 RAG 聊天复用
  * 当前阶段没有登录系统，因此先存到 localStorage
  */
 export const useWorkspaceStore = defineStore('workspace', {
     state: () => ({
         tenantId: localStorage.getItem('meta-ai.tenantId') || DEFAULT_TENANT_ID,
-        knowledgeBaseId: localStorage.getItem('meta-ai.knowledgeBaseId') || DEFAULT_KNOWLEDGE_BASE_ID,
+        kbId: localStorage.getItem('meta-ai.kbId') || DEFAULT_KB_ID,
         userId: localStorage.getItem('meta-ai.userId') || DEFAULT_USER_ID,
         deptIds: localStorage.getItem('meta-ai.deptIds') || DEFAULT_DEPT_IDS,
         sessionId: localStorage.getItem('meta-ai.sessionId') || createSessionId(),
@@ -53,7 +53,7 @@ export const useWorkspaceStore = defineStore('workspace', {
          */
         persist() {
             localStorage.setItem('meta-ai.tenantId', this.tenantId)
-            localStorage.setItem('meta-ai.knowledgeBaseId', this.knowledgeBaseId)
+            localStorage.setItem('meta-ai.kbId', this.kbId)
             localStorage.setItem('meta-ai.userId', this.userId)
             localStorage.setItem('meta-ai.deptIds', this.deptIds)
             localStorage.setItem('meta-ai.sessionId', this.sessionId)
@@ -63,7 +63,7 @@ export const useWorkspaceStore = defineStore('workspace', {
          *
          * <p>
          * 只更换 sessionId
-         * tenantId、knowledgeBaseId 和 userId 不变
+         * tenantId、kbId 和 userId 不变
          */
         resetSession() {
             this.sessionId = createSessionId()
@@ -90,7 +90,7 @@ export const useWorkspaceStore = defineStore('workspace', {
          */
         resetDefaults() {
             this.tenantId = DEFAULT_TENANT_ID
-            this.knowledgeBaseId = DEFAULT_KNOWLEDGE_BASE_ID
+            this.kbId = DEFAULT_KB_ID
             this.userId = DEFAULT_USER_ID
             this.deptIds = DEFAULT_DEPT_IDS
             this.sessionId = createSessionId()

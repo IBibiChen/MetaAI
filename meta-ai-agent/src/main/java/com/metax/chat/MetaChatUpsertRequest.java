@@ -13,13 +13,13 @@ import com.metax.chat.history.MetaChatHistoryType;
  * @param chatId  会话 ID
  * @param chatMode        会话模式
  * @param firstMessage    首条用户消息
- * @param knowledgeBaseId 知识库 ID
+ * @param kbId 知识库 ID
  * @param modelProvider   模型 provider
  * @param modelName       模型名称
  * @param source          会话来源
  * @author IBibiChen
  * @version v1.0
- * @since 2026/6/4
+ * @since 2026/6/8
  */
 public record MetaChatUpsertRequest(
         String tenantId,
@@ -27,7 +27,7 @@ public record MetaChatUpsertRequest(
         String chatId,
         MetaChatHistoryType chatMode,
         String firstMessage,
-        String knowledgeBaseId,
+        String kbId,
         String modelProvider,
         String modelName,
         String source

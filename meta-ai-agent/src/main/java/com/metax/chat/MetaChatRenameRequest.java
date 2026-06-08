@@ -13,7 +13,7 @@ import lombok.Data;
  *
  * @author IBibiChen
  * @version v1.0
- * @since 2026/6/4
+ * @since 2026/6/8
  */
 @Data
 @Schema(description = "聊天会话重命名请求")

@@ -1,7 +1,7 @@
 package com.metax.chat.file;
 
-import com.metax.rag.retrieval.MetaContextFile;
-import com.metax.rag.retrieval.MetaContextFileService;
+import com.metax.rag.retrieval.advisor.MetaContextFile;
+import com.metax.rag.retrieval.advisor.MetaContextFileService;
 
 import org.springframework.web.multipart.MultipartFile;
 

@@ -1,23 +1,22 @@
 package com.metax.controller;
 
-import com.metax.chat.file.MetaChatFileService;
-import com.metax.chat.history.MetaChatHistoryService;
-import com.metax.chat.history.MetaChatHistoryRole;
-import com.metax.chat.history.MetaChatHistoryType;
 import com.metax.chat.MetaChatDO;
 import com.metax.chat.MetaChatService;
-import com.metax.rag.retrieval.ChatStreamDelta;
-import com.metax.rag.retrieval.ChatStreamDone;
-import com.metax.rag.retrieval.ChatStreamMeta;
-import com.metax.rag.retrieval.RetrievalAdvisorFactory;
-import com.metax.rag.retrieval.RetrievalDecision;
-import com.metax.rag.retrieval.RetrievalDecisionResult;
-import com.metax.rag.retrieval.RetrievalDecisionService;
-import com.metax.rag.retrieval.RetrievalFilterExpressionFactory;
-import com.metax.rag.retrieval.RetrievalResponseAssembler;
-import com.metax.rag.retrieval.RetrievalSearchService;
-import com.metax.rag.retrieval.MetaContextFileAdvisor;
+import com.metax.chat.file.MetaChatFileService;
+import com.metax.chat.history.MetaChatHistoryRole;
+import com.metax.chat.history.MetaChatHistoryService;
+import com.metax.chat.history.MetaChatHistoryType;
 import com.metax.rag.indexing.DocumentIndexingService;
+import com.metax.rag.retrieval.advisor.MetaContextFileAdvisor;
+import com.metax.rag.retrieval.advisor.RetrievalAdvisorFactory;
+import com.metax.rag.retrieval.assembly.RetrievalResponseAssembler;
+import com.metax.rag.retrieval.decision.RetrievalDecisionResult;
+import com.metax.rag.retrieval.decision.RetrievalDecisionService;
+import com.metax.rag.retrieval.filter.RetrievalFilterExpressionFactory;
+import com.metax.rag.retrieval.search.RetrievalSearchService;
+import com.metax.rag.retrieval.stream.ChatStreamDelta;
+import com.metax.rag.retrieval.stream.ChatStreamDone;
+import com.metax.rag.retrieval.stream.ChatStreamMeta;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -34,9 +33,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 /**
  * ChatControllerStreamTest .
@@ -46,7 +43,7 @@ import static org.mockito.Mockito.when;
  *
  * @author IBibiChen
  * @version v1.0
- * @since 2026/6/4
+ * @since 2026/6/8
  */
 class ChatControllerStreamTest {
 

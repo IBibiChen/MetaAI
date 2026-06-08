@@ -195,7 +195,7 @@
                       type="button"
                       @click="downloadReference(reference)"
                   >
-                    {{ reference.filename }}
+                    {{ reference.documentName }}
                   </button>
                 </div>
               </div>
@@ -424,7 +424,7 @@ import {
 } from '@/api/chat'
 import {fetchStorageDocuments} from '@/api/storage'
 import {useWorkspaceStore} from '@/stores/workspace'
-import type {MetaChat, RetrievalCitation, RetrievalTrace, StorageDocument} from '@/types/api'
+import type {MetaChat, RetrievalDocumentReference, RetrievalTrace, StorageDocument} from '@/types/api'
 
 interface ChatMessage {
   id: string
@@ -432,7 +432,7 @@ interface ChatMessage {
   content: string
   time: string
   typing?: boolean
-  references?: RetrievalCitation[]
+  references?: RetrievalDocumentReference[]
   trace?: RetrievalTrace
 }
 
@@ -660,7 +660,7 @@ async function sendMessageContent(content: string) {
       if (streamStoppedByUser) return
       typingRenderer.enqueue(payload.content || '')
     },
-    onDone: (payload: { answer?: string, references?: RetrievalCitation[] }) => {
+    onDone: (payload: { answer?: string, references?: RetrievalDocumentReference[] }) => {
       if (streamStoppedByUser) return
       assistantMessage.references = payload.references
       typingRenderer.complete(payload.answer)
@@ -683,7 +683,7 @@ async function sendMessageContent(content: string) {
           chatId: workspace.chatId,
           msg: content,
           tenantId: workspace.tenantId,
-          knowledgeBaseId: workspace.knowledgeBaseId,
+          kbId: workspace.kbId,
           userId: workspace.userId,
           deptIds: workspace.deptIds,
           documentId: ragForm.documentId || undefined,
@@ -703,7 +703,7 @@ async function loadScopeDocuments() {
   if (scopeDocumentsLoading.value) return
 
   workspace.persist()
-  if (!workspace.tenantId || !workspace.knowledgeBaseId) {
+  if (!workspace.tenantId || !workspace.kbId) {
     scopeDocuments.value = []
     return
   }
@@ -712,7 +712,7 @@ async function loadScopeDocuments() {
   try {
     const page = await fetchStorageDocuments({
       tenantId: workspace.tenantId,
-      knowledgeBaseId: workspace.knowledgeBaseId,
+      kbId: workspace.kbId,
       indexStatus: 'INDEXED',
       current: 1,
       size: 100,
@@ -1015,7 +1015,7 @@ function handleEnter(event: KeyboardEvent) {
 function createMessage(
     role: ChatMessage['role'],
     content: string,
-    references?: RetrievalCitation[],
+    references?: RetrievalDocumentReference[],
     trace?: RetrievalTrace,
     createdAt?: string,
 ): ChatMessage {
@@ -1379,7 +1379,7 @@ function appendTypingCaret(html: string) {
   return `${html}${caret}`
 }
 
-function parseReferences(value?: string): RetrievalCitation[] | undefined {
+function parseReferences(value?: string): RetrievalDocumentReference[] | undefined {
   if (!value) return undefined
   try {
     const parsed = JSON.parse(value)
@@ -1431,7 +1431,7 @@ function modeClass(value?: string) {
   return 'default'
 }
 
-async function downloadReference(reference: RetrievalCitation) {
+async function downloadReference(reference: RetrievalDocumentReference) {
   try {
     const response = await fetch(`/api/v1/storage/documents/download/${encodeURIComponent(reference.documentId)}`)
     if (!response.ok) {
@@ -1441,7 +1441,7 @@ async function downloadReference(reference: RetrievalCitation) {
     const url = URL.createObjectURL(blob)
     const link = window.document.createElement('a')
     link.href = url
-    link.download = reference.filename
+    link.download = reference.documentName
     link.click()
     URL.revokeObjectURL(url)
   } catch (error) {

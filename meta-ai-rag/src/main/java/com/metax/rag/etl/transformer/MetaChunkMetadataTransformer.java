@@ -134,14 +134,14 @@ public class MetaChunkMetadataTransformer implements DocumentTransformer {
      *
      * <p>
      * Spring AI QdrantVectorStore 会把 Document.id 按 UUID 解析，不能直接使用 documentId:chunkIndex 这类业务可读 ID
-     * 这里用 tenantId、knowledgeBaseId 和 chunkId 生成确定性 UUID，保证同一 chunk 重复索引时 ID 稳定
+     * 这里用 tenantId、kbId 和 chunkId 生成确定性 UUID，保证同一 chunk 重复索引时 ID 稳定
      * 业务排查继续使用 metadata.chunkId，Document.id 只作为 Redis / Qdrant / Milvus 统一兼容的技术主键
      *
      * @param chunkId 业务可读 chunk ID
      * @return VectorStore 技术主键
      */
     private String generateVectorStoreId(String chunkId) {
-        String seed = "%s:%s:%s".formatted(request.tenantId(), request.knowledgeBaseId(), chunkId);
+        String seed = "%s:%s:%s".formatted(request.tenantId(), request.kbId(), chunkId);
         return UUID.nameUUIDFromBytes(seed.getBytes(StandardCharsets.UTF_8)).toString();
     }
 }

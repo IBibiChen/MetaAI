@@ -41,7 +41,7 @@ public class StorageDocumentIndexingRunObserver implements DocumentIndexingRunOb
         };
         storageDocumentMapper.update(null, new LambdaUpdateWrapper<StorageDocumentDO>()
                 .eq(StorageDocumentDO::getTenantId, run.tenantId())
-                .eq(StorageDocumentDO::getKnowledgeBaseId, run.knowledgeBaseId())
+                .eq(StorageDocumentDO::getKbId, run.kbId())
                 .eq(StorageDocumentDO::getDocumentId, run.documentId())
                 .eq(StorageDocumentDO::getLatestIndexingRunId, run.runId())
                 .eq(StorageDocumentDO::getDeleted, Boolean.FALSE)

@@ -63,7 +63,7 @@
               <n-input v-model:value="uploadDefaults.tenantId" placeholder="上传默认租户 ID"/>
             </n-form-item>
             <n-form-item label="知识库 ID">
-              <n-input v-model:value="uploadDefaults.knowledgeBaseId" placeholder="上传默认知识库 ID"/>
+              <n-input v-model:value="uploadDefaults.kbId" placeholder="上传默认知识库 ID"/>
             </n-form-item>
             <n-form-item label="可见性">
               <n-select v-model:value="uploadDefaults.visibility" :options="visibilityOptions"/>
@@ -107,7 +107,7 @@
             <n-input v-model:value="uploadDraft.tenantId" :disabled="uploading" placeholder="上传租户 ID"/>
           </n-form-item>
           <n-form-item label="知识库 ID">
-            <n-input v-model:value="uploadDraft.knowledgeBaseId" :disabled="uploading" placeholder="上传知识库 ID"/>
+            <n-input v-model:value="uploadDraft.kbId" :disabled="uploading" placeholder="上传知识库 ID"/>
           </n-form-item>
           <n-form-item label="可见性">
             <n-select v-model:value="uploadDraft.visibility" :disabled="uploading" :options="visibilityOptions"/>
@@ -216,7 +216,7 @@ const query = reactive({
 
 const uploadDefaults = reactive({
   tenantId: workspace.tenantId,
-  knowledgeBaseId: workspace.knowledgeBaseId,
+  kbId: workspace.kbId,
   visibility: 'PUBLIC',
   deptId: '',
   userId: '',
@@ -226,7 +226,7 @@ const uploadDefaults = reactive({
 
 const uploadDraft = reactive({
   tenantId: workspace.tenantId,
-  knowledgeBaseId: workspace.knowledgeBaseId,
+  kbId: workspace.kbId,
   visibility: 'PUBLIC',
   deptId: '',
   userId: '',
@@ -272,7 +272,7 @@ const pagination = computed(() => ({
 const canUpload = computed(() => Boolean(
     selectedUploadFile.value &&
     uploadDraft.tenantId.trim() &&
-    uploadDraft.knowledgeBaseId.trim() &&
+    uploadDraft.kbId.trim() &&
     !uploading.value,
 ))
 
@@ -370,13 +370,13 @@ async function loadDocuments() {
   if (!uploadDefaults.tenantId) {
     uploadDefaults.tenantId = workspace.tenantId
   }
-  if (!uploadDefaults.knowledgeBaseId) {
-    uploadDefaults.knowledgeBaseId = workspace.knowledgeBaseId
+  if (!uploadDefaults.kbId) {
+    uploadDefaults.kbId = workspace.kbId
   }
   try {
     const page = await fetchStorageDocuments({
       tenantId: workspace.tenantId,
-      knowledgeBaseId: workspace.knowledgeBaseId,
+      kbId: workspace.kbId,
       visibility: query.visibility,
       indexStatus: query.indexStatus,
       keyword: query.keyword || undefined,
@@ -416,7 +416,7 @@ function resetQuery() {
  */
 function openUploadDialog() {
   uploadDraft.tenantId = uploadDefaults.tenantId || workspace.tenantId
-  uploadDraft.knowledgeBaseId = uploadDefaults.knowledgeBaseId || workspace.knowledgeBaseId
+  uploadDraft.kbId = uploadDefaults.kbId || workspace.kbId
   uploadDraft.visibility = uploadDefaults.visibility
   uploadDraft.deptId = uploadDefaults.deptId
   uploadDraft.userId = uploadDefaults.userId
@@ -460,7 +460,7 @@ async function submitUpload() {
   try {
     await uploadDocument({
       tenantId: uploadDraft.tenantId.trim(),
-      knowledgeBaseId: uploadDraft.knowledgeBaseId.trim(),
+      kbId: uploadDraft.kbId.trim(),
       visibility: uploadDraft.visibility,
       deptId: uploadDraft.deptId.trim() || undefined,
       userId: uploadDraft.userId.trim() || undefined,
@@ -492,11 +492,11 @@ function resetUploadDialog() {
  *
  * <p>
  * documentId 来自文件行数据
- * tenantId 和 knowledgeBaseId 来自顶部工作区上下文
+ * tenantId 和 kbId 来自顶部工作区上下文
  */
 async function handleDownload(row: StorageDocument) {
   try {
-    await downloadDocument(workspace.tenantId, workspace.knowledgeBaseId, row)
+    await downloadDocument(workspace.tenantId, workspace.kbId, row)
   } catch (error) {
     message.error(error instanceof Error ? error.message : '下载失败')
   }
@@ -511,7 +511,7 @@ async function handleDownload(row: StorageDocument) {
  */
 async function handleIndex(row: StorageDocument) {
   try {
-    await indexDocument(workspace.tenantId, workspace.knowledgeBaseId, row.documentId)
+    await indexDocument(workspace.tenantId, workspace.kbId, row.documentId)
     message.success('索引任务已提交')
     await loadDocuments()
   } catch (error) {

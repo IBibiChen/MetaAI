@@ -15,7 +15,7 @@ import lombok.Data;
  *
  * @author IBibiChen
  * @version v1.0
- * @since 2026/6/4
+ * @since 2026/6/8
  */
 @Data
 @Schema(description = "聊天会话分页查询参数")
@@ -40,8 +40,8 @@ public class MetaChatPageRequest {
     /**
      * 会话模式
      */
-    @Parameter(description = "会话模式", example = "RAG")
-    @Schema(description = "会话模式", example = "RAG")
+    @Parameter(description = "会话模式", example = "rag")
+    @Schema(description = "会话模式", example = "rag")
     private String chatMode;
 
     /**

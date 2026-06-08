@@ -7,7 +7,7 @@
  *
  * <p>
  * 检索链路顺序
- * 1、Controller 接收 tenantId、knowledgeBaseId 和用户问题
+ * 1、Controller 接收 tenantId、kbId 和用户问题
  * 2、Controller 创建 RetrievalOptions，保存本次请求的过滤字段、召回参数和原始 query
  * 3、RetrievalFilterExpressionFactory 根据 tenantId、kbId、documentId、documentType 生成 metadata filter
  * 4、details 调试入口传入原始 filterExpression 时，仅用于 trace 展示，不参与实际检索

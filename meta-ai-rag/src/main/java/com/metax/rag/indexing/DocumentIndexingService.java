@@ -30,7 +30,7 @@ import java.util.function.Consumer;
  * <pre>{@code
  * curl -X POST http://localhost:8008/v1/rag/documents/import
  *   -d tenantId=t1
- *   -d knowledgeBaseId=kb1
+ *   -d kbId=kb1
  *   -d documentId=doc-001
  *   -d source=knowledge/t1/kb1/2026/05/demo.md
  *   -d bucket=meta-ai-knowledge
@@ -66,7 +66,7 @@ public class DocumentIndexingService {
      * documentType 可以为空，为空时根据 localPath 后缀自动识别
      *
      * @param tenantId        租户 ID
-     * @param knowledgeBaseId 知识库 ID
+     * @param kbId 知识库 ID
      * @param documentId      文档 ID
      * @param visibility      文档可见性
      * @param deptId          部门 ID
@@ -77,7 +77,7 @@ public class DocumentIndexingService {
      * @return 文档索引执行
      */
     public DocumentIndexingRun importLocalFile(String tenantId,
-                                               String knowledgeBaseId,
+                                               String kbId,
                                                String documentId,
                                                String visibility,
                                                String deptId,
@@ -88,7 +88,7 @@ public class DocumentIndexingService {
         // 阶段 1：把 Controller 传入的字符串参数适配成项目内部索引请求
         DocumentIndexingRequest request = DocumentIndexingRequest.builder()
                 .tenantId(tenantId)
-                .knowledgeBaseId(knowledgeBaseId)
+                .kbId(kbId)
                 .documentId(documentId)
                 .visibility(visibility)
                 .deptId(deptId)

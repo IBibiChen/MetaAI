@@ -32,10 +32,10 @@ public class StorageDocumentPageRequest {
     /**
      * 知识库 ID
      */
-    @NotBlank(message = "knowledgeBaseId 不能为空")
+    @NotBlank(message = "kbId 不能为空")
     @Parameter(description = "知识库 ID", example = "kb1", required = true)
     @Schema(description = "知识库 ID", example = "kb1")
-    private String knowledgeBaseId;
+    private String kbId;
 
     /**
      * 文档可见性

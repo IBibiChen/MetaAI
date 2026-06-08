@@ -28,8 +28,8 @@ import java.time.Instant;
 @NoArgsConstructor
 @Entity
 @Table(name = "meta_storage_document", indexes = {
-        @Index(name = "idx_storage_document_kb_created", columnList = "tenant_id, knowledge_base_id, created_at"),
-        @Index(name = "idx_storage_document_sha256", columnList = "tenant_id, knowledge_base_id, file_sha256"),
+        @Index(name = "idx_storage_document_kb_created", columnList = "tenant_id, kb_id, created_at"),
+        @Index(name = "idx_storage_document_sha256", columnList = "tenant_id, kb_id, file_sha256"),
         @Index(name = "idx_storage_document_index_status", columnList = "index_status")
 }, uniqueConstraints = {
         @UniqueConstraint(name = "uk_storage_document_document", columnNames = {"document_id"})
@@ -60,10 +60,10 @@ public class StorageDocumentDO {
     /**
      * 知识库 ID
      */
-    @Column(name = "knowledge_base_id", length = 64, nullable = false)
+    @Column(name = "kb_id", length = 64, nullable = false)
     @Comment("知识库 ID")
     @Schema(description = "知识库 ID", example = "kb1")
-    private String knowledgeBaseId;
+    private String kbId;
 
     /**
      * 文档可见性

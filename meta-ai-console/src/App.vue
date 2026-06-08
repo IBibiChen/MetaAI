@@ -50,7 +50,7 @@
                     @blur="workspace.persist"
                 />
                 <n-input
-                    v-model:value="workspace.knowledgeBaseId"
+                    v-model:value="workspace.kbId"
                     placeholder="知识库 ID"
                     size="small"
                     @blur="workspace.persist"

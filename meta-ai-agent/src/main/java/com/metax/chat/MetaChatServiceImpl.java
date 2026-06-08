@@ -19,7 +19,7 @@ import java.time.Instant;
  *
  * @author IBibiChen
  * @version v1.0
- * @since 2026/6/4
+ * @since 2026/6/8
  */
 @Service
 public class MetaChatServiceImpl extends ServiceImpl<MetaChatMapper, MetaChatDO> implements MetaChatService {
@@ -98,7 +98,7 @@ public class MetaChatServiceImpl extends ServiceImpl<MetaChatMapper, MetaChatDO>
         entity.setChatMode(request.chatMode().value());
         entity.setModelProvider(request.modelProvider());
         entity.setModelName(request.modelName());
-        entity.setKnowledgeBaseId(request.knowledgeBaseId());
+        entity.setKbId(request.kbId());
         entity.setSource(StringUtils.hasText(request.source()) ? request.source() : "console");
         entity.setMessageCount(0);
         entity.setPinned(false);
@@ -211,8 +211,8 @@ public class MetaChatServiceImpl extends ServiceImpl<MetaChatMapper, MetaChatDO>
 
     private void fillChatBinding(MetaChatDO entity, MetaChatUpsertRequest request) {
         entity.setChatMode(request.chatMode().value());
-        if (StringUtils.hasText(request.knowledgeBaseId())) {
-            entity.setKnowledgeBaseId(request.knowledgeBaseId());
+        if (StringUtils.hasText(request.kbId())) {
+            entity.setKbId(request.kbId());
         }
         if (StringUtils.hasText(request.modelProvider())) {
             entity.setModelProvider(request.modelProvider());

@@ -138,8 +138,8 @@
  *
  * <p>
  * 12、RAG 查询入口阶段
- * ChatController 接收 tenantId、knowledgeBaseId 和用户问题
- * 普通 RAG 查询必须传 tenantId 和 knowledgeBaseId，避免无过滤全库检索
+ * ChatController 接收 tenantId、kbId 和用户问题
+ * 普通 RAG 查询必须传 tenantId 和 kbId，避免无过滤全库检索
  * ChatModel、EmbeddingModel 和 VectorStore 都由配置文件选择
  * 默认 ChatClient 显式绑定 redisChatMemory 作为模型上下文窗口
  * 完整用户历史由 MetaChatHistory 独立归档，不能从 ChatMemory 读取完整历史
@@ -238,7 +238,7 @@
  * <pre>{@code
  * curl -X POST http://localhost:8008/v1/rag/documents/import
  *   -d tenantId=t1
- *   -d knowledgeBaseId=kb1
+ *   -d kbId=kb1
  *   -d documentId=doc-001
  *   -d source=knowledge/t1/kb1/demo.md
  *   -d bucket=meta-ai-knowledge
@@ -250,7 +250,7 @@
  * <pre>{@code
  * curl -X POST http://localhost:8008/v1/rag/documents/import/local
  *   -d tenantId=t1
- *   -d knowledgeBaseId=kb1
+ *   -d kbId=kb1
  *   -d documentId=doc-001
  *   -d path=docs/demo.md
  * }</pre>
@@ -260,7 +260,7 @@
  * <pre>{@code
  * curl -X POST http://localhost:8008/v1/rag/details
  *   -d tenantId=t1
- *   -d knowledgeBaseId=kb1
+ *   -d kbId=kb1
  *   -d msg=Spring AI 的 ETL 是什么
  *   -d topK=5
  *   -d threshold=0.5
