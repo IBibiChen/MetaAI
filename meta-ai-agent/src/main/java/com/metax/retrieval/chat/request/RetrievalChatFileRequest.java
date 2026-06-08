@@ -1,4 +1,4 @@
-package com.metax.controller.request;
+package com.metax.retrieval.chat.request;
 
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;

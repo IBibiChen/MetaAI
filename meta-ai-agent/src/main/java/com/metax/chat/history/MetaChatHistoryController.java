@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * <p>
  * 完整聊天历史查询接口
- * ChatController 只负责对话聊天和历史写入，后续可独立支持流式返回
+ * ChatMessageController 和 KnowledgeChatController 负责对话聊天和历史写入
  *
  * @author IBibiChen
  * @version v1.0

@@ -138,7 +138,7 @@
  *
  * <p>
  * 12、RAG 查询入口阶段
- * ChatController 接收 tenantId、kbId 和用户问题
+ * KnowledgeChatController 接收 tenantId、kbId 和用户问题
  * 普通 RAG 查询必须传 tenantId 和 kbId，避免无过滤全库检索
  * ChatModel、EmbeddingModel 和 VectorStore 都由配置文件选择
  * 默认 ChatClient 显式绑定 redisChatMemory 作为模型上下文窗口

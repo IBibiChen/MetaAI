@@ -1,25 +1,30 @@
 package com.metax.controller;
 
-import com.metax.chat.file.MetaChatFileResponse;
-import com.metax.chat.file.MetaChatFileService;
-import com.metax.chat.history.MetaChatHistoryService;
-import com.metax.chat.history.MetaChatHistoryRole;
-import com.metax.chat.history.MetaChatHistoryType;
+import com.metax.chat.ChatMessageService;
 import com.metax.chat.MetaChatDO;
 import com.metax.chat.MetaChatService;
-import com.metax.controller.request.ChatFileRequest;
-import com.metax.controller.request.RetrievalChatFileRequest;
-import com.metax.rag.indexing.DocumentIndexingService;
+import com.metax.chat.file.MetaChatFileResponse;
+import com.metax.chat.file.MetaChatFileService;
+import com.metax.chat.history.MetaChatHistoryRole;
+import com.metax.chat.history.MetaChatHistoryService;
+import com.metax.chat.history.MetaChatHistoryType;
+import com.metax.chat.support.ChatHistoryRecorder;
+import com.metax.chat.support.ChatScopeResolver;
+import com.metax.chat.support.ChatStreamEventAssembler;
+import com.metax.chat.support.ContextFileChatSupport;
+import com.metax.chat.request.ChatFileRequest;
 import com.metax.rag.model.MetadataKeys;
+import com.metax.retrieval.chat.KnowledgeChatService;
+import com.metax.rag.retrieval.advisor.MetaContextFile;
+import com.metax.rag.retrieval.advisor.MetaContextFileAdvisor;
 import com.metax.rag.retrieval.advisor.RetrievalAdvisorFactory;
+import com.metax.rag.retrieval.assembly.RetrievalResponseAssembler;
 import com.metax.rag.retrieval.decision.RetrievalDecisionResult;
 import com.metax.rag.retrieval.decision.RetrievalDecisionService;
 import com.metax.rag.retrieval.filter.RetrievalFilterExpressionFactory;
 import com.metax.rag.retrieval.model.RetrievalChatResponse;
-import com.metax.rag.retrieval.assembly.RetrievalResponseAssembler;
-import com.metax.rag.retrieval.search.RetrievalSearchService;
-import com.metax.rag.retrieval.advisor.MetaContextFile;
-import com.metax.rag.retrieval.advisor.MetaContextFileAdvisor;
+import com.metax.retrieval.chat.request.RetrievalChatFileRequest;
+import com.metax.retrieval.chat.RetrievalOptionsFactory;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -41,16 +46,16 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * ChatControllerFileTest .
+ * ChatApplicationFileTest .
  *
  * <p>
- * ChatController 聊天文件接口单元测试
+ * 聊天文件应用服务单元测试
  *
  * @author IBibiChen
  * @version v1.0
  * @since 2026/6/8
  */
-class ChatControllerFileTest {
+class ChatApplicationFileTest {
 
     @Test
     void chatShouldAnswerWithChatFiles() {
@@ -65,10 +70,10 @@ class ChatControllerFileTest {
                         .text("文件内容")
                         .metadata(Map.of(MetadataKeys.FILE_NAME, "demo.pdf", MetadataKeys.CHUNK_INDEX, 0))
                         .build()));
-        ChatController controller = controller(new TestChatModel("基于文件的回答"), metaChatHistoryService,
-                metaChatService, fileService);
+        ChatMessageService service = chatMessageService(new TestChatModel("基于文件的回答"),
+                metaChatHistoryService, metaChatService, fileService);
 
-        MetaChatFileResponse response = controller.chatWithFiles(chatFileRequest("c1", "t1", "u1", "总结一下"));
+        MetaChatFileResponse response = service.chatWithFiles(chatFileRequest("c1", "t1", "u1", "总结一下"));
 
         assertThat(response.answer()).isEqualTo("基于文件的回答");
         assertThat(response.chatId()).isEqualTo("c1");
@@ -95,10 +100,10 @@ class ChatControllerFileTest {
                         .text("上传文件内容")
                         .metadata(Map.of(MetadataKeys.FILE_NAME, "demo.pdf", MetadataKeys.CHUNK_INDEX, 0))
                         .build()));
-        ChatController controller = controller(new TestChatModel("对比回答"), metaChatHistoryService,
-                metaChatService, fileService, decisionService);
+        KnowledgeChatService service = knowledgeChatService(new TestChatModel("对比回答"),
+                metaChatHistoryService, metaChatService, fileService, decisionService);
 
-        RetrievalChatResponse response = controller.ragWithFiles(retrievalChatFileRequest("c1", "对比一下", "t1",
+        RetrievalChatResponse response = service.chatWithFiles(retrievalChatFileRequest("c1", "对比一下", "t1",
                 "kb1", "u1"));
 
         assertThat(response.answer()).isEqualTo("对比回答");
@@ -108,29 +113,41 @@ class ChatControllerFileTest {
         assertThat(response.files().get(0).fileId()).isEqualTo("file-1");
     }
 
-    private ChatController controller(ChatModel chatModel,
-                                      MetaChatHistoryService metaChatHistoryService,
-                                      MetaChatService metaChatService,
-                                      MetaChatFileService fileService) {
+    private ChatMessageService chatMessageService(ChatModel chatModel,
+                                                  MetaChatHistoryService metaChatHistoryService,
+                                                  MetaChatService metaChatService,
+                                                  MetaChatFileService fileService) {
         ChatClient chatClient = ChatClient.builder(chatModel).build();
-        return new ChatController(chatClient, chatClient, chatModel, mock(VectorStore.class),
-                mock(DocumentIndexingService.class), mock(RetrievalAdvisorFactory.class),
-                mock(RetrievalFilterExpressionFactory.class), new RetrievalResponseAssembler(),
-                mock(RetrievalSearchService.class), mock(RetrievalDecisionService.class), metaChatHistoryService,
-                metaChatService, fileService, new MetaContextFileAdvisor(fileService));
+        ChatScopeResolver chatScopeResolver = new ChatScopeResolver();
+        ChatHistoryRecorder chatHistoryRecorder = new ChatHistoryRecorder(metaChatService, metaChatHistoryService,
+                chatScopeResolver);
+        RetrievalResponseAssembler retrievalResponseAssembler = new RetrievalResponseAssembler();
+        ChatStreamEventAssembler streamEventAssembler = new ChatStreamEventAssembler(chatHistoryRecorder,
+                retrievalResponseAssembler);
+        ContextFileChatSupport fileSupport = new ContextFileChatSupport(fileService,
+                new MetaContextFileAdvisor(fileService), chatScopeResolver);
+        return new ChatMessageService(chatClient, chatScopeResolver, chatHistoryRecorder,
+                streamEventAssembler, fileSupport);
     }
 
-    private ChatController controller(ChatModel chatModel,
-                                      MetaChatHistoryService metaChatHistoryService,
-                                      MetaChatService metaChatService,
-                                      MetaChatFileService fileService,
-                                      RetrievalDecisionService decisionService) {
+    private KnowledgeChatService knowledgeChatService(ChatModel chatModel,
+                                                      MetaChatHistoryService metaChatHistoryService,
+                                                      MetaChatService metaChatService,
+                                                      MetaChatFileService fileService,
+                                                      RetrievalDecisionService decisionService) {
         ChatClient chatClient = ChatClient.builder(chatModel).build();
-        return new ChatController(chatClient, chatClient, chatModel, mock(VectorStore.class),
-                mock(DocumentIndexingService.class), mock(RetrievalAdvisorFactory.class),
-                mock(RetrievalFilterExpressionFactory.class), new RetrievalResponseAssembler(),
-                mock(RetrievalSearchService.class), decisionService, metaChatHistoryService,
-                metaChatService, fileService, new MetaContextFileAdvisor(fileService));
+        ChatScopeResolver chatScopeResolver = new ChatScopeResolver();
+        ChatHistoryRecorder chatHistoryRecorder = new ChatHistoryRecorder(metaChatService, metaChatHistoryService,
+                chatScopeResolver);
+        RetrievalResponseAssembler retrievalResponseAssembler = new RetrievalResponseAssembler();
+        ChatStreamEventAssembler streamEventAssembler = new ChatStreamEventAssembler(chatHistoryRecorder,
+                retrievalResponseAssembler);
+        ContextFileChatSupport fileSupport = new ContextFileChatSupport(fileService,
+                new MetaContextFileAdvisor(fileService), chatScopeResolver);
+        return new KnowledgeChatService(chatClient, chatModel, mock(VectorStore.class),
+                mock(RetrievalAdvisorFactory.class), mock(RetrievalFilterExpressionFactory.class),
+                retrievalResponseAssembler, decisionService, new RetrievalOptionsFactory(), chatScopeResolver,
+                chatHistoryRecorder, streamEventAssembler, fileSupport);
     }
 
     private MetaChatService metaChatService() {
