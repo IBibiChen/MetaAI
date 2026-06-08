@@ -44,7 +44,7 @@ class MetaDocumentTransformerFactoryTest {
     }
 
     /**
-     * content formatter 应排除技术 metadata 并保留可读来源字段
+     * content formatter 应排除技术 metadata
      */
     @Test
     void shouldExcludeTechnicalMetadataFromFormattedContent() {
@@ -52,16 +52,19 @@ class MetaDocumentTransformerFactoryTest {
         DocumentTransformer transformer = factory.contentFormatTransformer();
         Document document = Document.builder()
                 .text("chunk text")
-                .metadata(Map.of(
-                        MetadataKeys.TENANT_ID, "tenant-1",
-                        MetadataKeys.KNOWLEDGE_BASE_ID, "kb-1",
-                        MetadataKeys.DOCUMENT_ID, "doc-1",
-                        MetadataKeys.DOCUMENT_TYPE, "markdown",
-                        MetadataKeys.SOURCE, "docs/demo.md",
-                        MetadataKeys.CHUNK_ID, "doc-1:0",
-                        MetadataKeys.CHUNK_INDEX, 0,
-                        MetadataKeys.CONTENT_HASH, "hash",
-                        MetadataKeys.CREATED_AT, 1710000000000L
+                .metadata(Map.ofEntries(
+                        Map.entry(MetadataKeys.SCOPE, MetadataKeys.SCOPE_SESSION),
+                        Map.entry(MetadataKeys.TENANT_ID, "tenant-1"),
+                        Map.entry(MetadataKeys.KB_ID, "kb-1"),
+                        Map.entry(MetadataKeys.DOCUMENT_ID, "doc-1"),
+                        Map.entry(MetadataKeys.CONVERSATION_ID, "c1"),
+                        Map.entry(MetadataKeys.FILE_ID, "file-1"),
+                        Map.entry(MetadataKeys.DOCUMENT_TYPE, "markdown"),
+                        Map.entry(MetadataKeys.SOURCE, "docs/demo.md"),
+                        Map.entry(MetadataKeys.CHUNK_ID, "doc-1:0"),
+                        Map.entry(MetadataKeys.CHUNK_INDEX, 0),
+                        Map.entry(MetadataKeys.CONTENT_HASH, "hash"),
+                        Map.entry(MetadataKeys.CREATED_AT, 1710000000000L)
                 ))
                 .build();
 
@@ -70,11 +73,14 @@ class MetaDocumentTransformerFactoryTest {
 
         assertThat(formatted)
                 .contains("chunk text")
-                .contains("documentType: markdown")
-                .contains("source: docs/demo.md")
+                .doesNotContain("scope")
                 .doesNotContain("tenantId")
-                .doesNotContain("knowledgeBaseId")
+                .doesNotContain("kbId")
                 .doesNotContain("documentId")
+                .doesNotContain("conversationId")
+                .doesNotContain("fileId")
+                .doesNotContain("documentType")
+                .doesNotContain("source")
                 .doesNotContain("chunkId")
                 .doesNotContain("chunkIndex")
                 .doesNotContain("contentHash")

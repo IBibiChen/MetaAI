@@ -191,7 +191,7 @@ public class RagProperties {
          * 是否启用权限过滤
          *
          * <p>
-         * 关闭时只使用 tenantId、knowledgeBaseId、documentId 和 documentType 做范围过滤
+         * 关闭时只使用 tenantId、kbId、documentId 和 documentType 做范围过滤
          * 开启后追加 visibility、deptId 和 userId 权限过滤
          */
         private boolean permissionFilterEnabled = false;

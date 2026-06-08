@@ -14,12 +14,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 class MetadataKeysTest {
 
     /**
-     * metadata key 应保持驼峰命名
+     * metadata key 应保持项目统一命名
      */
     @Test
     void shouldUseCamelCaseMetadataKeys() {
         assertThat(MetadataKeys.TENANT_ID).isEqualTo("tenantId");
-        assertThat(MetadataKeys.KNOWLEDGE_BASE_ID).isEqualTo("knowledgeBaseId");
+        assertThat(MetadataKeys.KB_ID).isEqualTo("kbId");
         assertThat(MetadataKeys.DOCUMENT_ID).isEqualTo("documentId");
         assertThat(MetadataKeys.DOCUMENT_TYPE).isEqualTo("documentType");
         assertThat(MetadataKeys.CREATED_AT).isEqualTo("createdAt");

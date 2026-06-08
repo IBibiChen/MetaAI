@@ -13,7 +13,7 @@ import java.util.Map;
  * <p>
  * trace 的用途不是给模型看，而是给开发者和运营排查检索质量
  * 当回答不准确时，可以先看 transformedQuery 是否偏离用户原意
- * 再看 filter 是否包含 tenantId 和 knowledgeBaseId
+ * 再看 filter 是否包含 tenantId 和 kbId
  * 最后看 retrievedCount 与 usedCount 判断是召回不足、后处理过严还是上下文过长
  *
  * <p>
@@ -29,7 +29,7 @@ import java.util.Map;
  *   "query": "上面第二点是什么意思",
  *   "transformedQuery": "Spring AI RAG 文档中第二点的含义",
  *   "queryTransformerMode": "compression",
- *   "filter": "tenantId == 't1' && knowledgeBaseId == 'kb1'",
+ *   "filter": "tenantId == 't1' && kbId == 'kb1'",
  *   "topK": 5,
  *   "similarityThreshold": 0.5,
  *   "retrievedCount": 5,

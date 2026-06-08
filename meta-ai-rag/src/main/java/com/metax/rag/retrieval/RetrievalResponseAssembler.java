@@ -81,7 +81,7 @@ public class RetrievalResponseAssembler {
      * @return RAG 普通响应
      */
     public RetrievalChatResponse chat(ChatClientResponse response, String conversationId) {
-        return new RetrievalChatResponse(answer(response), conversationId, citations(response));
+        return new RetrievalChatResponse(answer(response), conversationId, citations(response), files(response));
     }
 
     /**
@@ -96,7 +96,7 @@ public class RetrievalResponseAssembler {
      * @return RAG 普通响应
      */
     public RetrievalChatResponse chatWithoutReferences(ChatClientResponse response, String conversationId) {
-        return new RetrievalChatResponse(answer(response), conversationId, List.of());
+        return new RetrievalChatResponse(answer(response), conversationId, List.of(), files(response));
     }
 
     /**
@@ -111,7 +111,22 @@ public class RetrievalResponseAssembler {
      * @return RAG 普通响应
      */
     public RetrievalChatResponse streamChat(String answer, ChatClientResponse response, String conversationId) {
-        return new RetrievalChatResponse(answer, conversationId, citations(response));
+        return new RetrievalChatResponse(answer, conversationId, citations(response), files(response));
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<MetaContextFile> files(ChatClientResponse response) {
+        Object value = null;
+        if (response.chatResponse() != null) {
+            value = response.chatResponse().getMetadata().get(MetaContextFileKeys.CONTEXT_FILES);
+        }
+        if (value == null) {
+            value = response.context().get(MetaContextFileKeys.CONTEXT_FILES);
+        }
+        if (!(value instanceof List<?> list) || !list.stream().allMatch(MetaContextFile.class::isInstance)) {
+            return List.of();
+        }
+        return (List<MetaContextFile>) list;
     }
 
     private String answer(ChatClientResponse response) {
@@ -145,6 +160,7 @@ public class RetrievalResponseAssembler {
      * <p>
      * 普通 /v1/rag 只面向前端聊天窗口展示文件来源，不暴露 chunk 文本、score 和完整 metadata
      * 多个 chunk 命中同一个文件时按 documentId 去重，保留首次出现顺序
+     * 只处理 scope = knowledge 的知识库文档，会话文件上下文由 files 字段单独承载
      *
      * @param response ChatClientResponse
      * @return 轻量文件引用列表
@@ -164,19 +180,24 @@ public class RetrievalResponseAssembler {
      * 从 Document metadata 组装单个轻量文件引用
      *
      * <p>
-     * filename 用于前端展示，documentId 用于前端调用业务下载接口
+     * documentName 用于前端展示，documentId 用于前端调用业务下载接口
      * 缺少任一关键字段时跳过该引用，避免前端拿到不可展示或不可下载的来源
+     * scope 不是 knowledge 时跳过，避免把会话级 fileId 伪装成知识库 documentId
      *
      * @param metadata Document metadata
      * @return 轻量文件引用
      */
     private RetrievalCitation citation(Map<String, Object> metadata) {
-        String filename = metadataValue(metadata, MetadataKeys.FILENAME);
-        String documentId = metadataValue(metadata, MetadataKeys.DOCUMENT_ID);
-        if (!StringUtils.hasText(filename) || !StringUtils.hasText(documentId)) {
+        String scope = metadataValue(metadata, MetadataKeys.SCOPE);
+        if (!MetadataKeys.SCOPE_KNOWLEDGE.equals(scope)) {
             return null;
         }
-        return new RetrievalCitation(filename, documentId);
+        String documentName = metadataValue(metadata, MetadataKeys.DOCUMENT_NAME);
+        String documentId = metadataValue(metadata, MetadataKeys.DOCUMENT_ID);
+        if (!StringUtils.hasText(documentName) || !StringUtils.hasText(documentId)) {
+            return null;
+        }
+        return new RetrievalCitation(documentId, documentName);
     }
 
     /**

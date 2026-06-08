@@ -33,14 +33,14 @@ class MetaDocumentMetadataTransformerTest {
         Document document = documents.get(0);
         assertThat(document.getMetadata())
                 .containsEntry(MetadataKeys.TENANT_ID, "tenant-1")
-                .containsEntry(MetadataKeys.KNOWLEDGE_BASE_ID, "kb-1")
+                .containsEntry(MetadataKeys.KB_ID, "kb-1")
                 .containsEntry(MetadataKeys.VISIBILITY, "PUBLIC")
                 .containsEntry(MetadataKeys.DEPT_ID, "")
                 .containsEntry(MetadataKeys.USER_ID, "")
                 .containsEntry(MetadataKeys.DOCUMENT_ID, "doc-1")
                 .containsEntry(MetadataKeys.DOCUMENT_TYPE, "markdown")
                 .containsEntry(MetadataKeys.SOURCE, "docs/demo.md")
-                .containsEntry(MetadataKeys.FILENAME, "demo.md")
+                .containsEntry(MetadataKeys.DOCUMENT_NAME, "demo.md")
                 .containsKey(MetadataKeys.CREATED_AT);
     }
 
@@ -92,7 +92,7 @@ class MetaDocumentMetadataTransformerTest {
         assertThat(document.getMetadata())
                 .containsEntry(MetadataKeys.DEPT_ID, "")
                 .containsEntry(MetadataKeys.USER_ID, "")
-                .containsEntry(MetadataKeys.FILENAME, "");
+                .containsEntry(MetadataKeys.DOCUMENT_NAME, "");
     }
 
     private DocumentIndexingRequest request() {

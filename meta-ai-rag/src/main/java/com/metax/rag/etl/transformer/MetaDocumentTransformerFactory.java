@@ -26,15 +26,19 @@ import java.util.List;
 public class MetaDocumentTransformerFactory {
 
     private static final List<String> EXCLUDED_FORMAT_METADATA_KEYS = List.of(
+            MetadataKeys.SCOPE,
             MetadataKeys.TENANT_ID,
-            MetadataKeys.KNOWLEDGE_BASE_ID,
+            MetadataKeys.KB_ID,
             MetadataKeys.VISIBILITY,
             MetadataKeys.DEPT_ID,
             MetadataKeys.USER_ID,
+            MetadataKeys.CONVERSATION_ID,
+            MetadataKeys.FILE_ID,
             MetadataKeys.DOCUMENT_ID,
             MetadataKeys.DOCUMENT_TYPE,
             MetadataKeys.SOURCE,
-            MetadataKeys.FILENAME,
+            MetadataKeys.DOCUMENT_NAME,
+            MetadataKeys.FILE_NAME,
             MetadataKeys.CHUNK_ID,
             MetadataKeys.CHUNK_INDEX,
             MetadataKeys.CONTENT_HASH,

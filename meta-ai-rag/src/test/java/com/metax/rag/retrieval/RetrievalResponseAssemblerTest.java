@@ -39,17 +39,32 @@ class RetrievalResponseAssemblerTest {
         assertThat(chatResponse.answer()).isEqualTo("answer");
         assertThat(chatResponse.conversationId()).isEqualTo("c1");
         assertThat(chatResponse.references()).containsExactly(
-                new RetrievalCitation("demo.docx", "doc1"),
-                new RetrievalCitation("demo.docx", "doc2"));
+                new RetrievalCitation("doc1", "demo.docx"),
+                new RetrievalCitation("doc2", "demo.docx"));
     }
 
     @Test
     void chatShouldSkipCitationWhenRequiredMetadataMissing() {
         ChatClientResponse response = response(Document.builder()
                 .text("chunk")
-                .metadata(Map.of(MetadataKeys.FILENAME, "demo.docx",
+                .metadata(Map.of(MetadataKeys.SCOPE, MetadataKeys.SCOPE_KNOWLEDGE,
+                        MetadataKeys.DOCUMENT_NAME, "demo.docx",
                         MetadataKeys.TENANT_ID, "t1",
-                        MetadataKeys.KNOWLEDGE_BASE_ID, "kb1"))
+                        MetadataKeys.KB_ID, "kb1"))
+                .build());
+
+        RetrievalChatResponse chatResponse = assembler.chat(response, "c1");
+
+        assertThat(chatResponse.references()).isEmpty();
+    }
+
+    @Test
+    void chatShouldSkipCitationWhenScopeIsFileContext() {
+        ChatClientResponse response = response(Document.builder()
+                .text("chunk")
+                .metadata(Map.of(MetadataKeys.SCOPE, MetadataKeys.SCOPE_SESSION,
+                        MetadataKeys.FILE_ID, "file-1",
+                        MetadataKeys.FILE_NAME, "demo.pdf"))
                 .build());
 
         RetrievalChatResponse chatResponse = assembler.chat(response, "c1");
@@ -99,7 +114,7 @@ class RetrievalResponseAssemblerTest {
         RetrievalChatResponse chatResponse = assembler.streamChat("answer", response, "c1");
 
         assertThat(chatResponse.answer()).isEqualTo("answer");
-        assertThat(chatResponse.references()).containsExactly(new RetrievalCitation("demo.docx", "doc1"));
+        assertThat(chatResponse.references()).containsExactly(new RetrievalCitation("doc1", "demo.docx"));
     }
 
     private ChatClientResponse response(Document... documents) {
@@ -120,10 +135,11 @@ class RetrievalResponseAssemblerTest {
     private Document document(String text, String documentId, String filename) {
         return Document.builder()
                 .text(text)
-                .metadata(Map.of(MetadataKeys.TENANT_ID, "t1",
-                        MetadataKeys.KNOWLEDGE_BASE_ID, "kb1",
+                .metadata(Map.of(MetadataKeys.SCOPE, MetadataKeys.SCOPE_KNOWLEDGE,
+                        MetadataKeys.TENANT_ID, "t1",
+                        MetadataKeys.KB_ID, "kb1",
                         MetadataKeys.DOCUMENT_ID, documentId,
-                        MetadataKeys.FILENAME, filename,
+                        MetadataKeys.DOCUMENT_NAME, filename,
                         MetadataKeys.SOURCE, "storage/t1/kb1/%s".formatted(filename)))
                 .score(0.9)
                 .build();

@@ -20,7 +20,7 @@ import java.util.List;
  * <p>
  * 设计说明：企业级 RAG 不应该默认暴露任意 filterExpression
  * filterExpression 很灵活，但直接暴露给普通接口会带来字段拼写错误、越权过滤和跨库兼容问题
- * 当前类使用 tenantId、knowledgeBaseId、visibility、deptId、userId、documentId、documentType 这些结构化字段生成过滤表达式
+ * 当前类使用 scope、tenantId、kbId、visibility、deptId、userId、documentId、documentType 这些结构化字段生成过滤表达式
  *
  * <p>
  * 结构化参数示例
@@ -41,8 +41,9 @@ import java.util.List;
  * <p>
  * 生成过滤效果
  * <pre>{@code
- * tenantId == 't1'
- * && knowledgeBaseId == 'kb1'
+ * scope == 'knowledge'
+ * && tenantId == 't1'
+ * && kbId == 'kb1'
  * && documentId == 'doc-001'
  * && documentType == 'markdown'
  * }</pre>
@@ -71,7 +72,7 @@ public class RetrievalFilterExpressionFactory {
      */
     public Filter.Expression create(RetrievalOptions options) {
         FilterExpressionBuilder builder = new FilterExpressionBuilder();
-        // 阶段 1：先构造 tenantId 和 knowledgeBaseId 强约束，缺失时直接阻断检索
+        // 阶段 1：先构造 tenantId 和 kbId 强约束，缺失时直接阻断检索
         // 先生成租户和知识库边界，再追加权限过滤和文档级收窄条件
         FilterExpressionBuilder.Op expression = requiredExpression(builder, options);
         if (properties.getRetrieval().isPermissionFilterEnabled()) {
@@ -96,14 +97,14 @@ public class RetrievalFilterExpressionFactory {
      * 构造租户和知识库强约束
      *
      * <p>
-     * tenantId 和 knowledgeBaseId 是检索隔离边界，缺少任一字段都必须快速失败
+     * tenantId 和 kbId 是检索隔离边界，缺少任一字段都必须快速失败
      *
      * @param builder 过滤表达式构造器
      * @param options RAG 检索参数
      * @return 租户和知识库过滤表达式
      */
     private FilterExpressionBuilder.Op requiredExpression(FilterExpressionBuilder builder, RetrievalOptions options) {
-        // tenantId 和 knowledgeBaseId 是默认强约束，少了这两个字段就无法保证多租户和多知识库隔离
+        // tenantId 和 kbId 是默认强约束，少了这两个字段就无法保证多租户和多知识库隔离
         if (!StringUtils.hasText(options.getTenantId())) {
             // 这里选择快速失败，不让缺少租户边界的请求进入向量检索
             throw new IllegalArgumentException("tenantId must not be blank");
@@ -113,8 +114,10 @@ public class RetrievalFilterExpressionFactory {
             throw new IllegalArgumentException("knowledgeBaseId must not be blank");
         }
         return builder.and(
-                builder.eq(MetadataKeys.TENANT_ID, options.getTenantId()),
-                builder.eq(MetadataKeys.KNOWLEDGE_BASE_ID, options.getKnowledgeBaseId()));
+                builder.eq(MetadataKeys.SCOPE, MetadataKeys.SCOPE_KNOWLEDGE),
+                builder.and(
+                        builder.eq(MetadataKeys.TENANT_ID, options.getTenantId()),
+                        builder.eq(MetadataKeys.KB_ID, options.getKnowledgeBaseId())));
     }
 
     /**

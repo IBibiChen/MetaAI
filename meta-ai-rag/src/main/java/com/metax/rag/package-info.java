@@ -75,11 +75,11 @@
  * MetaDocumentMetadataTransformer 实现 Spring AI DocumentTransformer 接口
  * 它在切分前为原始 Document 补齐租户、知识库、文档和来源字段
  * tenantId 是租户边界，检索时必须过滤
- * knowledgeBaseId 是知识库边界，检索时必须过滤
+ * kbId 是知识库 metadata 边界，检索时必须过滤
  * documentId 用于幂等覆盖和按文档收窄查询
  * documentType 用于选择解析器和按类型过滤
  * source 用于返回引用来源和定位对象存储 objectKey 或本地相对路径
- * filename 用于前端展示原始文件名
+ * documentName 用于前端展示知识库文档名称
  * createdAt 使用 epoch millis，便于范围过滤
  *
  * <p>
@@ -105,7 +105,7 @@
  * 8、内容格式化阶段
  * ContentFormatTransformer 不修改 Document 的原始 text
  * 它只为 Document 设置 ContentFormatter，用于控制 metadata 是否拼接进 EMBED / INFERENCE 文本
- * tenantId、knowledgeBaseId、documentId、chunkId、chunkIndex、contentHash、createdAt 等技术 metadata 仍保留在 Document.metadata 中
+ * tenantId、kbId、documentId、chunkId、chunkIndex、contentHash、createdAt 等技术 metadata 仍保留在 Document.metadata 中
  * 但这些技术 metadata 会被排除在 EMBED / INFERENCE 文本格式化之外，避免污染 embedding 语义和 prompt 上下文
  *
  * <p>
@@ -119,7 +119,7 @@
  *
  * <p>
  * 10、向量库 upsert 阶段
- * 写入新 chunk 前，MetaVectorStoreSink 会按 tenantId + knowledgeBaseId + documentId 删除旧 chunk
+ * 写入新 chunk 前，MetaVectorStoreSink 会按 tenantId + kbId + documentId 删除旧 chunk
  * 这样同一个 documentId 重复上传时不会产生重复召回数据
  * 这一步依赖写入 metadata 与 Redis / Qdrant / Milvus 过滤字段保持同名
  *
@@ -148,7 +148,7 @@
  * 13、检索参数组装阶段
  * RetrievalOptions 保存本次请求的过滤参数、召回参数和原始 query
  * RetrievalFilterExpressionFactory 优先使用结构化字段生成 Filter.Expression
- * tenantId 和 knowledgeBaseId 是强制过滤边界
+ * tenantId 和 kbId 是强制过滤边界
  * documentId 和 documentType 是可选收窄条件
  * 原始 filterExpression 仅用于 trace 调试展示，实际检索使用结构化权限过滤
  *
@@ -173,7 +173,7 @@
  * VectorStoreDocumentRetriever 使用 query embedding 到 VectorStore 做 similaritySearch
  * topK 控制最多返回多少个 chunk
  * similarityThreshold 控制最低相似度
- * filterExpression 控制 metadata 过滤，例如 tenantId、knowledgeBaseId、documentType
+ * filterExpression 控制 metadata 过滤，例如 tenantId、kbId、documentType
  * 写入和查询使用同一套配置选中的 EmbeddingModel 和 VectorStore，避免 embedding 语义空间错配
  *
  * <p>
@@ -301,7 +301,7 @@
  *   "query": "上面第二点是什么意思",
  *   "transformedQuery": "Spring AI RAG 文档中第二点的含义",
  *   "queryTransformerMode": "compression",
- *   "filter": "tenantId == 't1' && knowledgeBaseId == 'kb1'",
+ *   "filter": "tenantId == 't1' && kbId == 'kb1'",
  *   "topK": 5,
  *   "similarityThreshold": 0.5,
  *   "retrievedCount": 5,
@@ -344,12 +344,12 @@
  * metadata 示例
  * <pre>{@code
  * tenantId=t1
- * knowledgeBaseId=kb1
+ * kbId=kb1
  * visibility=PUBLIC
  * documentId=doc-001
  * documentType=markdown
  * source=knowledge/t1/kb1/demo.md
- * filename=demo.md
+ * documentName=demo.md
  * createdAt=1710000000000
  * chunkId=doc-001:0
  * chunkIndex=0
@@ -359,8 +359,8 @@
  * <p>
  * filterExpression 示例
  * <pre>{@code
- * tenantId == 't1' && knowledgeBaseId == 'kb1'
- * tenantId == 't1' && knowledgeBaseId == 'kb1' && documentType == 'markdown'
+ * tenantId == 't1' && kbId == 'kb1'
+ * tenantId == 't1' && kbId == 'kb1' && documentType == 'markdown'
  * }</pre>
  *
  * @author IBibiChen

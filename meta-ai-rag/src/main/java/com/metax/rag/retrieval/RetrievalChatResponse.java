@@ -11,7 +11,8 @@ import java.util.List;
  * 普通 RAG 对话响应，保留最终回答、会话 ID 和前端展示用文件引用
  *
  * <p>
- * references 只包含原始文件名和 documentId
+ * references 只包含 documentId 和 documentName
+ * files 只包含会话级临时文件的 fileId 和 fileName
  * chunk 文本、score、metadata 等排查字段只在 details / search 接口返回
  *
  * <p>
@@ -22,8 +23,15 @@ import java.util.List;
  *   "conversationId": "tenantId:userId:sessionId",
  *   "references": [
  *     {
- *       "filename": "demo.docx",
- *       "documentId": "1938200000000000001"
+ *       "documentId": "1938200000000000001",
+ *       "documentName": "demo.docx"
+ *     }
+ *   ],
+ *   "files": [
+ *     {
+ *       "fileId": "2063846120613888002",
+ *       "fileName": "upload.pdf",
+ *       "documentType": "pdf"
  *     }
  *   ]
  * }
@@ -49,6 +57,15 @@ public record RetrievalChatResponse(
          * 本次 RAG 检索引用的文件列表
          */
         @Schema(description = "本次 RAG 检索引用的文件列表")
-        List<RetrievalCitation> references
+        List<RetrievalCitation> references,
+        /**
+         * 本次参与文件上下文的临时文件列表
+         */
+        @Schema(description = "本次参与文件上下文的临时文件列表")
+        List<MetaContextFile> files
 ) {
+
+    public RetrievalChatResponse(String answer, String conversationId, List<RetrievalCitation> references) {
+        this(answer, conversationId, references, List.of());
+    }
 }

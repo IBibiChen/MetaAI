@@ -1,5 +1,6 @@
 package com.metax.controller;
 
+import com.metax.chat.file.ChatFileService;
 import com.metax.history.ChatHistoryService;
 import com.metax.history.ChatHistoryRole;
 import com.metax.history.ChatHistoryType;
@@ -15,6 +16,7 @@ import com.metax.rag.retrieval.RetrievalDecisionService;
 import com.metax.rag.retrieval.RetrievalFilterExpressionFactory;
 import com.metax.rag.retrieval.RetrievalResponseAssembler;
 import com.metax.rag.retrieval.RetrievalSearchService;
+import com.metax.rag.retrieval.MetaContextFileAdvisor;
 import com.metax.rag.indexing.DocumentIndexingService;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClient;
@@ -106,10 +108,12 @@ class ChatControllerStreamTest {
                                       MetaChatService metaChatService,
                                       RetrievalDecisionService decisionService) {
         ChatClient chatClient = ChatClient.builder(chatModel).build();
+        ChatFileService fileService = mock(ChatFileService.class);
         return new ChatController(chatClient, chatClient, chatModel, mock(VectorStore.class),
                 mock(DocumentIndexingService.class), mock(RetrievalAdvisorFactory.class),
                 mock(RetrievalFilterExpressionFactory.class), new RetrievalResponseAssembler(),
-                mock(RetrievalSearchService.class), decisionService, chatHistoryService, metaChatService);
+                mock(RetrievalSearchService.class), decisionService, chatHistoryService, metaChatService,
+                fileService, new MetaContextFileAdvisor(fileService));
     }
 
     private MetaChatService metaChatService() {

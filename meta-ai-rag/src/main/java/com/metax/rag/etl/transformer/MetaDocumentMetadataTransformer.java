@@ -22,7 +22,7 @@ import java.util.Map;
  *
  * <p>
  * metadata 是企业级 RAG 的权限边界和召回边界
- * 如果只做向量相似度搜索，不加 tenantId 和 knowledgeBaseId 过滤，不同租户或不同知识库的数据可能被一起召回
+ * 如果只做向量相似度搜索，不加 tenantId 和 kbId 过滤，不同租户或不同知识库的数据可能被一起召回
  *
  * @author IBibiChen
  * @version v1.0
@@ -69,9 +69,11 @@ public class MetaDocumentMetadataTransformer implements DocumentTransformer {
     private Document withDocumentMetadata(Document document, long createdAt) {
         // 复制 Reader 已经写入的 metadata，避免覆盖官方 Reader 自带字段
         Map<String, Object> metadata = new HashMap<>(document.getMetadata());
-        // tenantId 和 knowledgeBaseId 是检索强过滤边界，缺失会导致跨租户或跨知识库召回
+        // scope 标记知识库文档，避免会话文件临时索引被普通 RAG 检索召回
+        metadata.put(MetadataKeys.SCOPE, MetadataKeys.SCOPE_KNOWLEDGE);
+        // tenantId 和 kbId 是检索强过滤边界，缺失会导致跨租户或跨知识库召回
         metadata.put(MetadataKeys.TENANT_ID, request.tenantId());
-        metadata.put(MetadataKeys.KNOWLEDGE_BASE_ID, request.knowledgeBaseId());
+        metadata.put(MetadataKeys.KB_ID, request.knowledgeBaseId());
         DocumentVisibility visibility = request.resolvedVisibility();
         metadata.put(MetadataKeys.VISIBILITY, visibility.name());
         metadata.put(MetadataKeys.DEPT_ID, blankToEmpty(request.deptId()));
@@ -81,7 +83,7 @@ public class MetaDocumentMetadataTransformer implements DocumentTransformer {
         // documentType 和 source 用于检索收窄、引用展示和问题排查
         metadata.put(MetadataKeys.DOCUMENT_TYPE, request.documentType());
         metadata.put(MetadataKeys.SOURCE, request.source());
-        metadata.put(MetadataKeys.FILENAME, blankToEmpty(request.filename()));
+        metadata.put(MetadataKeys.DOCUMENT_NAME, blankToEmpty(request.filename()));
         // createdAt 使用统一时间戳，保证同一次索引生成的所有原始 Document 时间一致
         metadata.put(MetadataKeys.CREATED_AT, createdAt);
         Document enriched = rebuildDocument(document, metadata, document.getId());

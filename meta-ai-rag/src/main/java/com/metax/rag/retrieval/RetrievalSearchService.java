@@ -57,7 +57,7 @@ public class RetrievalSearchService {
             requestBuilder.filterExpression(filterExpression);
         }
         List<Document> documents = vectorStore.similaritySearch(requestBuilder.build());
-        // 直接返回命中 chunk 和 metadata，方便定位 documentId、chunkId、source、filename 等来源信息
+        // 直接返回命中 chunk 和 metadata，方便定位 documentId、chunkId、source、documentName 等来源信息
         List<RetrievalReference> hits = documents.stream()
                 .map(document -> new RetrievalReference(document.getText(), document.getScore(), document.getMetadata()))
                 .toList();

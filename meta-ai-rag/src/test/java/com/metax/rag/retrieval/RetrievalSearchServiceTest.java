@@ -50,7 +50,7 @@ class RetrievalSearchServiceTest {
         assertThat(response.hits()).hasSize(1);
         assertThat(response.hits().get(0).metadata()).containsEntry(MetadataKeys.DOCUMENT_ID, "doc1");
         assertThat(response.hits().get(0).metadata()).containsEntry(MetadataKeys.VISIBILITY, "PUBLIC");
-        assertThat(response.hits().get(0).metadata()).containsEntry(MetadataKeys.FILENAME, "demo.docx");
+        assertThat(response.hits().get(0).metadata()).containsEntry(MetadataKeys.DOCUMENT_NAME, "demo.docx");
         assertThat(response.hits().get(0).downloadUrl()).isEqualTo("storage/t1/kb1/demo.docx");
         assertThat(vectorStore.searchRequest.getQuery()).isEqualTo("查询内容");
         assertThat(vectorStore.searchRequest.getTopK()).isEqualTo(3);
@@ -81,7 +81,7 @@ class RetrievalSearchServiceTest {
                     .text("命中 chunk")
                     .metadata(Map.of(MetadataKeys.DOCUMENT_ID, "doc1",
                             MetadataKeys.VISIBILITY, "PUBLIC",
-                            MetadataKeys.FILENAME, "demo.docx",
+                            MetadataKeys.DOCUMENT_NAME, "demo.docx",
                             MetadataKeys.SOURCE, "storage/t1/kb1/demo.docx"))
                     .score(0.9)
                     .build();

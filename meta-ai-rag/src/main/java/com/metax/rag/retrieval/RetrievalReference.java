@@ -37,10 +37,11 @@ public record RetrievalReference(
          * chunk metadata，用于展示来源和定位原始文档
          *
          * <p>
-         * metadata.filename 是原始文件名，用于前端展示引用来源
+         * metadata.documentName 是知识库文档名称，用于前端展示引用来源
+         * metadata.fileName 是会话级文件名称，用于排查文件上下文
          * metadata.source 是对象存储 objectKey，用于定位原始文件
          */
-        @Schema(description = "chunk metadata，filename 为原始文件名，source 为对象存储 objectKey")
+        @Schema(description = "chunk metadata，documentName 为知识库文档名称，fileName 为会话级文件名称，source 为对象存储 objectKey")
         Map<String, Object> metadata,
         /**
          * 下载地址，当前直接返回 objectKey

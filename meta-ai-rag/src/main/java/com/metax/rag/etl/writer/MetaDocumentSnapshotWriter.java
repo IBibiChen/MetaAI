@@ -81,7 +81,7 @@ public class MetaDocumentSnapshotWriter implements DocumentWriter {
      * 生成本次 ETL 快照文件名
      *
      * <p>
-     * 文件名由 tenantId、knowledgeBaseId、documentId 组成
+     * 文件名由 tenantId、kbId、documentId 组成
      * 当前运行环境只启用一套 EmbeddingModel 和一套 VectorStore，同一份文档重复索引时会覆盖同一个快照文件
      *
      * <p>

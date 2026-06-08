@@ -14,10 +14,18 @@ package com.metax.rag.model;
  *
  * <p>
  * key 分层
- * tenantId / knowledgeBaseId 是租户和知识库边界
+ * scope 用于区分知识库文档和会话级文件上下文，避免临时文件污染普通 RAG 检索
+ * tenantId / kbId 是租户和知识库边界
  * visibility / deptId / userId 是权限过滤边界
- * documentId / documentType 是文档级收窄过滤
+ * documentId / documentType 是知识库文档级收窄过滤
+ * conversationId / fileId 是会话级文件上下文过滤边界
  * chunkId / chunkIndex / contentHash 是 chunk 级定位和幂等辅助信息
+ *
+ * <p>
+ * 语义边界
+ * scope = knowledge 时使用 documentId 表示知识库文档 ID
+ * scope = session 时使用 fileId 表示会话级临时文件 ID
+ * documentId 和 fileId 不能互相冒充，响应层按不同场景做展示适配
  *
  * @author IBibiChen
  * @version v1.0
@@ -26,14 +34,29 @@ package com.metax.rag.model;
 public final class MetadataKeys {
 
     /**
+     * 检索数据作用域，用于区分知识库文档和会话级文件上下文
+     */
+    public static final String SCOPE = "scope";
+
+    /**
+     * 知识库文档作用域
+     */
+    public static final String SCOPE_KNOWLEDGE = "knowledge";
+
+    /**
+     * 会话作用域，用于标识会话级文件上下文
+     */
+    public static final String SCOPE_SESSION = "session";
+
+    /**
      * 租户 ID，用于多租户数据隔离和默认检索过滤
      */
     public static final String TENANT_ID = "tenantId";
 
     /**
-     * 知识库 ID，用于限定一次 RAG 查询只能检索指定知识库
+     * 知识库 ID (KB = Knowledge Base)
      */
-    public static final String KNOWLEDGE_BASE_ID = "knowledgeBaseId";
+    public static final String KB_ID = "kbId";
 
     /**
      * 文档可见性，用于区分公共、部门和用户私有文档
@@ -51,7 +74,17 @@ public final class MetadataKeys {
     public static final String USER_ID = "userId";
 
     /**
-     * 文档 ID，用于同一文档重复索引时删除旧 chunk，也用于按文档收窄检索
+     * 会话 ID，用于会话级文件上下文临时索引隔离
+     */
+    public static final String CONVERSATION_ID = "conversationId";
+
+    /**
+     * 会话级文件 ID，用于限定当前会话可检索的临时文件范围
+     */
+    public static final String FILE_ID = "fileId";
+
+    /**
+     * 知识库文档 ID，用于同一文档重复索引时删除旧 chunk，也用于按文档收窄检索
      */
     public static final String DOCUMENT_ID = "documentId";
 
@@ -66,9 +99,14 @@ public final class MetadataKeys {
     public static final String SOURCE = "source";
 
     /**
-     * 原始文件名，用于前端展示引用来源
+     * 知识库文档名称，用于前端展示知识库引用来源
      */
-    public static final String FILENAME = "filename";
+    public static final String DOCUMENT_NAME = "documentName";
+
+    /**
+     * 会话级文件名称，用于前端展示文件上下文来源
+     */
+    public static final String FILE_NAME = "fileName";
 
     /**
      * 文档索引时间，使用 epoch millis，便于按时间范围过滤

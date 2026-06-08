@@ -13,6 +13,7 @@ import java.util.List;
  * @param answer         完整回答
  * @param conversationId 会话 ID
  * @param references     RAG 引用文件列表
+ * @param files          本次参与文件上下文的临时文件列表
  * @author IBibiChen
  * @version v1.0
  * @since 2026/6/4
@@ -33,6 +34,15 @@ public record ChatStreamDone(
          * RAG 引用文件列表
          */
         @Schema(description = "RAG 引用文件列表")
-        List<RetrievalCitation> references
+        List<RetrievalCitation> references,
+        /**
+         * 本次参与文件上下文的临时文件列表
+         */
+        @Schema(description = "本次参与文件上下文的临时文件列表")
+        List<MetaContextFile> files
 ) {
+
+    public ChatStreamDone(String answer, String conversationId, List<RetrievalCitation> references) {
+        this(answer, conversationId, references, List.of());
+    }
 }

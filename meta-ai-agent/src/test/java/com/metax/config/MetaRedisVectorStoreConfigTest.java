@@ -40,14 +40,19 @@ class MetaRedisVectorStoreConfigTest {
                         .build()));
 
         assertThat(filter)
+                .contains("@scope:")
                 .contains("@tenantId:")
-                .contains("@knowledgeBaseId:")
+                .contains("@kbId:")
                 .contains("@documentId:")
                 .contains("@documentType:");
         assertThat(Arrays.stream(config.metadataFields()).map(field -> field.name()).toList())
-                .contains(MetadataKeys.FILENAME)
+                .contains(MetadataKeys.DOCUMENT_NAME)
+                .contains(MetadataKeys.FILE_NAME)
                 .contains(MetadataKeys.VISIBILITY)
                 .contains(MetadataKeys.DEPT_ID)
-                .contains(MetadataKeys.USER_ID);
+                .contains(MetadataKeys.USER_ID)
+                .contains(MetadataKeys.SCOPE)
+                .contains(MetadataKeys.CONVERSATION_ID)
+                .contains(MetadataKeys.FILE_ID);
     }
 }

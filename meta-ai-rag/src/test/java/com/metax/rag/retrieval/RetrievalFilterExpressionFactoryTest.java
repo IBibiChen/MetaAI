@@ -35,7 +35,7 @@ class RetrievalFilterExpressionFactoryTest {
 
         assertThat(filterExpressionFactory.create(options).toString())
                 .contains("tenantId")
-                .contains("knowledgeBaseId")
+                .contains("kbId")
                 .contains("documentId")
                 .contains("documentType")
                 .doesNotContain("visibility");

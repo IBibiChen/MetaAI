@@ -61,7 +61,7 @@ class MetaEtlPipelineFactoryTest {
         assertThat(pipeline.sink().vectorStore()).isSameAs(vectorStore);
         assertThat(pipeline.sink().deleteFilter().toString())
                 .contains("tenantId")
-                .contains("knowledgeBaseId")
+                .contains("kbId")
                 .contains("documentId");
     }
 

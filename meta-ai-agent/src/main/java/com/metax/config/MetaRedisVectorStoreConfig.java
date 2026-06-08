@@ -87,17 +87,21 @@ public class MetaRedisVectorStoreConfig {
      */
     MetadataField[] metadataFields() {
         return new MetadataField[]{
+                MetadataField.tag(MetadataKeys.SCOPE),
                 MetadataField.tag(MetadataKeys.TENANT_ID),
-                MetadataField.tag(MetadataKeys.KNOWLEDGE_BASE_ID),
+                MetadataField.tag(MetadataKeys.KB_ID),
                 MetadataField.tag(MetadataKeys.VISIBILITY),
                 MetadataField.tag(MetadataKeys.DEPT_ID),
                 MetadataField.tag(MetadataKeys.USER_ID),
+                MetadataField.tag(MetadataKeys.CONVERSATION_ID),
+                MetadataField.tag(MetadataKeys.FILE_ID),
                 MetadataField.tag(MetadataKeys.DOCUMENT_ID),
                 MetadataField.tag(MetadataKeys.DOCUMENT_TYPE),
                 MetadataField.tag(MetadataKeys.CHUNK_ID),
                 MetadataField.tag(MetadataKeys.CONTENT_HASH),
                 MetadataField.text(MetadataKeys.SOURCE),
-                MetadataField.text(MetadataKeys.FILENAME),
+                MetadataField.text(MetadataKeys.DOCUMENT_NAME),
+                MetadataField.text(MetadataKeys.FILE_NAME),
                 MetadataField.numeric(MetadataKeys.CREATED_AT),
                 MetadataField.numeric(MetadataKeys.CHUNK_INDEX)
         };

@@ -1,5 +1,7 @@
 package com.metax.controller;
 
+import com.metax.chat.file.ChatFileResponse;
+import com.metax.chat.file.ChatFileService;
 import com.metax.history.ChatHistoryService;
 import com.metax.history.ChatHistoryRole;
 import com.metax.history.ChatHistoryType;
@@ -27,6 +29,9 @@ import com.metax.rag.retrieval.RetrievalSearchResponse;
 import com.metax.rag.retrieval.RetrievalSearchService;
 import com.metax.rag.retrieval.RetrievalTrace;
 import com.metax.rag.retrieval.RetrievalCitation;
+import com.metax.rag.retrieval.MetaContextFile;
+import com.metax.rag.retrieval.MetaContextFileAdvisor;
+import com.metax.rag.retrieval.MetaContextFileKeys;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
@@ -48,7 +53,9 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -96,6 +103,10 @@ public class ChatController {
 
     private final MetaChatService metaChatService;
 
+    private final ChatFileService chatFileService;
+
+    private final MetaContextFileAdvisor metaContextFileAdvisor;
+
     public ChatController(@Qualifier("chatClient") ChatClient chatClient,
                           @Qualifier("ragChatClient") ChatClient ragChatClient,
                           ChatModel chatModel,
@@ -107,7 +118,9 @@ public class ChatController {
                           RetrievalSearchService retrievalSearchService,
                           RetrievalDecisionService retrievalDecisionService,
                           ChatHistoryService chatHistoryService,
-                          MetaChatService metaChatService) {
+                          MetaChatService metaChatService,
+                          ChatFileService chatFileService,
+                          MetaContextFileAdvisor metaContextFileAdvisor) {
         this.chatClient = chatClient;
         this.ragChatClient = ragChatClient;
         this.chatModel = chatModel;
@@ -120,6 +133,8 @@ public class ChatController {
         this.retrievalDecisionService = retrievalDecisionService;
         this.chatHistoryService = chatHistoryService;
         this.metaChatService = metaChatService;
+        this.chatFileService = chatFileService;
+        this.metaContextFileAdvisor = metaContextFileAdvisor;
     }
 
     /**
@@ -145,6 +160,36 @@ public class ChatController {
             @Parameter(description = "用户消息", example = "你是谁")
             @RequestParam(name = "msg", defaultValue = "你是谁") String msg) {
         return memoryChat(conversationId, tenantId, userId, msg, ChatHistoryType.CHAT);
+    }
+
+    /**
+     * 默认记忆对话，支持聊天文件
+     *
+     * <p>
+     * 本接口复用 /v1/chat 入口，multipart 只用于携带会话级文件
+     * 文件只绑定当前 conversation，不进入知识库，也不会被 /v1/rag 检索
+     *
+     * @param conversationId 会话 ID
+     * @param tenantId       租户 ID
+     * @param userId         用户 ID
+     * @param msg            消息
+     * @param files          聊天文件
+     * @return 文件上下文对话响应
+     */
+    @PostMapping(value = "/v1/chat", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "默认记忆对话，支持聊天文件", description = "在现有聊天入口中上传文件并基于文件内容总结或问答")
+    public ChatFileResponse chatWithFiles(
+            @Parameter(description = "会话 ID，建议格式：tenantId:userId:sessionId", example = "t1:u1:s1")
+            @RequestParam(name = "conversationId", required = false) String conversationId,
+            @Parameter(description = "租户 ID", example = "t1")
+            @RequestParam(name = "tenantId", required = false) String tenantId,
+            @Parameter(description = "用户 ID", example = "u1")
+            @RequestParam(name = "userId", required = false) String userId,
+            @Parameter(description = "用户消息", example = "总结一下这个文件")
+            @RequestParam(name = "msg", defaultValue = "总结一下这个文件") String msg,
+            @Parameter(description = "聊天文件")
+            @RequestPart(name = "files", required = false) MultipartFile[] files) {
+        return fileChat(conversationId, tenantId, userId, msg, files);
     }
 
     /**
@@ -177,6 +222,36 @@ public class ChatController {
                 .advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, resolvedConversationId))
                 .user(msg);
         return contentStream(requestSpec, chat.getId(), resolvedConversationId, ChatHistoryType.CHAT);
+    }
+
+    /**
+     * 默认记忆对话流式返回，支持聊天文件
+     *
+     * <p>
+     * multipart 入口用于上传会话级临时文件，文件上下文由 MetaContextFileAdvisor 注入
+     *
+     * @param conversationId 会话 ID
+     * @param tenantId       租户 ID
+     * @param userId         用户 ID
+     * @param msg            消息
+     * @param files          聊天文件
+     * @return SSE 流式事件
+     */
+    @PostMapping(value = "/v1/chat/stream", consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
+            produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @Operation(summary = "默认记忆对话流式返回，支持聊天文件", description = "上传临时文件并基于文件内容进行流式总结或问答")
+    public Flux<ServerSentEvent<Object>> chatStreamWithFiles(
+            @Parameter(description = "会话 ID，建议格式：tenantId:userId:sessionId", example = "t1:u1:s1")
+            @RequestParam(name = "conversationId", required = false) String conversationId,
+            @Parameter(description = "租户 ID", example = "t1")
+            @RequestParam(name = "tenantId", required = false) String tenantId,
+            @Parameter(description = "用户 ID", example = "u1")
+            @RequestParam(name = "userId", required = false) String userId,
+            @Parameter(description = "用户消息", example = "总结一下这个文件")
+            @RequestParam(name = "msg", defaultValue = "总结一下这个文件") String msg,
+            @Parameter(description = "聊天文件")
+            @RequestPart(name = "files", required = false) MultipartFile[] files) {
+        return fileStreamChat(conversationId, tenantId, userId, msg, files);
     }
 
     /**
@@ -229,6 +304,57 @@ public class ChatController {
     }
 
     /**
+     * RAG 检索增强对话，支持聊天文件
+     *
+     * <p>
+     * 知识库上下文由 RetrievalAugmentationAdvisor 注入，临时文件上下文由 MetaContextFileAdvisor 注入
+     *
+     * @param conversationId  会话 ID
+     * @param msg             消息
+     * @param tenantId        租户 ID
+     * @param knowledgeBaseId 知识库 ID
+     * @param documentId      文档 ID
+     * @param documentType    文档类型
+     * @param userId          用户 ID
+     * @param deptIds         可访问部门 ID 列表
+     * @param files           聊天文件
+     * @return 模型响应内容
+     */
+    @PostMapping(value = "/v1/rag", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "RAG 检索增强对话，支持聊天文件", description = "同时参考知识库和本次会话上传文件进行总结、问答或对比")
+    public RetrievalChatResponse ragWithFiles(
+            @Parameter(description = "会话 ID，建议格式：tenantId:userId:sessionId", example = "t1:u1:s1")
+            @RequestParam(name = "conversationId", required = false) String conversationId,
+            @Parameter(description = "用户消息", example = "对比知识库方案和上传文件")
+            @RequestParam(name = "msg", defaultValue = "对比知识库方案和上传文件") String msg,
+            @Parameter(description = "租户 ID，RAG 查询强制过滤字段", example = "t1")
+            @RequestParam(name = "tenantId", required = false) String tenantId,
+            @Parameter(description = "知识库 ID，RAG 查询强制过滤字段", example = "kb1")
+            @RequestParam(name = "knowledgeBaseId", required = false) String knowledgeBaseId,
+            @Parameter(description = "文档 ID，可选收窄条件", example = "doc-001")
+            @RequestParam(name = "documentId", required = false) String documentId,
+            @Parameter(description = "文档类型，可选收窄条件，例如 txt、md、json、tika", example = "md")
+            @RequestParam(name = "documentType", required = false) String documentType,
+            @Parameter(description = "当前用户 ID，用于用户私有文档过滤", example = "u1")
+            @RequestParam(name = "userId", required = false) String userId,
+            @Parameter(description = "当前用户可访问部门 ID 列表，多个用英文逗号分隔", example = "d1,d2")
+            @RequestParam(name = "deptIds", required = false) String deptIds,
+            @Parameter(description = "聊天文件")
+            @RequestPart(name = "files", required = false) MultipartFile[] files) {
+        validateRetrievalScope(tenantId, knowledgeBaseId);
+        RetrievalOptions options = RetrievalOptions.builder()
+                .tenantId(tenantId)
+                .knowledgeBaseId(knowledgeBaseId)
+                .documentId(documentId)
+                .documentType(documentType)
+                .userId(userId)
+                .deptIds(parseCsv(deptIds))
+                .query(msg)
+                .build();
+        return ragChat(conversationId, msg, options, ChatHistoryType.RAG, files);
+    }
+
+    /**
      * RAG 检索增强对话流式返回
      *
      * <p>
@@ -278,6 +404,55 @@ public class ChatController {
     }
 
     /**
+     * RAG 检索增强对话流式返回，支持聊天文件
+     *
+     * @param conversationId  会话 ID
+     * @param msg             消息
+     * @param tenantId        租户 ID
+     * @param knowledgeBaseId 知识库 ID
+     * @param documentId      文档 ID
+     * @param documentType    文档类型
+     * @param userId          用户 ID
+     * @param deptIds         可访问部门 ID 列表
+     * @param files           聊天文件
+     * @return SSE 流式事件
+     */
+    @PostMapping(value = "/v1/rag/stream", consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
+            produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @Operation(summary = "RAG 检索增强对话流式返回，支持聊天文件", description = "同时参考知识库和本次会话上传文件进行流式总结、问答或对比")
+    public Flux<ServerSentEvent<Object>> ragStreamWithFiles(
+            @Parameter(description = "会话 ID，建议格式：tenantId:userId:sessionId", example = "t1:u1:s1")
+            @RequestParam(name = "conversationId", required = false) String conversationId,
+            @Parameter(description = "用户消息", example = "对比知识库方案和上传文件")
+            @RequestParam(name = "msg", defaultValue = "对比知识库方案和上传文件") String msg,
+            @Parameter(description = "租户 ID，RAG 查询强制过滤字段", example = "t1")
+            @RequestParam(name = "tenantId", required = false) String tenantId,
+            @Parameter(description = "知识库 ID，RAG 查询强制过滤字段", example = "kb1")
+            @RequestParam(name = "knowledgeBaseId", required = false) String knowledgeBaseId,
+            @Parameter(description = "文档 ID，可选收窄条件", example = "doc-001")
+            @RequestParam(name = "documentId", required = false) String documentId,
+            @Parameter(description = "文档类型，可选收窄条件，例如 txt、md、json、tika", example = "md")
+            @RequestParam(name = "documentType", required = false) String documentType,
+            @Parameter(description = "当前用户 ID，用于用户私有文档过滤", example = "u1")
+            @RequestParam(name = "userId", required = false) String userId,
+            @Parameter(description = "当前用户可访问部门 ID 列表，多个用英文逗号分隔", example = "d1,d2")
+            @RequestParam(name = "deptIds", required = false) String deptIds,
+            @Parameter(description = "聊天文件")
+            @RequestPart(name = "files", required = false) MultipartFile[] files) {
+        validateRetrievalScope(tenantId, knowledgeBaseId);
+        RetrievalOptions options = RetrievalOptions.builder()
+                .tenantId(tenantId)
+                .knowledgeBaseId(knowledgeBaseId)
+                .documentId(documentId)
+                .documentType(documentType)
+                .userId(userId)
+                .deptIds(parseCsv(deptIds))
+                .query(msg)
+                .build();
+        return ragStreamChat(conversationId, msg, options, ChatHistoryType.RAG, files);
+    }
+
+    /**
      * RAG 检索增强详情对话
      *
      * <p>
@@ -320,7 +495,7 @@ public class ChatController {
             @Parameter(description = "本次检索相似度阈值，不传时使用全局配置", example = "0.5")
             @RequestParam(name = "threshold", required = false) Double threshold,
             @Parameter(description = "原始过滤表达式，仅用于 trace 调试展示，实际检索使用结构化权限过滤",
-                    example = "tenantId == 't1' && knowledgeBaseId == 'kb1'")
+                    example = "tenantId == 't1' && kbId == 'kb1'")
             @RequestParam(name = "filterExpression", required = false) String filterExpression) {
         String resolvedConversationId = resolveConversationId(conversationId);
         validateRetrievalScope(tenantId, knowledgeBaseId);
@@ -402,7 +577,7 @@ public class ChatController {
             @Parameter(description = "本次检索相似度阈值，不传时使用全局配置", example = "0.5")
             @RequestParam(name = "threshold", required = false) Double threshold,
             @Parameter(description = "原始过滤表达式，仅用于 trace 调试展示，实际检索使用结构化权限过滤",
-                    example = "tenantId == 't1' && knowledgeBaseId == 'kb1'")
+                    example = "tenantId == 't1' && kbId == 'kb1'")
             @RequestParam(name = "filterExpression", required = false) String filterExpression) {
         validateRetrievalScope(tenantId, knowledgeBaseId);
         RetrievalOptions options = RetrievalOptions.builder()
@@ -571,12 +746,132 @@ public class ChatController {
         return answer;
     }
 
+    /**
+     * 执行会话文件普通对话
+     *
+     * <p>
+     * 有上传文件或历史 READY 文件时走 FILE_CHAT 历史类型，并通过 MetaContextFileAdvisor 注入文件上下文
+     * 没有任何可用文件时退回普通记忆对话，避免无文件请求被错误归档为文件对话
+     *
+     * @param conversationId 会话 ID
+     * @param tenantId       租户 ID
+     * @param userId         用户 ID
+     * @param msg            用户消息
+     * @param files          本轮上传文件
+     * @return 文件对话响应
+     */
+    private ChatFileResponse fileChat(String conversationId,
+                                      String tenantId,
+                                      String userId,
+                                      String msg,
+                                      MultipartFile[] files) {
+        String resolvedConversationId = resolveConversationId(conversationId);
+        ConversationScope scope = resolveScope(resolvedConversationId, tenantId, userId);
+        if (scope.tenantId() == null || scope.tenantId().isBlank()) {
+            throw new IllegalArgumentException("tenantId must not be blank");
+        }
+        if (scope.userId() == null || scope.userId().isBlank()) {
+            throw new IllegalArgumentException("userId must not be blank");
+        }
+        List<MetaContextFile> uploaded = chatFileService.uploadAndIndex(scope.tenantId(), scope.userId(),
+                resolvedConversationId, files);
+        List<MetaContextFile> contextFiles = uploaded.isEmpty()
+                ? chatFileService.readyFiles(scope.tenantId(), scope.userId(), resolvedConversationId)
+                : uploaded;
+        if (contextFiles.isEmpty()) {
+            String answer = memoryChat(resolvedConversationId, scope.tenantId(), scope.userId(), msg,
+                    ChatHistoryType.CHAT);
+            return new ChatFileResponse(answer, resolvedConversationId, List.of());
+        }
+
+        MetaChatDO chat = getOrCreateChat(resolvedConversationId, scope.tenantId(), scope.userId(),
+                ChatHistoryType.FILE_CHAT, msg, null);
+        chatHistoryService.saveUserMessage(chat.getId(), resolvedConversationId, ChatHistoryType.FILE_CHAT, msg);
+        metaChatService.updateLastMessage(chat.getId(), ChatHistoryRole.USER, msg);
+        ChatClientResponse response = chatClient.prompt()
+                .advisors(spec -> contextFileParams(spec, scope.tenantId(), scope.userId(), resolvedConversationId,
+                        msg, uploaded))
+                .user(msg)
+                .call()
+                .chatClientResponse();
+        String answer = content(response);
+        chatHistoryService.saveAssistantMessage(chat.getId(), resolvedConversationId, ChatHistoryType.FILE_CHAT,
+                answer);
+        metaChatService.updateLastMessage(chat.getId(), ChatHistoryRole.ASSISTANT, answer);
+        return new ChatFileResponse(answer, resolvedConversationId, files(response));
+    }
+
+    /**
+     * 执行会话文件流式对话
+     *
+     * <p>
+     * 流式文件对话需要读取 ChatClientResponse metadata 中的 CONTEXT_FILES
+     * 因此这里复用 chatClientResponseStream，而不是只消费 stream().content()
+     *
+     * @param conversationId 会话 ID
+     * @param tenantId       租户 ID
+     * @param userId         用户 ID
+     * @param msg            用户消息
+     * @param files          本轮上传文件
+     * @return SSE 流式事件
+     */
+    private Flux<ServerSentEvent<Object>> fileStreamChat(String conversationId,
+                                                         String tenantId,
+                                                         String userId,
+                                                         String msg,
+                                                         MultipartFile[] files) {
+        String resolvedConversationId = resolveConversationId(conversationId);
+        ConversationScope scope = resolveScope(resolvedConversationId, tenantId, userId);
+        if (scope.tenantId() == null || scope.tenantId().isBlank()) {
+            throw new IllegalArgumentException("tenantId must not be blank");
+        }
+        if (scope.userId() == null || scope.userId().isBlank()) {
+            throw new IllegalArgumentException("userId must not be blank");
+        }
+        List<MetaContextFile> uploaded = chatFileService.uploadAndIndex(scope.tenantId(), scope.userId(),
+                resolvedConversationId, files);
+        MetaChatDO chat = getOrCreateChat(resolvedConversationId, scope.tenantId(), scope.userId(),
+                ChatHistoryType.FILE_CHAT, msg, null);
+        chatHistoryService.saveUserMessage(chat.getId(), resolvedConversationId, ChatHistoryType.FILE_CHAT, msg);
+        metaChatService.updateLastMessage(chat.getId(), ChatHistoryRole.USER, msg);
+        ChatClient.ChatClientRequestSpec requestSpec = chatClient.prompt()
+                .advisors(spec -> contextFileParams(spec, scope.tenantId(), scope.userId(), resolvedConversationId,
+                        msg, uploaded))
+                .user(msg);
+        return chatClientResponseStream(requestSpec, chat.getId(), resolvedConversationId, ChatHistoryType.FILE_CHAT,
+                false);
+    }
+
     private RetrievalChatResponse ragChat(String conversationId,
                                           String msg,
                                           RetrievalOptions options,
                                           ChatHistoryType historyType) {
+        return ragChat(conversationId, msg, options, historyType, null);
+    }
+
+    /**
+     * 执行 RAG 普通对话
+     *
+     * <p>
+     * knowledgeBaseId 是接口和业务层字段，进入向量 metadata filter 时会映射为 kbId
+     * files 只进入 scope = session 的会话文件上下文，不会写入知识库 references
+     *
+     * @param conversationId 会话 ID
+     * @param msg            用户消息
+     * @param options        RAG 检索参数
+     * @param historyType    历史类型
+     * @param files          本轮上传文件
+     * @return RAG 对话响应
+     */
+    private RetrievalChatResponse ragChat(String conversationId,
+                                          String msg,
+                                          RetrievalOptions options,
+                                          ChatHistoryType historyType,
+                                          MultipartFile[] files) {
         String resolvedConversationId = resolveConversationId(conversationId);
         RetrievalOptions resolvedOptions = Objects.requireNonNull(options, "RetrievalOptions must not be null");
+        List<MetaContextFile> uploaded = uploadFiles(resolvedOptions.getTenantId(), resolvedOptions.getUserId(),
+                resolvedConversationId, files);
         MetaChatDO chat = getOrCreateChat(resolvedConversationId, resolvedOptions.getTenantId(),
                 resolvedOptions.getUserId(), historyType, msg, resolvedOptions.getKnowledgeBaseId());
 
@@ -588,14 +883,16 @@ public class ChatController {
         RetrievalChatResponse response;
         if (decision.decision() == RetrievalDecision.SKIP) {
             response = retrievalResponseAssembler.chatWithoutReferences(ragChatClient.prompt()
-                    .advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, resolvedConversationId))
+                    .advisors(spec -> contextFileParams(spec, resolvedOptions.getTenantId(),
+                            resolvedOptions.getUserId(), resolvedConversationId, msg, uploaded))
                     .user(msg)
                     .call()
                     .chatClientResponse(), resolvedConversationId);
         } else {
             response = retrievalResponseAssembler.chat(ragChatClient.prompt()
                     .advisors(spec -> {
-                        spec.param(ChatMemory.CONVERSATION_ID, resolvedConversationId);
+                        contextFileParams(spec, resolvedOptions.getTenantId(), resolvedOptions.getUserId(),
+                                resolvedConversationId, msg, uploaded);
                         spec.advisors(retrievalAdvisorFactory.create(vectorStore, chatModel, resolvedOptions,
                                 retrievalFilterExpressionFactory.create(resolvedOptions)));
                     })
@@ -613,8 +910,32 @@ public class ChatController {
                                                         String msg,
                                                         RetrievalOptions options,
                                                         ChatHistoryType historyType) {
+        return ragStreamChat(conversationId, msg, options, historyType, null);
+    }
+
+    /**
+     * 执行 RAG 流式对话
+     *
+     * <p>
+     * 检索决策为 SKIP 时仍然保留会话文件上下文 Advisor，支持“只基于上传文件回答”的场景
+     * 检索决策为 RETRIEVE 时同时注入会话文件上下文和知识库 RAG Advisor
+     *
+     * @param conversationId 会话 ID
+     * @param msg            用户消息
+     * @param options        RAG 检索参数
+     * @param historyType    历史类型
+     * @param files          本轮上传文件
+     * @return SSE 流式事件
+     */
+    private Flux<ServerSentEvent<Object>> ragStreamChat(String conversationId,
+                                                        String msg,
+                                                        RetrievalOptions options,
+                                                        ChatHistoryType historyType,
+                                                        MultipartFile[] files) {
         String resolvedConversationId = resolveConversationId(conversationId);
         RetrievalOptions resolvedOptions = Objects.requireNonNull(options, "RetrievalOptions must not be null");
+        List<MetaContextFile> uploaded = uploadFiles(resolvedOptions.getTenantId(), resolvedOptions.getUserId(),
+                resolvedConversationId, files);
         MetaChatDO chat = getOrCreateChat(resolvedConversationId, resolvedOptions.getTenantId(),
                 resolvedOptions.getUserId(), historyType, msg, resolvedOptions.getKnowledgeBaseId());
 
@@ -625,10 +946,12 @@ public class ChatController {
                 resolvedConversationId, decision.decision(), decision.reason(), resolvedOptions.getQuery());
         ChatClient.ChatClientRequestSpec requestSpec = ragChatClient.prompt();
         if (decision.decision() == RetrievalDecision.SKIP) {
-            requestSpec.advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, resolvedConversationId));
+            requestSpec.advisors(spec -> contextFileParams(spec, resolvedOptions.getTenantId(),
+                    resolvedOptions.getUserId(), resolvedConversationId, msg, uploaded));
         } else {
             requestSpec.advisors(spec -> {
-                spec.param(ChatMemory.CONVERSATION_ID, resolvedConversationId);
+                contextFileParams(spec, resolvedOptions.getTenantId(), resolvedOptions.getUserId(),
+                        resolvedConversationId, msg, uploaded);
                 spec.advisors(retrievalAdvisorFactory.create(vectorStore, chatModel, resolvedOptions,
                         retrievalFilterExpressionFactory.create(resolvedOptions)));
             });
@@ -706,13 +1029,16 @@ public class ChatController {
             String fullAnswer = answer.toString();
             ChatStreamDone data;
             List<RetrievalCitation> references = List.of();
+            List<MetaContextFile> files = files(lastResponse.get());
             if (includeReferences) {
                 RetrievalChatResponse response = retrievalResponseAssembler.streamChat(fullAnswer, lastResponse.get(),
                         conversationId);
                 references = response.references();
-                data = new ChatStreamDone(response.answer(), response.conversationId(), response.references());
+                files = response.files();
+                data = new ChatStreamDone(response.answer(), response.conversationId(), response.references(),
+                        response.files());
             } else {
-                data = new ChatStreamDone(fullAnswer, conversationId, List.of());
+                data = new ChatStreamDone(fullAnswer, conversationId, List.of(), files);
             }
             chatHistoryService.saveAssistantMessage(chatId, conversationId, historyType, fullAnswer, references);
             metaChatService.updateLastMessage(chatId, ChatHistoryRole.ASSISTANT, fullAnswer);
@@ -732,6 +1058,90 @@ public class ChatController {
         }
         AssistantMessage output = chatResponse.getResult().getOutput();
         return output == null ? null : output.getText();
+    }
+
+    /**
+     * 注入会话文件 Advisor 参数
+     *
+     * <p>
+     * ORIGINAL_USER_QUERY 保留用户原始问题，避免文件检索使用已被其他 Advisor 增强后的 prompt
+     * INCOMING_FILES 只表示本轮新上传文件，Advisor 会在为空时自行回退到当前会话 READY 文件
+     *
+     * @param spec           AdvisorSpec
+     * @param tenantId       租户 ID
+     * @param userId         用户 ID
+     * @param conversationId 会话 ID
+     * @param msg            原始用户消息
+     * @param uploaded       本轮新上传文件
+     */
+    private void contextFileParams(ChatClient.AdvisorSpec spec,
+                                   String tenantId,
+                                   String userId,
+                                   String conversationId,
+                                   String msg,
+                                   List<MetaContextFile> uploaded) {
+        ConversationScope scope = resolveScope(conversationId, tenantId, userId);
+        spec.param(ChatMemory.CONVERSATION_ID, conversationId);
+        spec.param(MetaContextFileKeys.TENANT_ID, scope.tenantId());
+        spec.param(MetaContextFileKeys.USER_ID, scope.userId());
+        spec.param(MetaContextFileKeys.CONVERSATION_ID, conversationId);
+        spec.param(MetaContextFileKeys.ORIGINAL_USER_QUERY, msg);
+        spec.param(MetaContextFileKeys.INCOMING_FILES, uploaded == null ? List.of() : uploaded);
+        spec.advisors(metaContextFileAdvisor);
+    }
+
+    /**
+     * 上传并索引本轮会话文件
+     *
+     * <p>
+     * 无文件时直接返回空列表，不触发 readyFiles 查询
+     * 这样可以让 Advisor 统一决定是否使用历史 READY 文件
+     *
+     * @param tenantId       租户 ID
+     * @param userId         用户 ID
+     * @param conversationId 会话 ID
+     * @param files          本轮上传文件
+     * @return 本轮新上传文件
+     */
+    private List<MetaContextFile> uploadFiles(String tenantId,
+                                              String userId,
+                                              String conversationId,
+                                              MultipartFile[] files) {
+        if (files == null || files.length == 0) {
+            return List.of();
+        }
+        ConversationScope scope = resolveScope(conversationId, tenantId, userId);
+        if (scope.tenantId() == null || scope.tenantId().isBlank()) {
+            throw new IllegalArgumentException("tenantId must not be blank");
+        }
+        if (scope.userId() == null || scope.userId().isBlank()) {
+            throw new IllegalArgumentException("userId must not be blank");
+        }
+        return chatFileService.uploadAndIndex(scope.tenantId(), scope.userId(), conversationId, files);
+    }
+
+    /**
+     * 从 ChatClientResponse 中读取本次参与上下文增强的会话文件
+     *
+     * <p>
+     * 普通响应优先读 ChatResponse metadata，流式兜底读 ChatClientResponse context
+     *
+     * @param response ChatClientResponse
+     * @return 会话文件上下文
+     */
+    @SuppressWarnings("unchecked")
+    private List<MetaContextFile> files(ChatClientResponse response) {
+        Object value = null;
+        if (response.chatResponse() != null) {
+            value = response.chatResponse().getMetadata().get(MetaContextFileKeys.CONTEXT_FILES);
+        }
+        if (value == null) {
+            value = response.context().get(MetaContextFileKeys.CONTEXT_FILES);
+        }
+        if (!(value instanceof List<?> list) || !list.stream().allMatch(MetaContextFile.class::isInstance)) {
+            return List.of();
+        }
+        return (List<MetaContextFile>) list;
     }
 
     private ServerSentEvent<Object> event(String event, Object data) {

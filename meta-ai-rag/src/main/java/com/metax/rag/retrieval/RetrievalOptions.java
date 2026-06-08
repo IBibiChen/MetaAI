@@ -13,7 +13,7 @@ import java.util.List;
  *
  * <p>
  * 字段说明：检索参数分为过滤参数和召回参数
- * tenantId / knowledgeBaseId / userId / deptIds / documentId / documentType 用于 metadata filter
+ * tenantId / kbId / userId / deptIds / documentId / documentType 用于 metadata filter
  * topK / similarityThreshold 用于控制召回数量和相似度下限
  * filterExpression 仅用于 trace 调试展示，普通业务接口使用结构化字段生成实际过滤
  * query 是原始用户问题，只用于 details trace，不参与过滤表达式生成
