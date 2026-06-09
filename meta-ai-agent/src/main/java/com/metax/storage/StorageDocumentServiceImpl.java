@@ -78,14 +78,14 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
     /**
      * 上传对象存储文档
      *
-     * @param tenantId        租户 ID
-     * @param kbId 知识库 ID
-     * @param visibility      文档可见性
-     * @param deptId          部门 ID
-     * @param userId          用户 ID
-     * @param documentType    文档类型
-     * @param autoIndex       是否上传后自动索引
-     * @param file            上传文件
+     * @param tenantId     租户 ID
+     * @param kbId         知识库 ID
+     * @param visibility   文档可见性
+     * @param deptId       部门 ID
+     * @param userId       用户 ID
+     * @param documentType 文档类型
+     * @param autoIndex    是否上传后自动索引
+     * @param file         上传文件
      * @return 上传响应
      */
     @Override
@@ -165,15 +165,15 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
     /**
      * 分页查询对象存储文档
      *
-     * @param tenantId        租户 ID
-     * @param kbId 知识库 ID
-     * @param visibility      文档可见性
-     * @param deptId          部门 ID
-     * @param userId          用户 ID
-     * @param indexStatus     索引状态
-     * @param keyword         文件名关键字
-     * @param current         页码
-     * @param size            每页数量
+     * @param tenantId    租户 ID
+     * @param kbId        知识库 ID
+     * @param visibility  文档可见性
+     * @param deptId      部门 ID
+     * @param userId      用户 ID
+     * @param indexStatus 索引状态
+     * @param keyword     文件名关键字
+     * @param current     页码
+     * @param size        每页数量
      * @return 分页对象
      */
     @Override
@@ -196,9 +196,9 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
     /**
      * 下载对象存储文档
      *
-     * @param tenantId        租户 ID
-     * @param kbId 知识库 ID
-     * @param documentId      文档 ID
+     * @param tenantId   租户 ID
+     * @param kbId       知识库 ID
+     * @param documentId 文档 ID
      * @return 下载结果
      */
     @Override
@@ -225,9 +225,9 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
     /**
      * 提交对象存储文档索引执行
      *
-     * @param tenantId        租户 ID
-     * @param kbId 知识库 ID
-     * @param documentId      文档 ID
+     * @param tenantId   租户 ID
+     * @param kbId       知识库 ID
+     * @param documentId 文档 ID
      * @return 更新后的文档元数据
      */
     @Override

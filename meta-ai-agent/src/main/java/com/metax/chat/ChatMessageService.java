@@ -101,11 +101,11 @@ public class ChatMessageService {
      * <p>
      * fileIds 为空时回退当前会话 READY 文件，非空时只使用显式指定文件
      *
-     * @param chatId      会话 ID
-     * @param tenantId    租户 ID
-     * @param userId      用户 ID
-     * @param msg         用户消息
-     * @param fileIds     会话文件 ID 列表
+     * @param chatId   会话 ID
+     * @param tenantId 租户 ID
+     * @param userId   用户 ID
+     * @param msg      用户消息
+     * @param fileIds  会话文件 ID 列表
      * @return 记忆对话响应
      */
     private ChatMessageResponse chatWithFiles(String chatId,

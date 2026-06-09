@@ -109,8 +109,10 @@ public class MetaEtlPipelineFactory {
         // 这个过滤表达式依赖写入 metadata 与 Redis / Qdrant / Milvus 过滤字段保持同名
         FilterExpressionBuilder builder = new FilterExpressionBuilder();
         return builder.and(
-                builder.and(builder.eq(MetadataKeys.TENANT_ID, request.tenantId()),
-                        builder.eq(MetadataKeys.KB_ID, request.kbId())),
+                builder.and(
+                        builder.eq(MetadataKeys.SCOPE, MetadataKeys.SCOPE_KNOWLEDGE),
+                        builder.and(builder.eq(MetadataKeys.TENANT_ID, request.tenantId()),
+                                builder.eq(MetadataKeys.KB_ID, request.kbId()))),
                 builder.eq(MetadataKeys.DOCUMENT_ID, request.documentId())
         ).build();
     }

@@ -169,10 +169,10 @@ class MetaDocumentResourceFactoryTest {
     }
 
     private DocumentIndexingRequest request(DocumentSourceType sourceType,
-                                        String documentType,
-                                        String bucket,
-                                        String objectKey,
-                                        String localPath) {
+                                            String documentType,
+                                            String bucket,
+                                            String objectKey,
+                                            String localPath) {
         return DocumentIndexingRequest.builder()
                 .tenantId("tenant-1")
                 .kbId("kb-1")

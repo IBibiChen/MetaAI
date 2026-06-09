@@ -52,14 +52,14 @@ public class StorageDocumentController {
     /**
      * 上传对象存储文档
      *
-     * @param tenantId        租户 ID
-     * @param kbId 知识库 ID
-     * @param visibility      文档可见性
-     * @param deptId          部门 ID
-     * @param userId          用户 ID
-     * @param documentType    文档类型
-     * @param autoIndex       是否上传后自动索引
-     * @param file            上传文件
+     * @param tenantId     租户 ID
+     * @param kbId         知识库 ID
+     * @param visibility   文档可见性
+     * @param deptId       部门 ID
+     * @param userId       用户 ID
+     * @param documentType 文档类型
+     * @param autoIndex    是否上传后自动索引
+     * @param file         上传文件
      * @return 上传响应
      */
     @PostMapping(value = "/v1/storage/documents/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

@@ -65,15 +65,15 @@ public class DocumentIndexingService {
      * localPath 必须是相对 metax.ai.rag.storage.local-root 的路径
      * documentType 可以为空，为空时根据 localPath 后缀自动识别
      *
-     * @param tenantId        租户 ID
-     * @param kbId 知识库 ID
-     * @param documentId      文档 ID
-     * @param visibility      文档可见性
-     * @param deptId          部门 ID
-     * @param userId          用户 ID
-     * @param documentType    文档类型
-     * @param localPath       本地文件相对路径
-     * @param source          来源标识
+     * @param tenantId     租户 ID
+     * @param kbId         知识库 ID
+     * @param documentId   文档 ID
+     * @param visibility   文档可见性
+     * @param deptId       部门 ID
+     * @param userId       用户 ID
+     * @param documentType 文档类型
+     * @param localPath    本地文件相对路径
+     * @param source       来源标识
      * @return 文档索引执行
      */
     public DocumentIndexingRun importLocalFile(String tenantId,

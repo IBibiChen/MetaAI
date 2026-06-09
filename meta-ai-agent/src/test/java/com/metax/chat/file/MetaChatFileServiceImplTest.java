@@ -10,9 +10,11 @@ import org.springframework.ai.document.Document;
 import org.springframework.ai.document.DocumentReader;
 import org.springframework.ai.document.DocumentTransformer;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.ai.vectorstore.filter.Filter;
 import org.springframework.mock.web.MockMultipartFile;
 
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -22,6 +24,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.util.DigestUtils.md5DigestAsHex;
 
 /**
  * MetaChatFileServiceImplTest .
@@ -59,6 +62,15 @@ class MetaChatFileServiceImplTest {
             writtenDocuments.set(documents);
             return true;
         }));
+        verify(vectorStore).delete(org.mockito.ArgumentMatchers.<Filter.Expression>argThat(expression -> {
+            String filter = expression.toString();
+            return filter.contains("scope")
+                    && filter.contains("session")
+                    && filter.contains("tenantId")
+                    && filter.contains("userId")
+                    && filter.contains("chatId")
+                    && filter.contains("fileId");
+        }));
         Document document = writtenDocuments.get().get(0);
         assertThat(document.getMetadata())
                 .containsEntry(MetadataKeys.SCOPE, MetadataKeys.SCOPE_SESSION)
@@ -66,6 +78,8 @@ class MetaChatFileServiceImplTest {
                 .containsEntry(MetadataKeys.USER_ID, "u1")
                 .containsEntry(MetadataKeys.CHAT_ID, "c1")
                 .containsEntry(MetadataKeys.FILE_NAME, "demo.pdf")
+                .containsEntry(MetadataKeys.CONTENT_HASH,
+                        md5DigestAsHex("文件内容".getBytes(StandardCharsets.UTF_8)))
                 .containsKey(MetadataKeys.FILE_ID)
                 .doesNotContainKey(MetadataKeys.DOCUMENT_ID);
     }

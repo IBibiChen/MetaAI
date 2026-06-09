@@ -29,6 +29,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -342,6 +343,7 @@ public class MetaChatFileServiceImpl extends ServiceImpl<MetaChatFileMapper, Met
         metadata.put(MetadataKeys.FILE_NAME, file.getOriginalFilename());
         metadata.put(MetadataKeys.CHUNK_ID, chunkId);
         metadata.put(MetadataKeys.CHUNK_INDEX, index);
+        metadata.put(MetadataKeys.CONTENT_HASH, contentHash(document.getText()));
         metadata.put(MetadataKeys.CREATED_AT, file.getCreatedAt().toEpochMilli());
         Document enriched = Document.builder()
                 .id(vectorStoreId(file, chunkId))
@@ -366,9 +368,28 @@ public class MetaChatFileServiceImpl extends ServiceImpl<MetaChatFileMapper, Met
     private Filter.Expression fileDeleteFilter(MetaChatFileDO file) {
         FilterExpressionBuilder builder = new FilterExpressionBuilder();
         return builder.and(
-                builder.eq(MetadataKeys.SCOPE, MetadataKeys.SCOPE_SESSION),
-                builder.eq(MetadataKeys.FILE_ID, file.getFileId())
+                builder.and(
+                        builder.eq(MetadataKeys.SCOPE, MetadataKeys.SCOPE_SESSION),
+                        builder.eq(MetadataKeys.TENANT_ID, file.getTenantId())),
+                builder.and(
+                        builder.eq(MetadataKeys.USER_ID, file.getUserId()),
+                        builder.and(builder.eq(MetadataKeys.CHAT_ID, file.getChatId()),
+                                builder.eq(MetadataKeys.FILE_ID, file.getFileId())))
         ).build();
+    }
+
+    /**
+     * 计算 chunk 内容 hash
+     *
+     * <p>
+     * 会话文件与知识库文档使用同一套 contentHash 语义，便于后续审计和增量索引扩展
+     *
+     * @param text chunk 文本
+     * @return contentHash
+     */
+    private String contentHash(String text) {
+        String normalizedText = text == null ? "" : text;
+        return org.springframework.util.DigestUtils.md5DigestAsHex(normalizedText.getBytes(StandardCharsets.UTF_8));
     }
 
     /**

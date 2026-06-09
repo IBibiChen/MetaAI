@@ -32,6 +32,7 @@ class MetaDocumentMetadataTransformerTest {
         assertThat(documents).hasSize(1);
         Document document = documents.get(0);
         assertThat(document.getMetadata())
+                .containsEntry(MetadataKeys.SCOPE, MetadataKeys.SCOPE_KNOWLEDGE)
                 .containsEntry(MetadataKeys.TENANT_ID, "tenant-1")
                 .containsEntry(MetadataKeys.KB_ID, "kb-1")
                 .containsEntry(MetadataKeys.VISIBILITY, "PUBLIC")

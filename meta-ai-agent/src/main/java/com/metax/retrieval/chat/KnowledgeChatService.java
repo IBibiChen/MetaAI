@@ -35,9 +35,9 @@ import java.util.Objects;
  * @version v1.0
  * @since 2026/6/8
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
-@Slf4j
 public class KnowledgeChatService {
 
     private final ChatClient ragChatClient;

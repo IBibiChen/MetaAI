@@ -60,6 +60,8 @@ class MetaEtlPipelineFactoryTest {
         assertThat(pipeline.snapshotWriters()).isEmpty();
         assertThat(pipeline.sink().vectorStore()).isSameAs(vectorStore);
         assertThat(pipeline.sink().deleteFilter().toString())
+                .contains("scope")
+                .contains("knowledge")
                 .contains("tenantId")
                 .contains("kbId")
                 .contains("documentId");
