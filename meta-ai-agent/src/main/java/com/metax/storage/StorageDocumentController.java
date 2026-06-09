@@ -2,6 +2,11 @@ package com.metax.storage;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.metax.common.CommonResult;
+import com.metax.storage.response.StorageDocumentDownloadResponse;
+import com.metax.storage.response.StorageDocumentUploadResponse;
+import com.metax.storage.request.StorageDocumentPageRequest;
+import com.metax.storage.request.StorageDocumentScopeRequest;
+import com.metax.storage.request.StorageDocumentUploadRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
@@ -11,7 +16,6 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.core.io.InputStreamResource;
@@ -22,12 +26,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.util.StringUtils;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.nio.charset.StandardCharsets;
 
@@ -52,38 +54,17 @@ public class StorageDocumentController {
     /**
      * 上传对象存储文档
      *
-     * @param tenantId     租户 ID
-     * @param kbId         知识库 ID
-     * @param visibility   文档可见性
-     * @param deptId       部门 ID
-     * @param userId       用户 ID
-     * @param documentType 文档类型
-     * @param autoIndex    是否上传后自动索引
-     * @param file         上传文件
+     * <p>
+     * Multipart 表单字段统一封装到 StorageDocumentUploadRequest，避免 Controller 暴露长参数列表
+     *
+     * @param request 上传请求
      * @return 上传响应
      */
     @PostMapping(value = "/v1/storage/documents/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(summary = "上传对象存储文档", description = "上传文件到 RustFS，并保存对象存储文档元数据")
     public CommonResult<StorageDocumentUploadResponse> upload(
-            @Parameter(description = "租户 ID", example = "t1", required = true)
-            @NotBlank(message = "tenantId 不能为空") @RequestParam(name = "tenantId") String tenantId,
-            @Parameter(description = "知识库 ID", example = "kb1", required = true)
-            @NotBlank(message = "kbId 不能为空")
-            @RequestParam(name = "kbId") String kbId,
-            @Parameter(description = "文档可见性，可选值：PUBLIC、DEPT、USER", example = "PUBLIC")
-            @RequestParam(name = "visibility", defaultValue = "PUBLIC") String visibility,
-            @Parameter(description = "部门 ID，visibility=DEPT 时必填", example = "d1")
-            @RequestParam(name = "deptId", required = false) String deptId,
-            @Parameter(description = "用户 ID，visibility=USER 时必填", example = "u1")
-            @RequestParam(name = "userId", required = false) String userId,
-            @Parameter(description = "文档类型，可为空，为空时索引阶段根据文件名识别", example = "pdf")
-            @RequestParam(name = "documentType", required = false) String documentType,
-            @Parameter(description = "是否上传后自动提交索引执行", example = "false")
-            @RequestParam(name = "autoIndex", defaultValue = "false") Boolean autoIndex,
-            @Parameter(description = "上传文件", required = true)
-            @NotNull(message = "file 不能为空") @RequestPart(name = "file") MultipartFile file) {
-        return CommonResult.success(storageDocumentService.upload(tenantId, kbId, visibility, deptId,
-                userId, documentType, autoIndex, file));
+            @Valid @ModelAttribute StorageDocumentUploadRequest request) {
+        return CommonResult.success(storageDocumentService.upload(request));
     }
 
     /**
@@ -95,9 +76,7 @@ public class StorageDocumentController {
     @GetMapping(value = "/v1/storage/documents/page")
     @Operation(summary = "分页查询对象存储文档", description = "按租户、知识库、索引状态和文件名关键字分页查询文档元数据")
     public CommonResult<Page<StorageDocumentDO>> page(@Valid @ParameterObject StorageDocumentPageRequest request) {
-        return CommonResult.success(storageDocumentService.pageDocuments(request.getTenantId(),
-                request.getKbId(), request.getVisibility(), request.getDeptId(), request.getUserId(),
-                request.getIndexStatus(), request.getKeyword(), request.getCurrent(), request.getSize()));
+        return CommonResult.success(storageDocumentService.pageDocuments(request));
     }
 
     /**
@@ -116,10 +95,10 @@ public class StorageDocumentController {
             })
     public ResponseEntity<InputStreamResource> download(
             @Valid @ParameterObject StorageDocumentScopeRequest request,
-            @Parameter(description = "文档 ID", example = "1938200000000000001", required = true,
-                    in = ParameterIn.PATH)
+            @Parameter(description = "文档 ID", example = "1938200000000000001", required = true, in = ParameterIn.PATH)
             @NotBlank(message = "documentId 不能为空") @PathVariable String documentId) {
-        StorageDocumentDownload download = storageDocumentService.download(request.getTenantId(),
+
+        StorageDocumentDownloadResponse download = storageDocumentService.download(request.getTenantId(),
                 request.getKbId(), documentId);
         return downloadResponse(download);
     }
@@ -141,9 +120,9 @@ public class StorageDocumentController {
                                     schema = @Schema(type = "string", format = "binary")))
             })
     public ResponseEntity<InputStreamResource> downloadByDocumentId(
-            @Parameter(description = "文档 ID", example = "1938200000000000001", required = true,
-                    in = ParameterIn.PATH)
+            @Parameter(description = "文档 ID", example = "1938200000000000001", required = true, in = ParameterIn.PATH)
             @NotBlank(message = "documentId 不能为空") @PathVariable String documentId) {
+
         return downloadResponse(storageDocumentService.download(documentId));
     }
 
@@ -156,7 +135,7 @@ public class StorageDocumentController {
      * @param download 下载结果
      * @return 文件流响应
      */
-    private ResponseEntity<InputStreamResource> downloadResponse(StorageDocumentDownload download) {
+    private ResponseEntity<InputStreamResource> downloadResponse(StorageDocumentDownloadResponse download) {
         ContentDisposition disposition = ContentDisposition.attachment()
                 .filename(download.filename(), StandardCharsets.UTF_8)
                 .build();
@@ -181,9 +160,9 @@ public class StorageDocumentController {
     @Operation(summary = "提交对象存储文档索引执行", description = "根据 documentId 读取对象存储元数据并提交异步索引执行")
     public CommonResult<StorageDocumentDO> index(
             @Valid @ParameterObject StorageDocumentScopeRequest request,
-            @Parameter(description = "文档 ID", example = "1938200000000000001", required = true,
-                    in = ParameterIn.PATH)
+            @Parameter(description = "文档 ID", example = "1938200000000000001", required = true, in = ParameterIn.PATH)
             @NotBlank(message = "documentId 不能为空") @PathVariable String documentId) {
+
         return CommonResult.success(storageDocumentService.index(request.getTenantId(), request.getKbId(),
                 documentId));
     }

@@ -1,5 +1,6 @@
 package com.metax.storage;
 
+import com.metax.storage.response.StorageDocumentDownloadResponse;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -86,7 +87,7 @@ class StorageDocumentControllerTest {
      */
     @Test
     void shouldDownloadByGlobalDocumentId() throws Exception {
-        when(storageDocumentService.download("doc-1")).thenReturn(new StorageDocumentDownload("demo.txt",
+        when(storageDocumentService.download("doc-1")).thenReturn(new StorageDocumentDownloadResponse("demo.txt",
                 "text/plain", 5L, new ByteArrayInputStream("hello".getBytes())));
 
         mockMvc.perform(get("/v1/storage/documents/download/doc-1"))

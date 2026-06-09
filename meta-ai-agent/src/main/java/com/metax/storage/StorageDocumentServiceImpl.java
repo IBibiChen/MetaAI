@@ -13,6 +13,10 @@ import com.metax.rag.indexing.DocumentIndexingService;
 import com.metax.rag.model.DocumentVisibility;
 import com.metax.rag.storage.ObjectStorageClient;
 import com.metax.rag.storage.StoredObject;
+import com.metax.storage.request.StorageDocumentPageRequest;
+import com.metax.storage.request.StorageDocumentUploadRequest;
+import com.metax.storage.response.StorageDocumentDownloadResponse;
+import com.metax.storage.response.StorageDocumentUploadResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -46,23 +50,62 @@ import java.util.HexFormat;
 public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMapper, StorageDocumentDO>
         implements StorageDocumentService {
 
+    /**
+     * 默认页码
+     */
     private static final long DEFAULT_CURRENT = 1L;
 
+    /**
+     * 默认每页数量
+     */
     private static final long DEFAULT_SIZE = 20L;
 
+    /**
+     * 最大分页数量
+     */
     private static final long MAX_PAGE_SIZE = 500L;
 
+    /**
+     * 单个对象存储文档最大上传大小
+     */
     private static final long MAX_UPLOAD_SIZE = 100 * 1024 * 1024L;
 
+    /**
+     * 对象存储路径按月份分桶，避免单目录对象过多
+     */
     private static final DateTimeFormatter OBJECT_DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy/MM")
             .withZone(ZoneId.systemDefault());
 
+    /**
+     * 对象存储客户端
+     *
+     * <p>
+     * 当前实现通过 RustFS / S3 兼容接口保存和读取原始文件
+     */
     private final ObjectStorageClient objectStorageClient;
 
+    /**
+     * 文档索引服务
+     *
+     * <p>
+     * 上传后自动索引和手动索引都会提交 DocumentIndexingRequest 到该服务
+     */
     private final DocumentIndexingService documentIndexingService;
 
+    /**
+     * RAG 配置属性
+     *
+     * <p>
+     * 当前用于读取对象存储 provider，写入 StorageDocumentDO 便于排查来源
+     */
     private final RagProperties ragProperties;
 
+    /**
+     * 文档类型解析器
+     *
+     * <p>
+     * 当请求未传 documentType 时，根据上传文件名推断 Reader 类型
+     */
     private final MetaDocumentTypeResolver documentTypeResolver;
 
     public StorageDocumentServiceImpl(ObjectStorageClient objectStorageClient,
@@ -78,28 +121,23 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
     /**
      * 上传对象存储文档
      *
-     * @param tenantId     租户 ID
-     * @param kbId         知识库 ID
-     * @param visibility   文档可见性
-     * @param deptId       部门 ID
-     * @param userId       用户 ID
-     * @param documentType 文档类型
-     * @param autoIndex    是否上传后自动索引
-     * @param file         上传文件
+     * <p>
+     * 上传链路同步完成对象存储写入和元数据表保存，autoIndex 为 true 时继续提交异步索引执行
+     *
+     * @param request 上传请求
      * @return 上传响应
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public StorageDocumentUploadResponse upload(String tenantId,
-                                                String kbId,
-                                                String visibility,
-                                                String deptId,
-                                                String userId,
-                                                String documentType,
-                                                Boolean autoIndex,
-                                                MultipartFile file) {
+    public StorageDocumentUploadResponse upload(StorageDocumentUploadRequest request) {
+        String tenantId = request.getTenantId();
+        String kbId = request.getKbId();
+        MultipartFile file = request.getFile();
+
+        // 租户和知识库是对象存储文档的硬边界，后续索引和检索都会依赖这两个字段
         validateScope(tenantId, kbId);
-        DocumentVisibility resolvedVisibility = resolveVisibility(visibility, deptId, userId);
+        DocumentVisibility resolvedVisibility = resolveVisibility(request.getVisibility(), request.getDeptId(),
+                request.getUserId());
         Assert.notNull(file, "file must not be null");
         if (file.isEmpty()) {
             throw new IllegalArgumentException("file must not be empty");
@@ -109,20 +147,21 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
         }
 
         String originalFilename = resolveOriginalFilename(file);
-        String resolvedDocumentType = documentTypeResolver.resolve(documentType, originalFilename);
+        String resolvedDocumentType = documentTypeResolver.resolve(request.getDocumentType(), originalFilename);
         String documentId = newDocumentId();
         String fileSha256 = fileSha256(file);
         String objectKey = objectKey(tenantId, kbId, documentId, fileSha256, originalFilename);
         String bucket = objectStorageClient.defaultBucket();
         String contentType = resolveContentType(file);
+        // 原始文件先进入对象存储，后续下载和索引 Reader 都从对象存储读取
         StoredObject storedObject = putObject(bucket, objectKey, file, contentType);
 
         StorageDocumentDO entity = new StorageDocumentDO();
         entity.setTenantId(tenantId);
         entity.setKbId(kbId);
         entity.setVisibility(resolvedVisibility.name());
-        entity.setDeptId(deptId);
-        entity.setUserId(userId);
+        entity.setDeptId(request.getDeptId());
+        entity.setUserId(request.getUserId());
         entity.setDocumentId(documentId);
         entity.setOriginalFilename(originalFilename);
         entity.setBucket(bucket);
@@ -143,13 +182,15 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
         entity.setCreatedAt(now);
         entity.setUpdatedAt(now);
         try {
+            // 元数据保存失败时删除刚上传的对象，避免对象存储残留业务不可见文件
             save(entity);
         } catch (RuntimeException ex) {
             objectStorageClient.deleteObject(bucket, objectKey);
             throw ex;
         }
-        if (Boolean.TRUE.equals(autoIndex)) {
+        if (Boolean.TRUE.equals(request.getAutoIndex())) {
             try {
+                // 自动索引失败不回滚上传结果，只把索引状态标记为 INDEX_FAILED
                 indexSavedDocument(entity);
             } catch (RuntimeException ex) {
                 entity.setIndexStatus(StorageDocumentIndexStatus.INDEX_FAILED.name());
@@ -165,30 +206,21 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
     /**
      * 分页查询对象存储文档
      *
-     * @param tenantId    租户 ID
-     * @param kbId        知识库 ID
-     * @param visibility  文档可见性
-     * @param deptId      部门 ID
-     * @param userId      用户 ID
-     * @param indexStatus 索引状态
-     * @param keyword     文件名关键字
-     * @param current     页码
-     * @param size        每页数量
+     * <p>
+     * 查询前会同步最新索引执行状态，避免列表展示旧的 INDEXING / INDEX_FAILED 状态
+     *
+     * @param request 分页查询请求
      * @return 分页对象
      */
     @Override
-    public Page<StorageDocumentDO> pageDocuments(String tenantId,
-                                                 String kbId,
-                                                 String visibility,
-                                                 String deptId,
-                                                 String userId,
-                                                 String indexStatus,
-                                                 String keyword,
-                                                 Long current,
-                                                 Long size) {
+    public Page<StorageDocumentDO> pageDocuments(StorageDocumentPageRequest request) {
+        String tenantId = request.getTenantId();
+        String kbId = request.getKbId();
         validateScope(tenantId, kbId);
-        Page<StorageDocumentDO> result = page(Page.of(resolveCurrent(current), resolveSize(size)),
-                query(tenantId, kbId, visibility, deptId, userId, indexStatus, keyword));
+        Page<StorageDocumentDO> result = page(Page.of(resolveCurrent(request.getCurrent()),
+                        resolveSize(request.getSize())),
+                query(tenantId, kbId, request.getVisibility(), request.getDeptId(), request.getUserId(),
+                        request.getIndexStatus(), request.getKeyword()));
         result.getRecords().forEach(this::syncIndexStatus);
         return result;
     }
@@ -202,7 +234,7 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
      * @return 下载结果
      */
     @Override
-    public StorageDocumentDownload download(String tenantId, String kbId, String documentId) {
+    public StorageDocumentDownloadResponse download(String tenantId, String kbId, String documentId) {
         StorageDocumentDO entity = getByDocumentId(tenantId, kbId, documentId);
         return download(entity);
     }
@@ -217,7 +249,7 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
      * @return 下载结果
      */
     @Override
-    public StorageDocumentDownload download(String documentId) {
+    public StorageDocumentDownloadResponse download(String documentId) {
         StorageDocumentDO entity = getByDocumentId(documentId);
         return download(entity);
     }
@@ -234,15 +266,25 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
     @Transactional(rollbackFor = Exception.class)
     public StorageDocumentDO index(String tenantId, String kbId, String documentId) {
         StorageDocumentDO entity = getByDocumentId(tenantId, kbId, documentId);
+        // 手动索引复用上传后的元数据，避免接口层重复拼装对象存储读取参数
         indexSavedDocument(entity);
         return entity;
     }
 
+    /**
+     * 提交已保存文档的索引执行
+     *
+     * <p>
+     * 索引服务异步执行 ETL，本方法只负责更新提交前状态和记录最新 runId
+     *
+     * @param entity 已保存的对象存储文档元数据
+     */
     private void indexSavedDocument(StorageDocumentDO entity) {
         entity.setIndexStatus(StorageDocumentIndexStatus.INDEXING.name());
         entity.setUpdatedAt(Instant.now());
         updateById(entity);
         try {
+            // DocumentIndexingRequest 只表达知识库文档索引，scope 由 RAG metadata Transformer 固定写入 knowledge
             documentIndexingService.submit(DocumentIndexingRequest.builder()
                     .tenantId(entity.getTenantId())
                     .kbId(entity.getKbId())
@@ -257,11 +299,13 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
                     .bucket(entity.getBucket())
                     .objectKey(entity.getObjectKey())
                     .build(), run -> {
+                // beforeRun 在索引执行开始前回调，用于把 runId 绑定回业务文档
                 entity.setLatestIndexingRunId(run.runId());
                 entity.setUpdatedAt(Instant.now());
                 updateById(entity);
             });
         } catch (RuntimeException ex) {
+            // 提交失败说明本轮索引没有进入 RUNNING，立即回写失败状态
             entity.setIndexStatus(StorageDocumentIndexStatus.INDEX_FAILED.name());
             entity.setUpdatedAt(Instant.now());
             updateById(entity);
@@ -269,6 +313,14 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
         }
     }
 
+    /**
+     * 同步索引执行状态
+     *
+     * <p>
+     * 列表查询时根据最新 runId 读取索引服务状态，并回写对象存储文档表
+     *
+     * @param entity 文档元数据
+     */
     private void syncIndexStatus(StorageDocumentDO entity) {
         if (!StringUtils.hasText(entity.getLatestIndexingRunId())) {
             return;
@@ -287,6 +339,7 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
         if (!indexStatus.name().equals(entity.getIndexStatus())) {
             entity.setIndexStatus(indexStatus.name());
             entity.setUpdatedAt(Instant.now());
+            // 这里只同步状态，不修改 chunkCount，chunkCount 由 StorageDocumentIndexingRunObserver 统一处理
             updateById(entity);
         }
     }
@@ -300,9 +353,9 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
      * @param entity 文档元数据
      * @return 下载结果
      */
-    private StorageDocumentDownload download(StorageDocumentDO entity) {
-        return new StorageDocumentDownload(entity.getOriginalFilename(), entity.getContentType(), entity.getFileSize(),
-                objectStorageClient.getObject(entity.getBucket(), entity.getObjectKey()));
+    private StorageDocumentDownloadResponse download(StorageDocumentDO entity) {
+        return new StorageDocumentDownloadResponse(entity.getOriginalFilename(), entity.getContentType(),
+                entity.getFileSize(), objectStorageClient.getObject(entity.getBucket(), entity.getObjectKey()));
     }
 
     /**
@@ -318,6 +371,14 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
         return IdWorker.getIdStr();
     }
 
+    /**
+     * 按租户、知识库和文档 ID 查询未删除文档
+     *
+     * @param tenantId   租户 ID
+     * @param kbId       知识库 ID
+     * @param documentId 文档 ID
+     * @return 文档元数据
+     */
     private StorageDocumentDO getByDocumentId(String tenantId, String kbId, String documentId) {
         validateScope(tenantId, kbId);
         Assert.hasText(documentId, "documentId must not be blank");
@@ -332,6 +393,15 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
         return entity;
     }
 
+    /**
+     * 按全局 documentId 查询未删除文档
+     *
+     * <p>
+     * 该入口服务于 RAG references 下载，依赖 documentId 数据库唯一约束
+     *
+     * @param documentId 文档 ID
+     * @return 文档元数据
+     */
     private StorageDocumentDO getByDocumentId(String documentId) {
         Assert.hasText(documentId, "documentId must not be blank");
         StorageDocumentDO entity = getOne(new LambdaQueryWrapper<StorageDocumentDO>()
@@ -343,6 +413,18 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
         return entity;
     }
 
+    /**
+     * 构造分页查询条件
+     *
+     * @param tenantId    租户 ID
+     * @param kbId        知识库 ID
+     * @param visibility  文档可见性
+     * @param deptId      部门 ID
+     * @param userId      用户 ID
+     * @param indexStatus 索引状态
+     * @param keyword     文件名关键字
+     * @return MyBatis Plus 查询条件
+     */
     private LambdaQueryWrapper<StorageDocumentDO> query(String tenantId,
                                                         String kbId,
                                                         String visibility,
@@ -363,6 +445,15 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
                 .orderByDesc(StorageDocumentDO::getId);
     }
 
+    /**
+     * 上传文件内容到对象存储
+     *
+     * @param bucket      bucket
+     * @param objectKey   object key
+     * @param file        上传文件
+     * @param contentType 内容类型
+     * @return 对象存储写入结果
+     */
     private StoredObject putObject(String bucket, String objectKey, MultipartFile file, String contentType) {
         try (InputStream inputStream = file.getInputStream()) {
             return objectStorageClient.putObject(bucket, objectKey, inputStream, file.getSize(), contentType);
@@ -371,6 +462,15 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
         }
     }
 
+    /**
+     * 计算上传文件 SHA-256
+     *
+     * <p>
+     * hash 用于对象路径、重复排查和审计，不作为业务 documentId
+     *
+     * @param file 上传文件
+     * @return SHA-256 十六进制字符串
+     */
     private String fileSha256(MultipartFile file) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
@@ -386,6 +486,19 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
         }
     }
 
+    /**
+     * 构造对象存储路径
+     *
+     * <p>
+     * 路径包含 tenantId、kbId、月份、documentId 和文件 hash，便于人工定位和排查
+     *
+     * @param tenantId         租户 ID
+     * @param kbId             知识库 ID
+     * @param documentId       文档 ID
+     * @param fileSha256       文件 SHA-256
+     * @param originalFilename 原始文件名
+     * @return 对象存储 object key
+     */
     private String objectKey(String tenantId,
                              String kbId,
                              String documentId,
@@ -397,6 +510,12 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
                 extension);
     }
 
+    /**
+     * 提取文件扩展名
+     *
+     * @param filename 文件名
+     * @return 小写扩展名
+     */
     private String fileExtension(String filename) {
         int index = filename.lastIndexOf('.');
         if (index < 0 || index == filename.length() - 1) {
@@ -405,6 +524,15 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
         return filename.substring(index).toLowerCase();
     }
 
+    /**
+     * 解析浏览器上传的原始文件名
+     *
+     * <p>
+     * 浏览器可能上传带路径的文件名，这里只保留最后一级文件名
+     *
+     * @param file 上传文件
+     * @return 原始文件名
+     */
     private String resolveOriginalFilename(MultipartFile file) {
         String filename = file.getOriginalFilename();
         if (!StringUtils.hasText(filename)) {
@@ -413,10 +541,22 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
         return filename.replace("\\", "/").substring(filename.replace("\\", "/").lastIndexOf('/') + 1);
     }
 
+    /**
+     * 解析上传文件 Content-Type
+     *
+     * @param file 上传文件
+     * @return 内容类型
+     */
     private String resolveContentType(MultipartFile file) {
         return StringUtils.hasText(file.getContentType()) ? file.getContentType() : "application/octet-stream";
     }
 
+    /**
+     * 转换上传响应
+     *
+     * @param entity 文档元数据
+     * @return 上传响应
+     */
     private StorageDocumentUploadResponse response(StorageDocumentDO entity) {
         return new StorageDocumentUploadResponse(entity.getDocumentId(), entity.getOriginalFilename(),
                 entity.getVisibility(), entity.getDeptId(), entity.getUserId(), entity.getBucket(),
@@ -424,6 +564,14 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
                 entity.getIndexStatus(), entity.getChunkCount(), entity.getLatestIndexingRunId());
     }
 
+    /**
+     * 解析并校验文档可见性
+     *
+     * @param visibility 原始可见性
+     * @param deptId     部门 ID
+     * @param userId     用户 ID
+     * @return 文档可见性
+     */
     private DocumentVisibility resolveVisibility(String visibility, String deptId, String userId) {
         DocumentVisibility resolvedVisibility = DocumentVisibility.resolve(visibility);
         if (resolvedVisibility == DocumentVisibility.DEPT) {
@@ -435,15 +583,33 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
         return resolvedVisibility;
     }
 
+    /**
+     * 校验租户和知识库边界
+     *
+     * @param tenantId 租户 ID
+     * @param kbId     知识库 ID
+     */
     private void validateScope(String tenantId, String kbId) {
         Assert.hasText(tenantId, "tenantId must not be blank");
         Assert.hasText(kbId, "kbId must not be blank");
     }
 
+    /**
+     * 解析页码
+     *
+     * @param current 原始页码
+     * @return 兜底后的页码
+     */
     private long resolveCurrent(Long current) {
         return current == null || current < DEFAULT_CURRENT ? DEFAULT_CURRENT : current;
     }
 
+    /**
+     * 解析每页数量
+     *
+     * @param size 原始每页数量
+     * @return 兜底并限制上限后的每页数量
+     */
     private long resolveSize(Long size) {
         if (size == null || size <= 0) {
             return DEFAULT_SIZE;

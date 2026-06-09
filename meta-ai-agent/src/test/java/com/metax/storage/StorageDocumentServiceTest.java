@@ -7,6 +7,9 @@ import com.metax.rag.indexing.DocumentIndexingRun;
 import com.metax.rag.indexing.DocumentIndexingService;
 import com.metax.rag.storage.ObjectStorageClient;
 import com.metax.rag.storage.StoredObject;
+import com.metax.storage.request.StorageDocumentUploadRequest;
+import com.metax.storage.response.StorageDocumentDownloadResponse;
+import com.metax.storage.response.StorageDocumentUploadResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -61,8 +64,8 @@ class StorageDocumentServiceTest {
                 eq("text/plain"))).thenReturn(new StoredObject("meta-ai-knowledge", "key", "etag", null, 11L,
                 "text/plain"));
 
-        StorageDocumentUploadResponse response = service.upload("t1", "kb1", null, null, null, null, false,
-                new MockMultipartFile("file", "demo.txt", "text/plain", "hello world".getBytes()));
+        StorageDocumentUploadResponse response = service.upload(uploadRequest("t1", "kb1", null, null,
+                null, null, false));
 
         assertThat(response.documentId()).isNotBlank();
         assertThat(response.originalFilename()).isEqualTo("demo.txt");
@@ -94,8 +97,8 @@ class StorageDocumentServiceTest {
             return run;
         });
 
-        StorageDocumentUploadResponse response = service.upload("t1", "kb1", "DEPT", "dept-1", null, "txt", true,
-                new MockMultipartFile("file", "demo.txt", "text/plain", "hello world".getBytes()));
+        StorageDocumentUploadResponse response = service.upload(uploadRequest("t1", "kb1", "DEPT",
+                "dept-1", null, "txt", true));
 
         ArgumentCaptor<DocumentIndexingRequest> captor = ArgumentCaptor.forClass(DocumentIndexingRequest.class);
         verify(documentIndexingService).submit(captor.capture(), any());
@@ -117,7 +120,7 @@ class StorageDocumentServiceTest {
         when(objectStorageClient.getObject("meta-ai-knowledge", "storage/t1/kb1/demo.txt"))
                 .thenReturn(new ByteArrayInputStream("hello".getBytes()));
 
-        StorageDocumentDownload download = service.download("doc-1");
+        StorageDocumentDownloadResponse download = service.download("doc-1");
 
         assertThat(download.filename()).isEqualTo("demo.txt");
         assertThat(download.contentType()).isEqualTo("text/plain");
@@ -147,6 +150,25 @@ class StorageDocumentServiceTest {
         entity.setFileSize(5L);
         entity.setDeleted(Boolean.FALSE);
         return entity;
+    }
+
+    private StorageDocumentUploadRequest uploadRequest(String tenantId,
+                                                       String kbId,
+                                                       String visibility,
+                                                       String deptId,
+                                                       String userId,
+                                                       String documentType,
+                                                       Boolean autoIndex) {
+        StorageDocumentUploadRequest request = new StorageDocumentUploadRequest();
+        request.setTenantId(tenantId);
+        request.setKbId(kbId);
+        request.setVisibility(visibility);
+        request.setDeptId(deptId);
+        request.setUserId(userId);
+        request.setDocumentType(documentType);
+        request.setAutoIndex(autoIndex);
+        request.setFile(new MockMultipartFile("file", "demo.txt", "text/plain", "hello world".getBytes()));
+        return request;
     }
 
     private static final class FakeStorageDocumentService extends StorageDocumentServiceImpl {
