@@ -31,7 +31,6 @@ import java.time.Duration;
  * metax.ai.rag.snapshot.output-dir=D:/meta-ai/rag-snapshots
  * metax.ai.rag.storage.provider=object
  * metax.ai.rag.storage.endpoint=http://localhost:9000
- * metax.ai.rag.storage.local-root=D:/meta-ai/knowledge
  * }</pre>
  *
  * @author IBibiChen
@@ -593,7 +592,6 @@ public class RagProperties {
          *
          * <p>
          * object 表示对象存储，当前默认使用 RustFS，兼容 MinIO 等 S3 协议对象存储
-         * legacy 预留给老系统文件服务适配器
          */
         private String provider = "object";
 
@@ -633,14 +631,6 @@ public class RagProperties {
          * RustFS / MinIO 私有化部署通常不强依赖 region，但 AWS SDK 仍要求提供一个值
          */
         private String region = "us-east-1";
-
-        /**
-         * 本地知识库文件根目录
-         *
-         * <p>
-         * 本地导入只允许读取该目录下的相对路径，避免接口读取任意系统文件
-         */
-        private String localRoot = "D:/meta-ai/knowledge";
 
         /**
          * 是否在对象存储服务启动时初始化默认 bucket
@@ -696,14 +686,6 @@ public class RagProperties {
 
         public void setRegion(String region) {
             this.region = region;
-        }
-
-        public String getLocalRoot() {
-            return localRoot;
-        }
-
-        public void setLocalRoot(String localRoot) {
-            this.localRoot = localRoot;
         }
 
         public boolean isInitializeBucket() {

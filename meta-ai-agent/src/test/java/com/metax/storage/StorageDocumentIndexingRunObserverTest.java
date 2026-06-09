@@ -4,7 +4,6 @@ import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.core.conditions.AbstractWrapper;
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
-import com.metax.rag.etl.model.DocumentSourceType;
 import com.metax.rag.indexing.DocumentIndexingRequest;
 import com.metax.rag.indexing.DocumentIndexingRun;
 import com.metax.rag.indexing.DocumentIndexingStatus;
@@ -97,7 +96,6 @@ class StorageDocumentIndexingRunObserverTest {
                 .documentId("doc-1")
                 .visibility("PUBLIC")
                 .documentType("txt")
-                .sourceType(DocumentSourceType.OBJECT_STORAGE)
                 .source("source.txt")
                 .documentName("source.txt")
                 .bucket("bucket")

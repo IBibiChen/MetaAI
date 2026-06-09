@@ -1,6 +1,5 @@
 package com.metax.rag.indexing;
 
-import com.metax.rag.etl.model.DocumentSourceType;
 import com.metax.rag.model.DocumentVisibility;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
@@ -20,7 +19,7 @@ import lombok.experimental.Accessors;
  * VectorStore 由 spring.ai.vectorstore.type 选择
  * tenantId 和 kbId 决定后续检索过滤边界
  * documentId 决定重复上传时覆盖哪份文档的旧 chunk
- * sourceType 决定文件来自对象存储文件流还是受控本地目录
+ * bucket 和 objectKey 决定从对象存储读取哪份原始文档
  *
  * <p>
  * 示例
@@ -30,7 +29,6 @@ import lombok.experimental.Accessors;
  *         .kbId("kb1")
  *         .documentId("doc-001")
  *         .documentType("markdown")
- *         .sourceType(DocumentSourceType.OBJECT_STORAGE)
  *         .source("knowledge/t1/kb1/demo.md")
  *         .bucket("meta-ai-knowledge")
  *         .objectKey("knowledge/t1/kb1/demo.md")
@@ -82,17 +80,12 @@ public final class DocumentIndexingRequest {
      * 文档类型，用于选择 Reader 和后续检索过滤
      *
      * <p>
-     * 允许调用方为空，提交文档索引执行前会根据 localPath 或 objectKey 自动识别
+     * 允许调用方为空，提交文档索引执行前会根据 objectKey 自动识别
      */
     private final String documentType;
 
     /**
-     * 文档来源类型，只区分对象存储文件流和受控本地文件
-     */
-    private final DocumentSourceType sourceType;
-
-    /**
-     * 文档来源，通常是对象存储 objectKey、本地相对路径或业务来源路径
+     * 文档来源，通常是对象存储 objectKey 或业务来源路径
      */
     private final String source;
 
@@ -110,20 +103,6 @@ public final class DocumentIndexingRequest {
      * 对象存储 object key
      */
     private final String objectKey;
-
-    /**
-     * 本地文件相对路径，必须位于 metax.ai.rag.storage.local-root 下
-     */
-    private final String localPath;
-
-    /**
-     * 返回用于推断 documentType 的路径提示
-     *
-     * @return 本地相对路径或对象存储 objectKey
-     */
-    public String typeHint() {
-        return sourceType == DocumentSourceType.LOCAL_FILE ? localPath : objectKey;
-    }
 
     /**
      * 返回解析后的文档可见性
@@ -150,12 +129,10 @@ public final class DocumentIndexingRequest {
                 .deptId(deptId)
                 .userId(userId)
                 .documentType(resolvedDocumentType)
-                .sourceType(sourceType)
                 .source(resolvedSource)
                 .documentName(documentName)
                 .bucket(bucket)
                 .objectKey(objectKey)
-                .localPath(localPath)
                 .build();
     }
 }

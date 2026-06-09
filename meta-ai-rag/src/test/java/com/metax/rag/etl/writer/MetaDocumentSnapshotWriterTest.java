@@ -1,7 +1,6 @@
 package com.metax.rag.etl.writer;
 
 import com.metax.rag.config.RagProperties;
-import com.metax.rag.etl.model.DocumentSourceType;
 import com.metax.rag.indexing.DocumentIndexingRequest;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.document.Document;
@@ -64,7 +63,6 @@ class MetaDocumentSnapshotWriterTest {
                 .documentId("doc-1")
                 .visibility("PUBLIC")
                 .documentType("markdown")
-                .sourceType(DocumentSourceType.OBJECT_STORAGE)
                 .source("docs/demo.md")
                 .documentName("demo.md")
                 .bucket("bucket")
@@ -79,7 +77,6 @@ class MetaDocumentSnapshotWriterTest {
                 .documentId("doc:1")
                 .visibility("PUBLIC")
                 .documentType("markdown")
-                .sourceType(DocumentSourceType.OBJECT_STORAGE)
                 .source("docs/demo.md")
                 .documentName("demo.md")
                 .bucket("bucket")

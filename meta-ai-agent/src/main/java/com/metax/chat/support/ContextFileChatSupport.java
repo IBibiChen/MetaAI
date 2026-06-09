@@ -8,7 +8,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.stereotype.Component;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -31,25 +30,6 @@ public class ContextFileChatSupport {
     private final MetaContextFileAdvisor metaContextFileAdvisor;
 
     private final ChatScopeResolver chatScopeResolver;
-
-    /**
-     * 上传并索引本轮会话文件
-     *
-     * @param tenantId 租户 ID
-     * @param userId   用户 ID
-     * @param chatId   会话 ID
-     * @param files    本轮上传文件
-     * @return 本轮上传文件描述
-     */
-    public List<MetaContextFile> uploadFiles(String tenantId, String userId, String chatId, MultipartFile[] files) {
-        if (files == null || files.length == 0) {
-            return List.of();
-        }
-
-        // 会话文件必须同时绑定 tenantId、userId 和 chatId，避免跨租户或跨会话复用临时文件
-        ChatScope scope = chatScopeResolver.required(chatId, tenantId, userId);
-        return metaChatFileService.uploadAndIndex(scope.tenantId(), scope.userId(), chatId, files);
-    }
 
     /**
      * 按文件 ID 解析本次可用 READY 会话文件

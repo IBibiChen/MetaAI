@@ -1,7 +1,6 @@
 package com.metax.rag.pipeline;
 
 import com.metax.rag.config.RagProperties;
-import com.metax.rag.etl.model.DocumentSourceType;
 import com.metax.rag.etl.reader.JsonDocumentReaderStrategy;
 import com.metax.rag.etl.reader.MarkdownDocumentReaderStrategy;
 import com.metax.rag.etl.reader.MetaDocumentReaderFactory;
@@ -13,10 +12,9 @@ import com.metax.rag.indexing.DocumentIndexingContext;
 import com.metax.rag.indexing.DocumentIndexingRequest;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.vectorstore.VectorStore;
-import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.ByteArrayResource;
 
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -36,11 +34,7 @@ class MetaEtlPipelineFactoryTest {
      */
     @Test
     void shouldCreateIndexingPipeline() throws Exception {
-        Path localRoot = Files.createTempDirectory("meta-rag-pipeline-root");
-        Files.createDirectories(localRoot.resolve("docs"));
-        Files.writeString(localRoot.resolve("docs/demo.txt"), "Spring AI RAG");
         RagProperties properties = new RagProperties();
-        properties.getStorage().setLocalRoot(localRoot.toString());
         VectorStore vectorStore = mock(VectorStore.class);
         MetaEtlPipelineFactory factory = new MetaEtlPipelineFactory(
                 properties,
@@ -49,8 +43,7 @@ class MetaEtlPipelineFactoryTest {
                 new MetaDocumentTransformerFactory(properties)
         );
         DocumentIndexingContext context = new DocumentIndexingContext(request(),
-                new MetaDocumentResource(new FileSystemResource(localRoot.resolve("docs/demo.txt")),
-                        "txt", "docs/demo.txt"));
+                new MetaDocumentResource(resource(), "txt", "docs/demo.txt"));
 
         MetaEtlUpsertPipeline pipeline = factory.createIndexingPipeline(context);
 
@@ -72,11 +65,7 @@ class MetaEtlPipelineFactoryTest {
      */
     @Test
     void shouldCreateSnapshotWriterWhenEnabled() throws Exception {
-        Path localRoot = Files.createTempDirectory("meta-rag-pipeline-root");
-        Files.createDirectories(localRoot.resolve("docs"));
-        Files.writeString(localRoot.resolve("docs/demo.txt"), "Spring AI RAG");
         RagProperties properties = new RagProperties();
-        properties.getStorage().setLocalRoot(localRoot.toString());
         properties.getSnapshot().setEnabled(true);
         properties.getSnapshot().setOutputDir(Files.createTempDirectory("meta-rag-snapshot").toString());
         VectorStore vectorStore = mock(VectorStore.class);
@@ -87,8 +76,7 @@ class MetaEtlPipelineFactoryTest {
                 new MetaDocumentTransformerFactory(properties)
         );
         DocumentIndexingContext context = new DocumentIndexingContext(request(),
-                new MetaDocumentResource(new FileSystemResource(localRoot.resolve("docs/demo.txt")),
-                        "txt", "docs/demo.txt"));
+                new MetaDocumentResource(resource(), "txt", "docs/demo.txt"));
 
         MetaEtlUpsertPipeline pipeline = factory.createIndexingPipeline(context);
 
@@ -112,10 +100,20 @@ class MetaEtlPipelineFactoryTest {
                 .documentId("doc-1")
                 .visibility("PUBLIC")
                 .documentType("txt")
-                .sourceType(DocumentSourceType.LOCAL_FILE)
                 .source("docs/demo.txt")
                 .documentName("demo.txt")
-                .localPath("docs/demo.txt")
+                .bucket("bucket")
+                .objectKey("docs/demo.txt")
                 .build();
+    }
+
+    private ByteArrayResource resource() {
+        return new ByteArrayResource("Spring AI RAG".getBytes()) {
+
+            @Override
+            public String getFilename() {
+                return "demo.txt";
+            }
+        };
     }
 }

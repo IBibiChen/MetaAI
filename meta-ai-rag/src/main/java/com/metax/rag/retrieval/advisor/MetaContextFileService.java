@@ -17,16 +17,6 @@ import java.util.List;
 public interface MetaContextFileService {
 
     /**
-     * 查询当前会话可用文件
-     *
-     * @param tenantId 租户 ID
-     * @param userId   用户 ID
-     * @param chatId   会话 ID
-     * @return 会话级上下文文件
-     */
-    List<MetaContextFile> readyFiles(String tenantId, String userId, String chatId);
-
-    /**
      * 检索会话文件内容
      *
      * @param tenantId 租户 ID

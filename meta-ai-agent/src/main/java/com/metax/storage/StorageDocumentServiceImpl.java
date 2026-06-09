@@ -5,7 +5,6 @@ import com.baomidou.mybatisplus.core.toolkit.IdWorker;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.metax.rag.config.RagProperties;
-import com.metax.rag.etl.model.DocumentSourceType;
 import com.metax.rag.etl.resource.MetaDocumentTypeResolver;
 import com.metax.rag.indexing.DocumentIndexingRequest;
 import com.metax.rag.indexing.DocumentIndexingRun;
@@ -293,7 +292,6 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
                     .deptId(entity.getDeptId())
                     .userId(entity.getUserId())
                     .documentType(entity.getDocumentType())
-                    .sourceType(DocumentSourceType.OBJECT_STORAGE)
                     .source(entity.getSource())
                     .documentName(entity.getOriginalFilename())
                     .bucket(entity.getBucket())

@@ -32,10 +32,4 @@ public interface DocumentStorageService {
      */
     InputStream getObject(String bucket, String objectKey);
 
-    /**
-     * 默认 bucket 名称
-     *
-     * @return 默认 bucket 名称
-     */
-    String defaultBucket();
 }

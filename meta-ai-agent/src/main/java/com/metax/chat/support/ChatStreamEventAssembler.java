@@ -56,48 +56,6 @@ public class ChatStreamEventAssembler {
     private final RetrievalResponseAssembler retrievalResponseAssembler;
 
     /**
-     * 普通聊天文本流
-     *
-     * <p>
-     * 普通聊天只需要模型增量文本，不需要读取 ChatClientResponse context 或 metadata
-     * 这里使用 stream().content() 展示最轻量的 Spring AI 流式用法
-     *
-     * @param requestSpec ChatClient 请求
-     * @param fkId        会话主表 ID
-     * @param chatId      会话 ID
-     * @param historyType 历史类型
-     * @return SSE 流式事件
-     */
-    public Flux<ServerSentEvent<Object>> contentStream(ChatClient.ChatClientRequestSpec requestSpec,
-                                                       Long fkId,
-                                                       String chatId,
-                                                       MetaChatHistoryType historyType) {
-        StringBuilder answer = new StringBuilder();
-
-        // meta 事件先把 chatId 返回给前端，前端可立即绑定当前会话
-        Flux<ServerSentEvent<Object>> meta = Flux.just(event("meta", new ChatStreamMeta(chatId)));
-
-        // content 流只处理增量文本，所有非空片段都会追加到完整回答缓冲区
-        Flux<ServerSentEvent<Object>> body = requestSpec.stream()
-                .content()
-                .filter(content -> content != null && !content.isEmpty())
-                .doOnNext(answer::append)
-                .map(content -> event("delta", new ChatStreamDelta(content)));
-
-        // done 事件负责写入助手完整回答，避免每个 delta 都落完整历史
-        Mono<ServerSentEvent<Object>> done = Mono.fromSupplier(() -> {
-            String fullAnswer = answer.toString();
-            chatHistoryRecorder.saveAssistantMessage(fkId, chatId, historyType, fullAnswer);
-            return event("done", new ChatStreamDone(fullAnswer, chatId, List.of()));
-        });
-        return meta.concatWith(body).concatWith(done)
-                .onErrorResume(ex -> {
-                    log.error("流式对话发生异常：chatId = {}", chatId, ex);
-                    return Flux.just(event("error", new ChatStreamError("系统异常")));
-                });
-    }
-
-    /**
      * 深层响应流
      *
      * <p>

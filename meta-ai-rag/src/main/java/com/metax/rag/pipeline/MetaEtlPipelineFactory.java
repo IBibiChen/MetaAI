@@ -67,7 +67,7 @@ public class MetaEtlPipelineFactory {
         DocumentIndexingRequest request = context.request();
         // 当前应用只启用一套 VectorStore，写入和查询都使用配置文件选中的同一个向量库
         VectorStore resolvedVectorStore = vectorStore;
-        // Reader 阶段把对象存储或本地文件解析为 Spring AI Document
+        // Reader 阶段把对象存储文件解析为 Spring AI Document
         DocumentReader reader = documentReaderFactory.create(context.documentResource());
         // Transformer 顺序固定为文档 metadata -> chunk 切分 -> chunk metadata -> 内容格式化
         List<DocumentTransformer> transformers = List.of(
@@ -92,7 +92,7 @@ public class MetaEtlPipelineFactory {
      *
      * <p>
      * 这里保留 List<DocumentWriter> 而不是单个 Writer，是为了继续使用 Spring AI DocumentWriter 抽象
-     * 后续如果需要同时输出本地文件、对象存储快照或审计样本，可以在这里追加多个 Writer
+     * 后续如果需要同时输出对象存储快照或审计样本，可以在这里追加多个 Writer
      *
      * @param request 文档索引请求
      * @return ETL 快照 Writer 列表
