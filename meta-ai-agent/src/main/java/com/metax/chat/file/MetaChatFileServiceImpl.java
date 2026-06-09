@@ -10,6 +10,7 @@ import com.metax.rag.etl.transformer.MetaDocumentTransformerFactory;
 import com.metax.rag.model.MetadataKeys;
 import com.metax.rag.retrieval.advisor.MetaContextFile;
 import com.metax.rag.storage.ObjectStorageClient;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.document.DocumentReader;
@@ -48,6 +49,7 @@ import java.util.*;
  */
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class MetaChatFileServiceImpl extends ServiceImpl<MetaChatFileMapper, MetaChatFileDO>
         implements MetaChatFileService {
 
@@ -82,37 +84,22 @@ public class MetaChatFileServiceImpl extends ServiceImpl<MetaChatFileMapper, Met
 
     private final VectorStore vectorStore;
 
-    public MetaChatFileServiceImpl(ObjectStorageClient objectStorageClient,
-                                   MetaDocumentTypeResolver documentTypeResolver,
-                                   MetaDocumentReaderFactory documentReaderFactory,
-                                   MetaDocumentTransformerFactory documentTransformerFactory,
-                                   VectorStore vectorStore) {
-        this.objectStorageClient = objectStorageClient;
-        this.documentTypeResolver = documentTypeResolver;
-        this.documentReaderFactory = documentReaderFactory;
-        this.documentTransformerFactory = documentTransformerFactory;
-        this.vectorStore = vectorStore;
-    }
-
     /**
      * 上传并解析聊天文件
      *
      * <p>
      * 本方法同步完成对象存储归档、Reader 解析、chunk 切分和 VectorStore 写入
-     * v1 选择同步链路，是为了让同一次 POST /v1/chat 可以立即基于上传文件回答
+     * v1 选择同步链路，是为了让后续问答流可以立即通过 fileIds 引用已上传文件
      *
-     * @param tenantId       租户 ID
-     * @param userId         用户 ID
-     * @param chatId 会话 ID
-     * @param files          上传文件
+     * @param tenantId 租户 ID
+     * @param userId   用户 ID
+     * @param chatId   会话 ID
+     * @param files    上传文件
      * @return 已解析文件列表
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public List<MetaContextFile> uploadAndIndex(String tenantId,
-                                                String userId,
-                                                String chatId,
-                                                MultipartFile[] files) {
+    public List<MetaContextFile> uploadAndIndex(String tenantId, String userId, String chatId, MultipartFile[] files) {
         if (files == null || files.length == 0) {
             return List.of();
         }
@@ -127,9 +114,12 @@ public class MetaChatFileServiceImpl extends ServiceImpl<MetaChatFileMapper, Met
     /**
      * 查询当前会话可用文件
      *
-     * @param tenantId       租户 ID
-     * @param userId         用户 ID
-     * @param chatId 会话 ID
+     * <p>
+     * 只返回 READY 且未删除的文件，用于 fileIds 为空时的会话文件回退
+     *
+     * @param tenantId 租户 ID
+     * @param userId   用户 ID
+     * @param chatId   会话 ID
      * @return 文件列表
      */
     @Override
@@ -148,13 +138,54 @@ public class MetaChatFileServiceImpl extends ServiceImpl<MetaChatFileMapper, Met
     }
 
     /**
+     * 按文件 ID 查询当前会话可用文件
+     *
+     * <p>
+     * 显式 fileIds 必须全部属于当前 tenantId、userId、chatId 且处于 READY 状态
+     *
+     * @param tenantId 租户 ID
+     * @param userId   用户 ID
+     * @param chatId   会话 ID
+     * @param fileIds  文件 ID 列表
+     * @return 文件列表
+     */
+    @Override
+    public List<MetaContextFile> readyFiles(String tenantId, String userId, String chatId, List<String> fileIds) {
+        validateScope(tenantId, userId, chatId);
+        List<String> resolvedFileIds = normalizeFileIds(fileIds);
+        if (resolvedFileIds.isEmpty()) {
+            // 空 fileIds 的语义由上层定义为回退当前会话 READY 文件
+            return readyFiles(tenantId, userId, chatId);
+        }
+        List<MetaContextFile> files = list(new LambdaQueryWrapper<MetaChatFileDO>()
+                .eq(MetaChatFileDO::getTenantId, tenantId)
+                .eq(MetaChatFileDO::getUserId, userId)
+                .eq(MetaChatFileDO::getChatId, chatId)
+                .eq(MetaChatFileDO::getParseStatus, MetaChatFileStatus.READY.name())
+                .eq(MetaChatFileDO::getDeleted, Boolean.FALSE)
+                .in(MetaChatFileDO::getFileId, resolvedFileIds)
+                .orderByDesc(MetaChatFileDO::getCreatedAt))
+                .stream()
+                .map(this::contextFile)
+                .toList();
+        if (files.size() != resolvedFileIds.size()) {
+            // 缺失任何一个 fileId 都说明文件不可用或越权，直接失败比静默忽略更安全
+            throw new IllegalArgumentException("fileIds 包含不可用或无权访问的会话文件");
+        }
+        return files;
+    }
+
+    /**
      * 检索聊天文件内容
      *
-     * @param tenantId       租户 ID
-     * @param userId         用户 ID
-     * @param chatId 会话 ID
-     * @param files          文件列表
-     * @param query          用户问题
+     * <p>
+     * 仅在当前会话、当前用户、当前租户范围内检索 Service 层传入的文件集合
+     *
+     * @param tenantId 租户 ID
+     * @param userId   用户 ID
+     * @param chatId   会话 ID
+     * @param files    文件列表
+     * @param query    用户问题
      * @return 命中的 chunk
      */
     @Override
@@ -168,6 +199,7 @@ public class MetaChatFileServiceImpl extends ServiceImpl<MetaChatFileMapper, Met
         if (files == null || files.isEmpty()) {
             return List.of();
         }
+        // 向量检索过滤条件同时包含租户、用户、会话和 fileId，避免命中其他会话文件
         SearchRequest request = SearchRequest.builder()
                 .query(query)
                 .topK(DEFAULT_TOP_K)
@@ -184,10 +216,10 @@ public class MetaChatFileServiceImpl extends ServiceImpl<MetaChatFileMapper, Met
      * 文件先归档到对象存储，再写入元数据表，最后同步写入 scope = session 的临时向量索引
      * 解析失败时回写 PARSE_FAILED，并删除本次已经归档的对象，避免无效文件继续被会话引用
      *
-     * @param tenantId       租户 ID
-     * @param userId         用户 ID
-     * @param chatId 会话 ID
-     * @param file           上传文件
+     * @param tenantId 租户 ID
+     * @param userId   用户 ID
+     * @param chatId   会话 ID
+     * @param file     上传文件
      * @return 已完成索引的文件元数据
      */
     private MetaChatFileDO uploadAndIndexOne(String tenantId,
@@ -346,10 +378,10 @@ public class MetaChatFileServiceImpl extends ServiceImpl<MetaChatFileMapper, Met
      * 会话文件检索必须同时限定 scope、tenantId、userId、chatId 和 fileId
      * 这里的 fileId 来自本次上传文件或当前会话 READY 文件，不能用知识库 documentId 替代
      *
-     * @param tenantId       租户 ID
-     * @param userId         用户 ID
-     * @param chatId 会话 ID
-     * @param files          本次允许检索的会话文件
+     * @param tenantId 租户 ID
+     * @param userId   用户 ID
+     * @param chatId   会话 ID
+     * @param files    本次允许检索的会话文件
      * @return 会话文件检索过滤表达式
      */
     private Filter.Expression fileFilter(String tenantId,
@@ -448,7 +480,7 @@ public class MetaChatFileServiceImpl extends ServiceImpl<MetaChatFileMapper, Met
      *
      * @param tenantId         租户 ID
      * @param userId           用户 ID
-     * @param chatId   会话 ID
+     * @param chatId           会话 ID
      * @param fileId           文件 ID
      * @param fileSha256       文件 SHA-256
      * @param originalFilename 原始文件名
@@ -508,11 +540,28 @@ public class MetaChatFileServiceImpl extends ServiceImpl<MetaChatFileMapper, Met
     }
 
     /**
+     * 规范化文件 ID 列表
+     *
+     * @param fileIds 原始文件 ID 列表
+     * @return 去重后的非空文件 ID 列表
+     */
+    private List<String> normalizeFileIds(List<String> fileIds) {
+        if (fileIds == null || fileIds.isEmpty()) {
+            return List.of();
+        }
+        return fileIds.stream()
+                .filter(StringUtils::hasText)
+                .map(String::trim)
+                .distinct()
+                .toList();
+    }
+
+    /**
      * 校验会话文件作用域
      *
-     * @param tenantId       租户 ID
-     * @param userId         用户 ID
-     * @param chatId 会话 ID
+     * @param tenantId 租户 ID
+     * @param userId   用户 ID
+     * @param chatId   会话 ID
      */
     private void validateScope(String tenantId, String userId, String chatId) {
         Assert.hasText(tenantId, "tenantId must not be blank");

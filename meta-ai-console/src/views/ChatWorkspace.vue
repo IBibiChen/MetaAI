@@ -200,6 +200,19 @@
                 </div>
               </div>
 
+              <div v-if="messageItem.files?.length" class="references session-files">
+                <div class="section-label">会话文件</div>
+                <div class="citation-list">
+                  <span
+                      v-for="file in messageItem.files"
+                      :key="file.fileId"
+                      class="citation-item file-source"
+                  >
+                    {{ file.fileName }}
+                  </span>
+                </div>
+              </div>
+
               <div v-if="messageItem.trace" class="trace-block">
                 <div class="section-label">检索 Trace</div>
                 <n-code
@@ -265,6 +278,23 @@
       </div>
 
       <footer class="composer">
+        <input
+            ref="chatFileInputRef"
+            class="chat-file-input"
+            type="file"
+            multiple
+            @change="handleChatFileChange"
+        />
+        <div v-if="chatFiles.length" class="chat-file-strip">
+          <span
+              v-for="file in chatFiles"
+              :key="file.fileId"
+              class="chat-file-chip"
+              :title="file.fileName"
+          >
+            {{ file.fileName }}
+          </span>
+        </div>
         <n-input
             class="composer-input"
             v-model:value="draft"
@@ -273,6 +303,20 @@
             :autosize="{ minRows: 2, maxRows: 5 }"
             @keydown.enter="handleEnter"
         />
+        <n-button
+            class="composer-button attachment-button"
+            secondary
+            :loading="chatFileUploading"
+            :disabled="sending || chatFileUploading"
+            @click="openChatFilePicker"
+        >
+          <template #icon>
+            <n-icon>
+              <Paperclip/>
+            </n-icon>
+          </template>
+          附件
+        </n-button>
         <n-button
             v-if="sending"
             class="composer-button streaming-stop-button"
@@ -402,6 +446,7 @@ import {
   Copy,
   Eraser,
   ListFilter,
+  Paperclip,
   Pencil,
   Pin,
   RefreshCw,
@@ -415,16 +460,26 @@ import {
 
 import {
   deleteChat,
+  fetchChatFiles,
   fetchChatHistoryByChatId,
   fetchChats,
   renameChat,
-  streamPlainChat,
-  streamRagChat,
+  streamPlainChatJson,
+  streamRagChatJson,
   updateChatFlags,
+  uploadChatFiles,
 } from '@/api/chat'
 import {fetchStorageDocuments} from '@/api/storage'
 import {useWorkspaceStore} from '@/stores/workspace'
-import type {MetaChat, RetrievalDocumentReference, RetrievalTrace, StorageDocument} from '@/types/api'
+import type {
+  ChatOptions,
+  MetaChat,
+  MetaContextFile,
+  RetrievalDocumentReference,
+  RetrievalTrace,
+  StorageDocument
+} from '@/types/api'
+import type {ChatStreamHandle} from '@/api/chat'
 
 interface ChatMessage {
   id: string
@@ -433,6 +488,7 @@ interface ChatMessage {
   time: string
   typing?: boolean
   references?: RetrievalDocumentReference[]
+  files?: MetaContextFile[]
   trace?: RetrievalTrace
 }
 
@@ -448,11 +504,14 @@ const workspace = useWorkspaceStore()
 const message = useMessage()
 const messageViewport = ref<HTMLElement | null>(null)
 const messageScrollbarTrack = ref<HTMLElement | null>(null)
+const chatFileInputRef = ref<HTMLInputElement | null>(null)
 const messages = ref<ChatMessage[]>([])
 const chats = ref<MetaChat[]>([])
+const chatFiles = ref<MetaContextFile[]>([])
 const activeChatId = ref<string | null>(null)
 const draft = ref('')
 const sending = ref(false)
+const chatFileUploading = ref(false)
 const historyLoading = ref(false)
 const messageTransitioning = ref(false)
 const messageScrollbarVisible = ref(false)
@@ -565,7 +624,7 @@ const ragForm = reactive({
 const activeChat = computed(() => chats.value.find((item) => item.id === activeChatId.value) || null)
 let stopActiveTyping: (() => void) | null = null
 let activeTypingRenderer: TypingRenderer | null = null
-let activeStream: EventSource | null = null
+let activeStream: ChatStreamHandle | null = null
 let streamStoppedByUser = false
 let messageResizeObserver: ResizeObserver | null = null
 let messageScrollbarHideTimer: number | null = null
@@ -581,6 +640,7 @@ onMounted(async () => {
   await loadChats()
   if (activeChatId.value && messages.value.length === 0) {
     await loadHistory()
+    await loadChatFiles()
   }
 })
 
@@ -593,6 +653,7 @@ watch(() => workspace.contextVersion, async () => {
   stopStreaming()
   activeChatId.value = null
   messages.value = []
+  chatFiles.value = []
   scopeDocuments.value = []
   clearRetrievalScope()
   await loadChats()
@@ -660,9 +721,10 @@ async function sendMessageContent(content: string) {
       if (streamStoppedByUser) return
       typingRenderer.enqueue(payload.content || '')
     },
-    onDone: (payload: { answer?: string, references?: RetrievalDocumentReference[] }) => {
+    onDone: (payload: { answer?: string, references?: RetrievalDocumentReference[], files?: MetaContextFile[] }) => {
       if (streamStoppedByUser) return
       assistantMessage.references = payload.references
+      assistantMessage.files = payload.files
       typingRenderer.complete(payload.answer)
     },
     onError: (payload: { message?: string }) => {
@@ -675,22 +737,54 @@ async function sendMessageContent(content: string) {
     },
   }
 
+  const selectedFileIds = chatFiles.value.map((file) => file.fileId)
   if (chatMode.value === 'plain') {
-    activeStream = streamPlainChat(workspace.chatId, workspace.tenantId, workspace.userId, content, handlers)
+    activeStream = streamPlainChatJson(chatOptions(content), selectedFileIds, handlers)
   } else {
-    activeStream = streamRagChat(
-        {
-          chatId: workspace.chatId,
-          msg: content,
-          tenantId: workspace.tenantId,
-          kbId: workspace.kbId,
-          userId: workspace.userId,
-          deptIds: workspace.deptIds,
-          documentId: ragForm.documentId || undefined,
-          documentType: ragForm.documentType || undefined,
-        },
-        handlers,
-    )
+    activeStream = streamRagChatJson(chatOptions(content), selectedFileIds, handlers)
+  }
+}
+
+function chatOptions(content: string): ChatOptions {
+  return {
+    chatId: workspace.chatId,
+    msg: content,
+    tenantId: workspace.tenantId,
+    kbId: workspace.kbId,
+    userId: workspace.userId,
+    deptIds: workspace.deptIds,
+    documentId: ragForm.documentId || undefined,
+    documentType: ragForm.documentType || undefined,
+  }
+}
+
+function openChatFilePicker() {
+  chatFileInputRef.value?.click()
+}
+
+async function handleChatFileChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  const files = Array.from(input.files || [])
+  input.value = ''
+  if (!files.length || chatFileUploading.value) return
+
+  workspace.persist()
+  chatFileUploading.value = true
+  try {
+    chatFiles.value = await uploadChatFiles(workspace.chatId, workspace.tenantId, workspace.userId, files)
+    message.success('会话文件已上传')
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '上传会话文件失败')
+  } finally {
+    chatFileUploading.value = false
+  }
+}
+
+async function loadChatFiles() {
+  try {
+    chatFiles.value = await fetchChatFiles(workspace.chatId, workspace.tenantId, workspace.userId)
+  } catch {
+    chatFiles.value = []
   }
 }
 
@@ -803,6 +897,7 @@ function handleNewSession() {
   workspace.resetSession()
   activeChatId.value = null
   messages.value = []
+  chatFiles.value = []
 }
 
 async function loadChats() {
@@ -814,6 +909,7 @@ async function loadChats() {
     const current = chats.value.find((item) => item.chatId === workspace.chatId)
     if (current) {
       activeChatId.value = current.id
+      await loadChatFiles()
     }
   } catch (error) {
     message.error(error instanceof Error ? error.message : '加载对话失败')
@@ -827,6 +923,7 @@ async function selectChat(chat: MetaChat) {
   activeChatId.value = chat.id
   workspace.selectChat(chat.chatId)
   await loadHistory()
+  await loadChatFiles()
 }
 
 async function togglePinned(chat: MetaChat) {
@@ -2255,13 +2352,47 @@ async function downloadReference(reference: RetrievalDocumentReference) {
   cursor: pointer;
 }
 
+.file-source {
+  cursor: default;
+}
+
+.session-files .citation-item {
+  border-color: rgba(126, 168, 255, 0.24);
+  color: #c9d8ff;
+  background: rgba(126, 168, 255, 0.08);
+}
+
 .composer {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 12px;
   padding: 14px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.chat-file-input {
+  display: none;
+}
+
+.chat-file-strip {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chat-file-chip {
+  max-width: 220px;
+  border: 1px solid rgba(126, 168, 255, 0.24);
+  border-radius: 6px;
+  padding: 5px 9px;
+  overflow: hidden;
+  color: #c9d8ff;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: rgba(126, 168, 255, 0.08);
 }
 
 .composer-input :deep(.n-input__textarea-el::placeholder) {
@@ -2291,6 +2422,10 @@ async function downloadReference(reference: RetrievalDocumentReference) {
   --n-text-color-pressed: #ffe7ad !important;
   box-shadow: 0 0 0 1px rgba(255, 203, 104, 0.08), 0 10px 22px rgba(255, 173, 52, 0.08);
   animation: stop-button-pulse var(--stop-pulse-duration) ease-in-out infinite;
+}
+
+.attachment-button {
+  min-width: 86px;
 }
 
 .streaming-stop-button::before {

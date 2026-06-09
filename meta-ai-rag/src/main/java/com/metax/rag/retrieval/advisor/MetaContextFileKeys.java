@@ -33,17 +33,18 @@ public final class MetaContextFileKeys {
     public static final String ORIGINAL_USER_QUERY = "metax.contextFile.originalUserQuery";
 
     /**
-     * 本轮新上传的文件（当前请求刚接收到的文件）
-     */
-    public static final String INCOMING_FILES = "metax.contextFile.incomingFiles";
-
-    /**
-     * 本次参与上下文增强的所有文件
+     * 本次参与上下文增强的所有会话文件
+     *
+     * <p>
+     * 由业务 Service 层解析 fileIds 后写入，Advisor 只消费该字段
      */
     public static final String CONTEXT_FILES = "metax.contextFile.contextFiles";
 
     /**
-     * 本次命中的文件 chunk
+     * 本次命中的会话文件 chunk
+     *
+     * <p>
+     * 由文件 Advisor 检索后写入，用于响应 metadata 和排查文件上下文命中情况
      */
     public static final String DOCUMENTS = "metax.contextFile.documents";
 

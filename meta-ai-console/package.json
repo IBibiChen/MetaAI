@@ -10,6 +10,7 @@
     "typecheck": "vue-tsc -b"
   },
   "dependencies": {
+    "@microsoft/fetch-event-source": "^2.0.1",
     "axios": "^1.7.9",
     "dompurify": "^3.4.8",
     "lucide-vue-next": "^0.552.0",

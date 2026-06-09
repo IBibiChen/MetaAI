@@ -22,7 +22,7 @@ import java.util.stream.Collectors;
  * MetaContextFileAdvisor .
  *
  * <p>
- * 会话级文件上下文 Advisor，负责检索临时上传文件并把文件上下文追加到用户 prompt
+ * 会话级文件上下文 Advisor，负责消费 Service 层解析出的会话文件并把文件上下文追加到用户 prompt
  *
  * @author IBibiChen
  * @version v1.0
@@ -61,17 +61,20 @@ public class MetaContextFileAdvisor implements BaseAdvisor {
             return chatClientRequest;
         }
 
+        // 文件检索必须使用用户原始问题，不能使用已被其他 Advisor 增强后的 prompt
         String query = contextValue(context, MetaContextFileKeys.ORIGINAL_USER_QUERY);
         if (!StringUtils.hasText(query)) {
             query = chatClientRequest.prompt().getUserMessage().getText();
         }
         List<MetaContextFile> files = files(context, tenantId, userId, chatId);
         if (files.isEmpty()) {
+            // 没有文件上下文时仍写入空 metadata，保证响应组装阶段结构稳定
             context.put(MetaContextFileKeys.CONTEXT_FILES, List.of());
             context.put(MetaContextFileKeys.DOCUMENTS, List.of());
             return chatClientRequest.mutate().context(context).build();
         }
 
+        // 只检索 Service 层传入的 CONTEXT_FILES，避免 Advisor 隐式混入历史文件
         List<Document> documents = contextFileService.retrieve(tenantId, userId, chatId, files, query);
         context.put(MetaContextFileKeys.CONTEXT_FILES, files);
         context.put(MetaContextFileKeys.DOCUMENTS, documents);
@@ -95,6 +98,7 @@ public class MetaContextFileAdvisor implements BaseAdvisor {
         ChatResponse.Builder chatResponseBuilder = chatClientResponse.chatResponse() == null
                 ? ChatResponse.builder()
                 : ChatResponse.builder().from(chatClientResponse.chatResponse());
+        // 把请求阶段写入的文件上下文透传到 ChatResponse metadata，供 done 事件和非流式响应组装
         chatResponseBuilder.metadata(MetaContextFileKeys.CONTEXT_FILES,
                 chatClientResponse.context().getOrDefault(MetaContextFileKeys.CONTEXT_FILES, List.of()));
         chatResponseBuilder.metadata(MetaContextFileKeys.DOCUMENTS,
@@ -115,8 +119,8 @@ public class MetaContextFileAdvisor implements BaseAdvisor {
      * 解析本次参与上下文增强的会话文件
      *
      * <p>
-     * 本轮新上传的 INCOMING_FILES 优先，确保上传后第一次提问只围绕新文件回答
-     * 未上传新文件时再回退到当前会话已解析完成的 READY 文件，支持连续追问
+     * CONTEXT_FILES 表示本次参与上下文增强的所有文件，是问答链路的标准输入
+     * Advisor 不再自行回退查询 READY 文件，避免文件选择逻辑分散在多层
      *
      * @param context  Advisor context
      * @param tenantId 租户 ID
@@ -129,13 +133,12 @@ public class MetaContextFileAdvisor implements BaseAdvisor {
                                         String tenantId,
                                         String userId,
                                         String chatId) {
-        Object uploaded = context.get(MetaContextFileKeys.INCOMING_FILES);
-        if (uploaded instanceof List<?> list && list.stream().allMatch(MetaContextFile.class::isInstance)) {
-            if (!list.isEmpty()) {
-                return (List<MetaContextFile>) list;
-            }
+        Object contextFiles = context.get(MetaContextFileKeys.CONTEXT_FILES);
+        if (contextFiles instanceof List<?> list && list.stream().allMatch(MetaContextFile.class::isInstance)) {
+            return (List<MetaContextFile>) list;
         }
-        return contextFileService.readyFiles(tenantId, userId, chatId);
+        // context 中没有合法 CONTEXT_FILES 时直接视为无文件，不再自行回退查 READY 文件
+        return List.of();
     }
 
     /**

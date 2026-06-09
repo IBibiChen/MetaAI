@@ -50,7 +50,7 @@ class MetaContextFileAdvisorTest {
                     spec.param(MetaContextFileKeys.USER_ID, "u1");
                     spec.param(MetaContextFileKeys.CHAT_ID, "c1");
                     spec.param(MetaContextFileKeys.ORIGINAL_USER_QUERY, "原始问题");
-                    spec.param(MetaContextFileKeys.INCOMING_FILES, List.of(file));
+                    spec.param(MetaContextFileKeys.CONTEXT_FILES, List.of(file));
                     spec.advisors(new MetaContextFileAdvisor(contextFileService));
                 })
                 .user("被增强后的问题")

@@ -268,6 +268,21 @@ export interface RetrievalDocumentReference {
 }
 
 /**
+ * 会话级临时文件
+ *
+ * <p>
+ * 对应后端 MetaContextFile
+ */
+export interface MetaContextFile {
+    /** 文件 ID */
+    fileId: string
+    /** 文件名称 */
+    fileName: string
+    /** 文档类型 */
+    documentType: string
+}
+
+/**
  * 检索链路 Trace
  *
  * <p>
@@ -302,8 +317,22 @@ export interface RetrievalChatResponse {
     chatId: string
     /** 引用来源列表 */
     references?: RetrievalDocumentReference[]
+    /** 本次实际参与上下文增强的会话临时文件 */
+    files?: MetaContextFile[]
     /** 检索链路 Trace */
     trace?: RetrievalTrace
+}
+
+/**
+ * 普通聊天响应
+ */
+export interface ChatMessageResponse {
+    /** 模型最终回答 */
+    answer?: string
+    /** 后端解析后的会话 ID */
+    chatId: string
+    /** 本次实际参与上下文增强的会话临时文件 */
+    files?: MetaContextFile[]
 }
 
 /**
@@ -332,6 +361,8 @@ export interface ChatStreamDone {
     chatId: string
     /** 回答引用的来源文档 */
     references?: RetrievalDocumentReference[]
+    /** 本次实际参与上下文增强的会话临时文件 */
+    files?: MetaContextFile[]
 }
 
 /**
@@ -368,4 +399,6 @@ export interface ChatOptions {
     documentType?: string
     /** 当前用户可访问部门 ID，多个值用英文逗号分隔 */
     deptIds?: string
+    /** 会话文件 ID 列表，空值表示回退当前会话 READY 文件 */
+    fileIds?: string[]
 }

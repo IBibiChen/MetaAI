@@ -1,6 +1,5 @@
 package com.metax.retrieval.chat;
 
-import com.metax.retrieval.chat.request.RetrievalChatFileRequest;
 import com.metax.retrieval.chat.request.RetrievalChatRequest;
 import com.metax.retrieval.debug.request.RetrievalDetailsRequest;
 import com.metax.rag.retrieval.model.RetrievalOptions;
@@ -40,29 +39,6 @@ public class RetrievalOptionsFactory {
                 .documentType(request.getDocumentType())
                 .userId(request.getUserId())
                 // deptIds 从接口逗号分隔文本转换成结构化权限过滤条件
-                .deptIds(parseCsv(request.getDeptIds()))
-                .query(msg)
-                .build();
-    }
-
-    /**
-     * 转换知识库问答文件请求
-     *
-     * @param request 知识库问答文件请求参数
-     * @param msg     实际用户消息
-     * @return 检索参数
-     */
-    public RetrievalOptions create(RetrievalChatFileRequest request, String msg) {
-        // 文件只补充 session scope 上下文，知识库过滤条件仍然必须由 tenantId 和 kbId 限定
-        validateRetrievalScope(request.getTenantId(), request.getKbId());
-        // 文件问答和普通问答共享 RetrievalOptions，文件列表由会话文件 Advisor 独立处理
-        return RetrievalOptions.builder()
-                .tenantId(request.getTenantId())
-                .kbId(request.getKbId())
-                .documentId(request.getDocumentId())
-                .documentType(request.getDocumentType())
-                .userId(request.getUserId())
-                // deptIds 会进入 RetrievalFilterExpressionFactory 生成部门级权限表达式
                 .deptIds(parseCsv(request.getDeptIds()))
                 .query(msg)
                 .build();

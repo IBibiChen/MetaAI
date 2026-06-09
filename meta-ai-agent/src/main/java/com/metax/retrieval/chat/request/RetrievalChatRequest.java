@@ -4,6 +4,8 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
+import java.util.List;
+
 /**
  * RetrievalChatRequest .
  *
@@ -73,4 +75,14 @@ public class RetrievalChatRequest {
     @Parameter(description = "当前用户可访问部门 ID 列表，多个用英文逗号分隔", example = "d1,d2")
     @Schema(description = "当前用户可访问部门 ID 列表，多个用英文逗号分隔", example = "d1,d2")
     private String deptIds;
+
+    /**
+     * 会话文件 ID 列表
+     *
+     * <p>
+     * 为空时回退当前会话 READY 文件，非空时只使用显式指定文件
+     */
+    @Parameter(description = "会话文件 ID 列表，空值表示回退当前会话 READY 文件", example = "2063846120613888002")
+    @Schema(description = "会话文件 ID 列表，空值表示回退当前会话 READY 文件", example = "[\"2063846120613888002\"]")
+    private List<String> fileIds;
 }
