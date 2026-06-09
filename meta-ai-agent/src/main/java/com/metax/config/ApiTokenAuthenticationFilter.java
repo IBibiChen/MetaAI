@@ -45,14 +45,12 @@ public class ApiTokenAuthenticationFilter extends OncePerRequestFilter {
      * 需要开发期 API Key 保护的接口路径规则
      *
      * <p>
-     * GET SSE 保持浏览器 EventSource 原生调用能力，不纳入此列表
+     * GET 协议保持浏览器 EventSource 原生调用能力，不纳入此列表
      * 新增需要自定义 Header 或文件上传的 POST 接口时，优先追加到这里
      */
     private static final List<PathPattern> API_KEY_REQUIRED_PATTERNS = parsePatterns(List.of(
             "/v1/chat",
-            "/v1/chat/stream",
             "/v1/rag",
-            "/v1/rag/stream",
             "/v1/chat/files"
     ));
 
@@ -96,7 +94,7 @@ public class ApiTokenAuthenticationFilter extends OncePerRequestFilter {
             filterChain.doFilter(request, response);
             return;
         }
-        // 前端 POST JSON 和文件上传统一使用 Bearer API Key，GET SSE 保持原生 EventSource 能力
+        // 前端 POST JSON 和文件上传统一使用 Bearer API Key，GET 协议保持原生 EventSource 能力
         String actualApiKey = resolveApiKey(request);
         if (!apiKey.equals(actualApiKey)) {
             writeUnauthorized(response);
@@ -109,7 +107,7 @@ public class ApiTokenAuthenticationFilter extends OncePerRequestFilter {
      * 判断当前请求是否需要 API Key 鉴权
      *
      * <p>
-     * 只保护 POST 接口，GET SSE 不拦截，避免破坏浏览器原生 EventSource 调用
+     * 只保护 POST 接口，GET 协议不拦截，避免破坏浏览器原生 EventSource 调用
      *
      * @param request HTTP 请求
      * @return true 表示需要校验 Authorization Header

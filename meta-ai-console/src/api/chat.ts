@@ -17,7 +17,7 @@ import type {
     RetrievalChatResponse,
 } from '@/types/api'
 
-// 本地开发期 API Token，必须与后端 metax.ai.security.api-token 保持一致
+// 本地开发期 API Key，必须与后端 metax.ai.security.api-key 保持一致
 const METAX_API_TOKEN = 'sk-metax-123456'
 const METAX_AUTHORIZATION = `Bearer ${METAX_API_TOKEN}`
 
@@ -50,6 +50,7 @@ export async function sendPlainChat(chatId: string, tenantId: string, userId: st
             tenantId,
             userId,
             msg,
+            stream: 'false',
             fileIds: toCsv(fileIds),
         },
     })
@@ -70,6 +71,7 @@ export async function sendPlainChatJson(options: ChatOptions, fileIds: string[] 
         tenantId: options.tenantId,
         userId: options.userId,
         msg: options.msg,
+        stream: false,
         fileIds,
     }), {
         headers: {
@@ -119,7 +121,7 @@ export async function fetchChatFiles(chatId: string, tenantId: string, userId: s
  * 发送普通聊天流
  *
  * <p>
- * 对应后端 GET /v1/chat/stream
+ * 对应后端 GET /v1/chat?stream=true
  * 使用 EventSource 消费 SSE 事件
  */
 export function streamPlainChat(
@@ -130,11 +132,12 @@ export function streamPlainChat(
     handlers: ChatStreamHandlers,
     fileIds: string[] = [],
 ) {
-    return openChatStream('/api/v1/chat/stream', {
+    return openChatStream('/api/v1/chat', {
         chatId,
         tenantId,
         userId,
         msg,
+        stream: 'true',
         fileIds: toCsv(fileIds),
     }, handlers)
 }
@@ -143,16 +146,17 @@ export function streamPlainChat(
  * 发送普通聊天 JSON 流
  *
  * <p>
- * 对应后端 POST /v1/chat/stream
+ * 对应后端 POST /v1/chat
  * 使用 fetchEventSource 携带 JSON body 和 Authorization Header
  * 适合带 fileIds 或需要鉴权 Header 的复杂流式问答
  */
 export function streamPlainChatJson(options: ChatOptions, fileIds: string[], handlers: ChatStreamHandlers) {
-    return openJsonChatStream('/api/v1/chat/stream', {
+    return openJsonChatStream('/api/v1/chat', {
         chatId: options.chatId,
         tenantId: options.tenantId,
         userId: options.userId,
         msg: options.msg,
+        stream: true,
         fileIds,
     }, handlers)
 }
@@ -171,6 +175,7 @@ export async function sendRagChat(options: ChatOptions) {
             msg: options.msg,
             tenantId: options.tenantId,
             kbId: options.kbId,
+            stream: 'false',
             documentId: options.documentId || undefined,
             documentType: options.documentType || undefined,
             userId: options.userId || undefined,
@@ -195,6 +200,7 @@ export async function sendRagChatJson(options: ChatOptions, fileIds: string[] = 
         msg: options.msg,
         tenantId: options.tenantId,
         kbId: options.kbId,
+        stream: false,
         documentId: options.documentId || undefined,
         documentType: options.documentType || undefined,
         userId: options.userId,
@@ -212,15 +218,16 @@ export async function sendRagChatJson(options: ChatOptions, fileIds: string[] = 
  * 发送 RAG 聊天流
  *
  * <p>
- * 对应后端 GET /v1/rag/stream
+ * 对应后端 GET /v1/rag?stream=true
  * done 事件返回完整 answer 和 references
  */
 export function streamRagChat(options: ChatOptions, handlers: ChatStreamHandlers) {
-    return openChatStream('/api/v1/rag/stream', {
+    return openChatStream('/api/v1/rag', {
         chatId: options.chatId,
         msg: options.msg,
         tenantId: options.tenantId,
         kbId: options.kbId,
+        stream: 'true',
         documentId: options.documentId,
         documentType: options.documentType,
         userId: options.userId,
@@ -233,16 +240,17 @@ export function streamRagChat(options: ChatOptions, handlers: ChatStreamHandlers
  * 发送 RAG JSON 聊天流
  *
  * <p>
- * 对应后端 POST /v1/rag/stream
+ * 对应后端 POST /v1/rag
  * done 事件返回完整 answer、references 和 files
  * references 来自知识库检索，files 来自会话文件上下文
  */
 export function streamRagChatJson(options: ChatOptions, fileIds: string[], handlers: ChatStreamHandlers) {
-    return openJsonChatStream('/api/v1/rag/stream', {
+    return openJsonChatStream('/api/v1/rag', {
         chatId: options.chatId,
         msg: options.msg,
         tenantId: options.tenantId,
         kbId: options.kbId,
+        stream: true,
         documentId: options.documentId || undefined,
         documentType: options.documentType || undefined,
         userId: options.userId,

@@ -387,6 +387,8 @@ export interface ChatOptions {
     chatId: string
     /** 用户消息 */
     msg: string
+    /** 是否启用流式响应 */
+    stream?: boolean
     /** 租户 ID */
     tenantId: string
     /** 用户 ID */

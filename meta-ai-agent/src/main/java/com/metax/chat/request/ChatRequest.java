@@ -49,6 +49,16 @@ public class ChatRequest {
     private String msg;
 
     /**
+     * 是否启用流式响应
+     *
+     * <p>
+     * GET 协议通过 query 参数传入，POST JSON 协议通过请求体传入
+     */
+    @Parameter(description = "是否启用流式响应，true 表示返回 SSE", example = "false")
+    @Schema(description = "是否启用流式响应，true 表示返回 SSE", example = "false")
+    private Boolean stream;
+
+    /**
      * 会话文件 ID 列表
      *
      * <p>

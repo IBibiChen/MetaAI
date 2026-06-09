@@ -9,6 +9,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -39,15 +40,18 @@ public class ChatMessageController {
      * <p>
      * 模型 provider 由 spring.ai.model.chat 配置决定
      * 默认记忆后端固定使用 redisChatMemory
-     * GET 协议用于简单 query 参数调用，也方便浏览器和接口文档直接调试
+     * GET 协议通过 stream query 参数控制 JSON 或 SSE 响应
      *
      * @param request 记忆对话请求参数
      * @return 记忆对话响应
      */
-    @GetMapping(value = "/v1/chat")
-    @Operation(summary = "默认记忆对话", description = "使用当前配置选中的 ChatModel 和 ChatMemory 进行多轮对话")
-    public CommonResult<ChatMessageResponse> chat(@Valid @ParameterObject ChatRequest request) {
-        return CommonResult.success(chatMessageService.chat(request));
+    @GetMapping(value = "/v1/chat", produces = {
+            MediaType.APPLICATION_JSON_VALUE,
+            MediaType.TEXT_EVENT_STREAM_VALUE
+    })
+    @Operation(summary = "默认记忆对话", description = "通过 stream 参数控制普通 JSON 响应或 SSE 流式响应")
+    public ResponseEntity<?> chat(@Valid @ParameterObject ChatRequest request) {
+        return response(request);
     }
 
     /**
@@ -55,48 +59,32 @@ public class ChatMessageController {
      *
      * <p>
      * 文件必须先通过 POST /v1/chat/files 上传，再通过 fileIds 参与本轮问答
-     * POST JSON 协议用于携带复杂请求体和 Authorization Header
+     * POST JSON 协议通过 stream 字段控制 JSON 或 SSE 响应
      *
      * @param request 记忆对话 JSON 请求参数
      * @return 记忆对话响应
      */
-    @PostMapping(value = "/v1/chat", consumes = MediaType.APPLICATION_JSON_VALUE)
-    @Operation(summary = "默认记忆对话 JSON 请求", description = "基于 JSON 请求体和已上传会话文件进行问答")
-    public CommonResult<ChatMessageResponse> chatJson(@Valid @RequestBody ChatRequest request) {
-        return CommonResult.success(chatMessageService.chat(request));
+    @PostMapping(value = "/v1/chat", consumes = MediaType.APPLICATION_JSON_VALUE, produces = {
+            MediaType.APPLICATION_JSON_VALUE,
+            MediaType.TEXT_EVENT_STREAM_VALUE
+    })
+    @Operation(summary = "默认记忆对话 JSON 请求", description = "基于 JSON 请求体和 stream 字段控制普通或流式问答")
+    public ResponseEntity<?> chatJson(@Valid @RequestBody ChatRequest request) {
+        return response(request);
     }
 
     /**
-     * 默认记忆对话流式返回
-     *
-     * <p>
-     * 使用 SSE 返回 meta、delta、done 和 error 事件
-     * 模型完整回答会在流结束后写入完整聊天历史
-     * GET 流式协议保留给原生 EventSource，参数全部来自 query string
+     * 根据 stream 参数组装普通或流式响应
      *
      * @param request 记忆对话请求参数
-     * @return SSE 流式事件
+     * @return HTTP 响应
      */
-    @GetMapping(value = "/v1/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    @Operation(summary = "默认记忆对话流式返回", description = "使用当前配置选中的 ChatModel 和 ChatMemory 进行多轮流式对话")
-    public Flux<ServerSentEvent<Object>> chatStream(@Valid @ParameterObject ChatRequest request) {
-        return chatMessageService.chatStream(request);
-    }
-
-    /**
-     * 默认记忆对话 JSON 流式返回，支持已上传聊天文件
-     *
-     * <p>
-     * 文件必须先通过 POST /v1/chat/files 上传，再通过 fileIds 参与本轮流式问答
-     * POST JSON 流式协议由 fetchEventSource 调用，支持 Authorization Header 和复杂参数
-     *
-     * @param request 记忆对话 JSON 流式请求参数
-     * @return SSE 流式事件
-     */
-    @PostMapping(value = "/v1/chat/stream", consumes = MediaType.APPLICATION_JSON_VALUE,
-            produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    @Operation(summary = "默认记忆对话 JSON 流式返回", description = "基于 JSON 请求体和已上传会话文件进行流式问答")
-    public Flux<ServerSentEvent<Object>> chatStreamJson(@Valid @RequestBody ChatRequest request) {
-        return chatMessageService.chatStream(request);
+    private ResponseEntity<?> response(ChatRequest request) {
+        if (Boolean.TRUE.equals(request.getStream())) {
+            Flux<ServerSentEvent<Object>> stream = chatMessageService.chatStream(request);
+            return ResponseEntity.ok().contentType(MediaType.TEXT_EVENT_STREAM).body(stream);
+        }
+        ChatMessageResponse response = chatMessageService.chat(request);
+        return ResponseEntity.ok(CommonResult.success(response));
     }
 }

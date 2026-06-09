@@ -668,8 +668,8 @@ watch(messages, async () => {
  * 发送消息
  *
  * <p>
- * 普通聊天调用 /v1/chat/stream
- * RAG 聊天调用 /v1/rag/stream 并展示文件引用
+ * 普通聊天调用 /v1/chat 并通过 stream=true 开启流式
+ * RAG 聊天调用 /v1/rag 并通过 stream=true 开启流式，同时展示文件引用
  */
 async function sendMessage() {
   const content = draft.value.trim()

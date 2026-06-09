@@ -32,7 +32,7 @@ class ApiTokenAuthenticationFilterTest {
 
     @Test
     void postJsonStreamShouldRejectMissingAuthorization() throws ServletException, IOException {
-        MockHttpServletResponse response = doFilter("POST", "/v1/chat/stream", null);
+        MockHttpServletResponse response = doFilter("POST", "/v1/chat", null);
 
         assertThat(response.getStatus()).isEqualTo(401);
         assertThat(response.getContentAsString()).contains("未授权");
@@ -40,7 +40,7 @@ class ApiTokenAuthenticationFilterTest {
 
     @Test
     void postJsonStreamShouldRejectWrongAuthorization() throws ServletException, IOException {
-        MockHttpServletResponse response = doFilter("POST", "/v1/rag/stream", "Bearer wrong-token");
+        MockHttpServletResponse response = doFilter("POST", "/v1/rag", "Bearer wrong-token");
 
         assertThat(response.getStatus()).isEqualTo(401);
         assertThat(response.getContentAsString()).contains("未授权");
@@ -48,7 +48,7 @@ class ApiTokenAuthenticationFilterTest {
 
     @Test
     void postJsonStreamShouldRejectAuthorizationWithoutBearerPrefix() throws ServletException, IOException {
-        MockHttpServletResponse response = doFilter("POST", "/v1/chat/stream", API_KEY);
+        MockHttpServletResponse response = doFilter("POST", "/v1/chat", API_KEY);
 
         assertThat(response.getStatus()).isEqualTo(401);
         assertThat(response.getContentAsString()).contains("未授权");
@@ -56,7 +56,7 @@ class ApiTokenAuthenticationFilterTest {
 
     @Test
     void postJsonStreamShouldRejectBlankBearerValue() throws ServletException, IOException {
-        MockHttpServletResponse response = doFilter("POST", "/v1/chat/stream", "Bearer ");
+        MockHttpServletResponse response = doFilter("POST", "/v1/chat", "Bearer ");
 
         assertThat(response.getStatus()).isEqualTo(401);
         assertThat(response.getContentAsString()).contains("未授权");
@@ -85,7 +85,7 @@ class ApiTokenAuthenticationFilterTest {
 
     @Test
     void postJsonStreamShouldMatchWithContextPath() throws ServletException, IOException {
-        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/meta-ai/v1/chat/stream");
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/meta-ai/v1/chat");
         request.setContextPath("/meta-ai");
         request.addHeader(HttpHeaders.AUTHORIZATION, "Bearer " + API_KEY);
         MockHttpServletResponse response = new MockHttpServletResponse();
@@ -97,7 +97,7 @@ class ApiTokenAuthenticationFilterTest {
 
     @Test
     void getStreamShouldNotRequireAuthorization() throws ServletException, IOException {
-        MockHttpServletResponse response = doFilter("GET", "/v1/chat/stream", null);
+        MockHttpServletResponse response = doFilter("GET", "/v1/chat", null);
 
         assertThat(response.getStatus()).isEqualTo(200);
     }
