@@ -9,7 +9,7 @@
  *
  * <p>
  * 一、文档来源与资源归一化
- * 对象存储对象或受控本地文件先统一转换为 Spring Resource
+ * storage 模块已归档的对象存储文档先统一转换为 Spring Resource
  * documentType 和 source 在资源阶段落定，后续 Reader、metadata 和索引执行共用同一份解析结果
  *
  * <p>
@@ -37,14 +37,14 @@
  *
  * <p>
  * 1、文档进入系统
- * RAG 索引链路只消费已经归档好的文件资源
- * 生产入口是对象存储 bucket + objectKey，适合管理后台或业务系统先完成原始文件归档的场景
- * 本地文件导入适合开发调试和受控离线知识库目录
- * 如果业务需要接收原始文件，应在独立文件归档模块先写入对象存储，再调用对象存储导入接口
+ * RAG 索引链路只消费 storage 模块已经归档并落库的对象存储文档
+ * 生产入口是对象存储文档上传接口，文件先保存到对象存储并写入 StorageDocumentDO 元数据
+ * 手动索引入口根据 documentId 读取已保存元数据，再提交 DocumentIndexingService
+ * 这样可以保证上传、下载、列表、索引状态和向量库写入共享同一套文档生命周期
  *
  * <p>
  * 2、原始文件存储
- * 对象存储或受控本地目录负责保存原始文件，VectorStore 只保存 chunk 文本、向量和 metadata
+ * 对象存储负责保存原始文件，VectorStore 只保存 chunk 文本、向量和 metadata
  * 原始文件和向量数据通过 source / objectKey 建立关联
  * 这样后续需要重新切分、重建索引、审计来源时，可以从原始文件来源重新读取原文件
  *
@@ -60,7 +60,7 @@
  *
  * <p>
  * 4、DocumentReader 阶段
- * MetaDocumentResourceFactory 先把对象存储文件流或本地文件统一转换为 Spring Resource
+ * MetaDocumentResourceFactory 先把对象存储文件流转换为 Spring Resource
  * MetaDocumentReader 实现 Spring AI DocumentReader 接口，并委托官方 Reader 解析
  * Reader 设计使用 Factory(工厂模式) + Strategy(策略模式) + Delegation(委托模式) 组合
  * MetaDocumentReaderFactory 负责选择策略，MetaDocumentReaderStrategy 负责创建官方 Reader，MetaDocumentReader 负责委托执行
@@ -234,25 +234,19 @@
  * }</pre>
  *
  * <p>
- * 对象存储 objectKey 导入示例
+ * 对象存储文档上传示例
  * <pre>{@code
- * curl -X POST http://localhost:8008/v1/rag/documents/import
- *   -d tenantId=t1
- *   -d kbId=kb1
- *   -d documentId=doc-001
- *   -d source=knowledge/t1/kb1/demo.md
- *   -d bucket=meta-ai-knowledge
- *   -d objectKey=knowledge/t1/kb1/demo.md
+ * curl -X POST http://localhost:8008/v1/storage/documents/upload
+ *   -F tenantId=t1
+ *   -F kbId=kb1
+ *   -F file=@demo.md
+ *   -F autoIndex=false
  * }</pre>
  *
  * <p>
- * 本地文件导入示例
+ * 对象存储文档手动索引示例
  * <pre>{@code
- * curl -X POST http://localhost:8008/v1/rag/documents/import/local
- *   -d tenantId=t1
- *   -d kbId=kb1
- *   -d documentId=doc-001
- *   -d path=docs/demo.md
+ * curl -X POST "http://localhost:8008/v1/storage/documents/{documentId}/index?tenantId=t1&kbId=kb1"
  * }</pre>
  *
  * <p>

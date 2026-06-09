@@ -2,7 +2,7 @@
  * package-info .
  *
  * <p>
- * com.metax.retrieval 承载知识库问答、知识库文档索引、检索调试和会话文件增强 RAG 能力
+ * com.metax.retrieval 承载知识库问答、检索调试和会话文件增强 RAG 能力
  *
  * <p>
  * 第一阶段：接口入口和协议分流
@@ -76,11 +76,12 @@
  * includeReferences 只在 RETRIEVE 决策下开启，SKIP 场景不会返回知识库 references
  *
  * <p>
- * 第八阶段：知识库文档索引和检索调试
+ * 第八阶段：知识库文档管理和检索调试
  *
  * <p>
- * KnowledgeDocumentIndexController 和 KnowledgeDocumentIndexService 负责把对象存储文档或受控本地文档提交到核心索引服务
- * 实际 Reader、Transformer、Writer 和 VectorStore 写入由 meta-ai-rag 模块完成
+ * 知识库文档上传、下载、列表和手动索引由 com.metax.storage 包统一承载
+ * 文档必须先通过对象存储文档接口归档并保存元数据，再由 StorageDocumentService 提交核心索引服务
+ * 实际 Reader、Transformer、Writer 和 VectorStore 写入仍由 meta-ai-rag 模块完成
  * RetrievalDebugController 用于查看检索明细，支持验证 topK、threshold、过滤条件和命中文档
  * 索引链路写入知识库 scope，聊天文件链路写入 session scope，两者通过 metadata 边界隔离
  *
