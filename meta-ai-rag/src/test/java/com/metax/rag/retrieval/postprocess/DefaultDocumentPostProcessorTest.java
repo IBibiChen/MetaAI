@@ -1,6 +1,6 @@
 package com.metax.rag.retrieval.postprocess;
 
-import com.metax.rag.config.RagProperties;
+import com.metax.rag.config.MetaRetrievalProperties;
 import com.metax.rag.model.MetadataKeys;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.document.Document;
@@ -25,7 +25,7 @@ class DefaultDocumentPostProcessorTest {
      */
     @Test
     void shouldDeduplicateAndLimitDocuments() {
-        RagProperties.PostProcessor properties = new RagProperties.PostProcessor();
+        MetaRetrievalProperties.PostProcessor properties = new MetaRetrievalProperties.PostProcessor();
         properties.setMaxContextDocuments(2);
         DefaultDocumentPostProcessor processor = new DefaultDocumentPostProcessor(properties);
 
@@ -48,7 +48,7 @@ class DefaultDocumentPostProcessorTest {
      */
     @Test
     void shouldKeepOrderWhenNoOpRerankEnabled() {
-        RagProperties.PostProcessor properties = new RagProperties.PostProcessor();
+        MetaRetrievalProperties.PostProcessor properties = new MetaRetrievalProperties.PostProcessor();
         properties.setRerankEnabled(true);
         properties.setDeduplicateEnabled(false);
         DefaultDocumentPostProcessor processor = new DefaultDocumentPostProcessor(properties);

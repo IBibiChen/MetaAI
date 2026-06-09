@@ -3,7 +3,7 @@ package com.metax.rag.pipeline;
 import com.metax.rag.etl.reader.MetaDocumentReaderFactory;
 import com.metax.rag.etl.transformer.MetaDocumentTransformerFactory;
 import com.metax.rag.etl.writer.MetaDocumentSnapshotWriter;
-import com.metax.rag.config.RagProperties;
+import com.metax.rag.config.MetaRetrievalProperties;
 import com.metax.rag.indexing.DocumentIndexingContext;
 import com.metax.rag.indexing.DocumentIndexingRequest;
 import com.metax.rag.model.MetadataKeys;
@@ -35,7 +35,7 @@ import java.util.List;
 @Component
 public class MetaEtlPipelineFactory {
 
-    private final RagProperties properties;
+    private final MetaRetrievalProperties properties;
 
     private final VectorStore vectorStore;
 
@@ -43,7 +43,7 @@ public class MetaEtlPipelineFactory {
 
     private final MetaDocumentTransformerFactory documentTransformerFactory;
 
-    public MetaEtlPipelineFactory(RagProperties properties,
+    public MetaEtlPipelineFactory(MetaRetrievalProperties properties,
                                   VectorStore vectorStore,
                                   MetaDocumentReaderFactory documentReaderFactory,
                                   MetaDocumentTransformerFactory documentTransformerFactory) {

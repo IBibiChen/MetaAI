@@ -1,6 +1,5 @@
 package com.metax.rag.etl.resource;
 
-import com.metax.rag.config.RagProperties;
 import com.metax.rag.indexing.DocumentIndexingRequest;
 import com.metax.rag.storage.DocumentStorageService;
 import org.springframework.core.io.Resource;
@@ -32,12 +31,10 @@ public class MetaDocumentResourceFactory {
      * 当前知识库文档只从 storage 模块归档后的对象存储读取
      * 文件上传、默认 bucket 和对象写入职责属于 ObjectStorageClient，不放在该读取工厂中
      *
-     * @param properties           RAG 配置
      * @param storageService       文档存储读取端口
      * @param documentTypeResolver 文档类型解析器
      */
-    public MetaDocumentResourceFactory(RagProperties properties,
-                                       DocumentStorageService storageService,
+    public MetaDocumentResourceFactory(DocumentStorageService storageService,
                                        MetaDocumentTypeResolver documentTypeResolver) {
         this.storageService = storageService;
         this.documentTypeResolver = documentTypeResolver;

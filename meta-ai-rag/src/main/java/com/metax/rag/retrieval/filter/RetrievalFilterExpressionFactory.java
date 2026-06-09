@@ -1,6 +1,6 @@
 package com.metax.rag.retrieval.filter;
 
-import com.metax.rag.config.RagProperties;
+import com.metax.rag.config.MetaRetrievalProperties;
 import com.metax.rag.model.DocumentVisibility;
 import com.metax.rag.model.MetadataKeys;
 import com.metax.rag.retrieval.model.RetrievalOptions;
@@ -56,9 +56,9 @@ import java.util.List;
 @Component
 public class RetrievalFilterExpressionFactory {
 
-    private final RagProperties properties;
+    private final MetaRetrievalProperties properties;
 
-    public RetrievalFilterExpressionFactory(RagProperties properties) {
+    public RetrievalFilterExpressionFactory(MetaRetrievalProperties properties) {
         this.properties = properties;
     }
 
@@ -76,7 +76,7 @@ public class RetrievalFilterExpressionFactory {
         // 阶段 1：先构造 tenantId 和 kbId 强约束，缺失时直接阻断检索
         // 先生成租户和知识库边界，再追加权限过滤和文档级收窄条件
         FilterExpressionBuilder.Op expression = requiredExpression(builder, options);
-        if (properties.getRetrieval().isPermissionFilterEnabled()) {
+        if (properties.getSearch().isPermissionFilterEnabled()) {
             // 阶段 2：按配置追加 PUBLIC / DEPT / USER 可见性过滤
             // 权限过滤关闭时只保留租户、知识库和可选文档级收窄条件
             expression = builder.and(expression, permissionExpression(builder, options));

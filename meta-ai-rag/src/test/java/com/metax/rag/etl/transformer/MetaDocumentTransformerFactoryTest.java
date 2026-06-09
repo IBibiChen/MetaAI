@@ -1,6 +1,6 @@
 package com.metax.rag.etl.transformer;
 
-import com.metax.rag.config.RagProperties;
+import com.metax.rag.config.MetaRetrievalProperties;
 import com.metax.rag.model.MetadataKeys;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.document.Document;
@@ -25,8 +25,8 @@ class MetaDocumentTransformerFactoryTest {
      * tokenTextSplitter 应使用 RAG chunk 配置创建 TokenTextSplitter
      */
     @Test
-    void shouldCreateSplitterByRagProperties() {
-        RagProperties properties = new RagProperties();
+    void shouldCreateSplitterByMetaRetrievalProperties() {
+        MetaRetrievalProperties properties = new MetaRetrievalProperties();
         properties.getChunk().setSize(20);
         properties.getChunk().setMinChars(1);
         properties.getChunk().setMinLengthToEmbed(1);
@@ -48,7 +48,7 @@ class MetaDocumentTransformerFactoryTest {
      */
     @Test
     void shouldExcludeTechnicalMetadataFromFormattedContent() {
-        MetaDocumentTransformerFactory factory = new MetaDocumentTransformerFactory(new RagProperties());
+        MetaDocumentTransformerFactory factory = new MetaDocumentTransformerFactory(new MetaRetrievalProperties());
         DocumentTransformer transformer = factory.contentFormatTransformer();
         Document document = Document.builder()
                 .text("chunk text")

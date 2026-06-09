@@ -4,7 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.IdWorker;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.metax.rag.config.RagProperties;
+import com.metax.rag.config.MetaRetrievalProperties;
 import com.metax.rag.etl.resource.MetaDocumentTypeResolver;
 import com.metax.rag.indexing.DocumentIndexingRequest;
 import com.metax.rag.indexing.DocumentIndexingRun;
@@ -92,12 +92,12 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
     private final DocumentIndexingService documentIndexingService;
 
     /**
-     * RAG 配置属性
+     * Meta Retrieval 配置属性
      *
      * <p>
      * 当前用于读取对象存储 provider，写入 StorageDocumentDO 便于排查来源
      */
-    private final RagProperties ragProperties;
+    private final MetaRetrievalProperties retrievalProperties;
 
     /**
      * 文档类型解析器
@@ -109,11 +109,11 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
 
     public StorageDocumentServiceImpl(ObjectStorageClient objectStorageClient,
                                       DocumentIndexingService documentIndexingService,
-                                      RagProperties ragProperties,
+                                      MetaRetrievalProperties retrievalProperties,
                                       MetaDocumentTypeResolver documentTypeResolver) {
         this.objectStorageClient = objectStorageClient;
         this.documentIndexingService = documentIndexingService;
-        this.ragProperties = ragProperties;
+        this.retrievalProperties = retrievalProperties;
         this.documentTypeResolver = documentTypeResolver;
     }
 
@@ -170,7 +170,7 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
         entity.setFileSha256(fileSha256);
         entity.setDocumentType(resolvedDocumentType);
         entity.setSource(objectKey);
-        entity.setStorageProvider(ragProperties.getStorage().getProvider());
+        entity.setStorageProvider(retrievalProperties.getStorage().getProvider());
         entity.setStorageEtag(storedObject.etag());
         entity.setStorageVersionId(storedObject.versionId());
         entity.setIndexStatus(StorageDocumentIndexStatus.UPLOADED.name());

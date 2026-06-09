@@ -1,6 +1,6 @@
 package com.metax.rag.etl.writer;
 
-import com.metax.rag.config.RagProperties;
+import com.metax.rag.config.MetaRetrievalProperties;
 import com.metax.rag.indexing.DocumentIndexingRequest;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.document.DocumentWriter;
@@ -32,9 +32,9 @@ public class MetaDocumentSnapshotWriter implements DocumentWriter {
 
     private final DocumentIndexingRequest request;
 
-    private final RagProperties.Snapshot properties;
+    private final MetaRetrievalProperties.Snapshot properties;
 
-    public MetaDocumentSnapshotWriter(DocumentIndexingRequest request, RagProperties.Snapshot properties) {
+    public MetaDocumentSnapshotWriter(DocumentIndexingRequest request, MetaRetrievalProperties.Snapshot properties) {
         Assert.notNull(request, "DocumentIndexingRequest must not be null");
         Assert.notNull(properties, "Snapshot properties must not be null");
         this.request = request;

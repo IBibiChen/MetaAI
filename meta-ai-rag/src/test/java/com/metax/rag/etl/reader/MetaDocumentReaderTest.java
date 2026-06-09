@@ -1,6 +1,6 @@
 package com.metax.rag.etl.reader;
 
-import com.metax.rag.config.RagProperties;
+import com.metax.rag.config.MetaRetrievalProperties;
 import com.metax.rag.etl.resource.MetaDocumentResource;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.document.Document;
@@ -159,10 +159,10 @@ class MetaDocumentReaderTest {
     /**
      * 创建默认 OCR 配置
      *
-     * @return RagProperties
+     * @return MetaRetrievalProperties
      */
-    private RagProperties ocrProperties() {
-        return new RagProperties();
+    private MetaRetrievalProperties ocrProperties() {
+        return new MetaRetrievalProperties();
     }
 
     private MetaDocumentResource resource(String text, String filename, String documentType) {

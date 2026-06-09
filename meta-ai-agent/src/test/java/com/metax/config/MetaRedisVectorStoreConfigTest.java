@@ -1,6 +1,6 @@
 package com.metax.config;
 
-import com.metax.rag.config.RagProperties;
+import com.metax.rag.config.MetaRetrievalProperties;
 import com.metax.rag.model.MetadataKeys;
 import com.metax.rag.retrieval.filter.RetrievalFilterExpressionFactory;
 import com.metax.rag.retrieval.model.RetrievalOptions;
@@ -29,7 +29,7 @@ class MetaRedisVectorStoreConfigTest {
         RedisFilterExpressionConverter converter = new RedisFilterExpressionConverter(
                 Arrays.asList(config.metadataFields()));
 
-        String filter = converter.convertExpression(new RetrievalFilterExpressionFactory(new RagProperties()).create(
+        String filter = converter.convertExpression(new RetrievalFilterExpressionFactory(new MetaRetrievalProperties()).create(
                 RetrievalOptions.builder()
                         .tenantId("t1")
                         .kbId("kb1")

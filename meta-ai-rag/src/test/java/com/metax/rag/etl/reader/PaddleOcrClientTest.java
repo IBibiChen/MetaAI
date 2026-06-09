@@ -1,6 +1,6 @@
 package com.metax.rag.etl.reader;
 
-import com.metax.rag.config.RagProperties;
+import com.metax.rag.config.MetaRetrievalProperties;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -152,10 +152,10 @@ class PaddleOcrClientTest {
      * 创建测试 OCR 配置
      *
      * @param httpServer 测试 HTTP 服务
-     * @return RagProperties
+     * @return MetaRetrievalProperties
      */
-    private RagProperties properties(HttpServer httpServer) {
-        RagProperties properties = new RagProperties();
+    private MetaRetrievalProperties properties(HttpServer httpServer) {
+        MetaRetrievalProperties properties = new MetaRetrievalProperties();
         properties.getOcr().setBaseUrl("http://localhost:" + httpServer.getAddress().getPort());
         properties.getOcr().setTimeout(Duration.ofSeconds(5));
         return properties;

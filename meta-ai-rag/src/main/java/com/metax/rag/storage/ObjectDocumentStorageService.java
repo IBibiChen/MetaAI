@@ -1,6 +1,6 @@
 package com.metax.rag.storage;
 
-import com.metax.rag.config.RagProperties;
+import com.metax.rag.config.MetaRetrievalProperties;
 import jakarta.annotation.PreDestroy;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
@@ -39,11 +39,11 @@ import java.net.URI;
  * <p>
  * 配置示例
  * <pre>{@code
- * metax.ai.rag.storage.provider=object
- * metax.ai.rag.storage.endpoint=http://localhost:9000
- * metax.ai.rag.storage.bucket=meta-ai-knowledge
- * metax.ai.rag.storage.access-key=${RAG_STORAGE_ACCESS_KEY:rustfsadmin}
- * metax.ai.rag.storage.secret-key=${RAG_STORAGE_SECRET_KEY:rustfsadmin}
+ * metax.ai.retrieval.storage.provider=object
+ * metax.ai.retrieval.storage.endpoint=http://localhost:9000
+ * metax.ai.retrieval.storage.bucket=meta-ai-knowledge
+ * metax.ai.retrieval.storage.access-key=${METAX_RETRIEVAL_STORAGE_ACCESS_KEY:rustfsadmin}
+ * metax.ai.retrieval.storage.secret-key=${METAX_RETRIEVAL_STORAGE_SECRET_KEY:rustfsadmin}
  * }</pre>
  *
  * @author IBibiChen
@@ -51,10 +51,10 @@ import java.net.URI;
  * @since 2026/6/2
  */
 @Service
-@ConditionalOnProperty(prefix = "metax.ai.rag.storage", name = "provider", havingValue = "object", matchIfMissing = true)
+@ConditionalOnProperty(prefix = "metax.ai.retrieval.storage", name = "provider", havingValue = "object", matchIfMissing = true)
 public class ObjectDocumentStorageService implements DocumentStorageService, ObjectStorageClient {
 
-    private final RagProperties properties;
+    private final MetaRetrievalProperties properties;
 
     private final S3Client s3Client;
 
@@ -62,13 +62,13 @@ public class ObjectDocumentStorageService implements DocumentStorageService, Obj
      * 创建 S3 兼容对象存储文档服务
      *
      * <p>
-     * 根据 metax.ai.rag.storage 配置创建 AWS SDK S3Client
+     * 根据 metax.ai.retrieval.storage 配置创建 AWS SDK S3Client
      * forcePathStyle=true 适配 RustFS / MinIO 这类私有化 S3 兼容对象存储
      * 按 initializeBucket 开关决定是否在服务启动时检查并创建默认 bucket
      *
-     * @param properties RAG 配置属性
+     * @param properties Meta Retrieval 配置属性
      */
-    public ObjectDocumentStorageService(RagProperties properties) {
+    public ObjectDocumentStorageService(MetaRetrievalProperties properties) {
         this.properties = properties;
         // S3Client 是线程安全客户端，作为服务字段复用，避免每次下载都重新创建连接资源
         this.s3Client = buildS3Client(properties);
@@ -81,10 +81,10 @@ public class ObjectDocumentStorageService implements DocumentStorageService, Obj
      * <p>
      * RustFS / MinIO 等私有化 S3 兼容存储使用 path-style 访问，避免依赖虚拟主机风格域名
      *
-     * @param properties RAG 配置属性
+     * @param properties Meta Retrieval 配置属性
      * @return S3 兼容对象存储客户端
      */
-    private static S3Client buildS3Client(RagProperties properties) {
+    private static S3Client buildS3Client(MetaRetrievalProperties properties) {
         return S3Client.builder()
                 .endpointOverride(URI.create(properties.getStorage().getEndpoint()))
                 .region(Region.of(properties.getStorage().getRegion()))
@@ -99,16 +99,16 @@ public class ObjectDocumentStorageService implements DocumentStorageService, Obj
      *
      * <p>
      * initializeBucket=false 时不触碰 bucket 管理接口，适合生产环境保持最小权限
-     * initializeBucket=true 时只检查并创建 metax.ai.rag.storage.bucket 指定的默认 bucket
+     * initializeBucket=true 时只检查并创建 metax.ai.retrieval.storage.bucket 指定的默认 bucket
      *
      * <p>
      * S3 兼容存储返回 404 或 NoSuchBucketException 时创建 bucket
      * 其他 S3Exception 代表认证、权限、endpoint 等配置问题，直接抛出避免静默启动
      *
-     * @param properties RAG 配置属性
+     * @param properties Meta Retrieval 配置属性
      * @param s3Client   S3 兼容对象存储客户端
      */
-    static void initializeBucketIfNecessary(RagProperties properties, S3Client s3Client) {
+    static void initializeBucketIfNecessary(MetaRetrievalProperties properties, S3Client s3Client) {
         if (!properties.getStorage().isInitializeBucket()) {
             return;
         }
@@ -228,7 +228,7 @@ public class ObjectDocumentStorageService implements DocumentStorageService, Obj
      * 默认 bucket 名称
      *
      * <p>
-     * 默认值来自 metax.ai.rag.storage.bucket 配置
+     * 默认值来自 metax.ai.retrieval.storage.bucket 配置
      *
      * @return 默认 bucket 名称
      */

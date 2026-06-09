@@ -1,6 +1,6 @@
 package com.metax.storage;
 
-import com.metax.rag.config.RagProperties;
+import com.metax.rag.config.MetaRetrievalProperties;
 import com.metax.rag.etl.resource.MetaDocumentTypeResolver;
 import com.metax.rag.indexing.DocumentIndexingRequest;
 import com.metax.rag.indexing.DocumentIndexingRun;
@@ -52,7 +52,7 @@ class StorageDocumentServiceTest {
 
     @BeforeEach
     void setUp() {
-        RagProperties properties = new RagProperties();
+        MetaRetrievalProperties properties = new MetaRetrievalProperties();
         service = new FakeStorageDocumentService(objectStorageClient, documentIndexingService, properties,
                 new MetaDocumentTypeResolver());
     }
@@ -177,9 +177,9 @@ class StorageDocumentServiceTest {
 
         private FakeStorageDocumentService(ObjectStorageClient objectStorageClient,
                                            DocumentIndexingService documentIndexingService,
-                                           RagProperties ragProperties,
+                                           MetaRetrievalProperties retrievalProperties,
                                            MetaDocumentTypeResolver documentTypeResolver) {
-            super(objectStorageClient, documentIndexingService, ragProperties, documentTypeResolver);
+            super(objectStorageClient, documentIndexingService, retrievalProperties, documentTypeResolver);
         }
 
         @Override

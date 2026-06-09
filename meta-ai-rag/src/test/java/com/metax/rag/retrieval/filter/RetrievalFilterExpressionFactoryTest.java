@@ -1,6 +1,6 @@
 package com.metax.rag.retrieval.filter;
 
-import com.metax.rag.config.RagProperties;
+import com.metax.rag.config.MetaRetrievalProperties;
 import com.metax.rag.retrieval.model.RetrievalOptions;
 import org.junit.jupiter.api.Test;
 
@@ -24,7 +24,7 @@ class RetrievalFilterExpressionFactoryTest {
     @Test
     void shouldCreateFilterExpressionFromStructuredOptions() {
         RetrievalFilterExpressionFactory filterExpressionFactory = new RetrievalFilterExpressionFactory(
-                new RagProperties());
+                new MetaRetrievalProperties());
         RetrievalOptions options = RetrievalOptions.builder()
                 .tenantId("tenant-1")
                 .kbId("kb-1")
@@ -96,7 +96,7 @@ class RetrievalFilterExpressionFactoryTest {
     @Test
     void shouldRejectMissingRetrievalScope() {
         RetrievalFilterExpressionFactory filterExpressionFactory = new RetrievalFilterExpressionFactory(
-                new RagProperties());
+                new MetaRetrievalProperties());
         RetrievalOptions options = RetrievalOptions.builder()
                 .tenantId("")
                 .kbId("kb-1")
@@ -109,9 +109,9 @@ class RetrievalFilterExpressionFactoryTest {
                 .hasMessageContaining("tenantId");
     }
 
-    private RagProperties propertiesWithPermissionFilter() {
-        RagProperties properties = new RagProperties();
-        properties.getRetrieval().setPermissionFilterEnabled(true);
+    private MetaRetrievalProperties propertiesWithPermissionFilter() {
+        MetaRetrievalProperties properties = new MetaRetrievalProperties();
+        properties.getSearch().setPermissionFilterEnabled(true);
         return properties;
     }
 }

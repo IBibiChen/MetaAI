@@ -1,6 +1,6 @@
 package com.metax.rag.etl.writer;
 
-import com.metax.rag.config.RagProperties;
+import com.metax.rag.config.MetaRetrievalProperties;
 import com.metax.rag.indexing.DocumentIndexingRequest;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.document.Document;
@@ -27,7 +27,7 @@ class MetaDocumentSnapshotWriterTest {
     @Test
     void shouldWriteDocumentsToSnapshotFile() throws Exception {
         Path outputDir = Files.createTempDirectory("meta-rag-snapshot");
-        RagProperties.Snapshot properties = new RagProperties.Snapshot();
+        MetaRetrievalProperties.Snapshot properties = new MetaRetrievalProperties.Snapshot();
         properties.setOutputDir(outputDir.toString());
         properties.setWithDocumentMarkers(true);
         properties.setMetadataMode(MetadataMode.NONE);
@@ -46,7 +46,7 @@ class MetaDocumentSnapshotWriterTest {
     @Test
     void shouldCreateSafeSnapshotFileName() throws Exception {
         Path outputDir = Files.createTempDirectory("meta-rag-snapshot");
-        RagProperties.Snapshot properties = new RagProperties.Snapshot();
+        MetaRetrievalProperties.Snapshot properties = new MetaRetrievalProperties.Snapshot();
         properties.setOutputDir(outputDir.toString());
         MetaDocumentSnapshotWriter writer = new MetaDocumentSnapshotWriter(unsafeRequest(), properties);
 

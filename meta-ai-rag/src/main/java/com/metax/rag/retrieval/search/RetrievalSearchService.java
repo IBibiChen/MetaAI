@@ -1,6 +1,6 @@
 package com.metax.rag.retrieval.search;
 
-import com.metax.rag.config.RagProperties;
+import com.metax.rag.config.MetaRetrievalProperties;
 import com.metax.rag.retrieval.filter.RetrievalFilterExpressionFactory;
 import com.metax.rag.retrieval.model.RetrievalChunkReference;
 import com.metax.rag.retrieval.model.RetrievalOptions;
@@ -29,11 +29,11 @@ import java.util.List;
 @Service
 public class RetrievalSearchService {
 
-    private final RagProperties properties;
+    private final MetaRetrievalProperties properties;
 
     private final RetrievalFilterExpressionFactory filterExpressionFactory;
 
-    public RetrievalSearchService(RagProperties properties,
+    public RetrievalSearchService(MetaRetrievalProperties properties,
                                   RetrievalFilterExpressionFactory filterExpressionFactory) {
         this.properties = properties;
         this.filterExpressionFactory = filterExpressionFactory;
@@ -77,7 +77,7 @@ public class RetrievalSearchService {
      * @return 本次实际使用的 topK
      */
     int resolvedTopK(RetrievalOptions options) {
-        return options.getTopK() == null ? properties.getRetrieval().getTopK() : options.getTopK();
+        return options.getTopK() == null ? properties.getSearch().getTopK() : options.getTopK();
     }
 
     /**
@@ -88,7 +88,7 @@ public class RetrievalSearchService {
      */
     double resolvedSimilarityThreshold(RetrievalOptions options) {
         return options.getSimilarityThreshold() == null
-                ? properties.getRetrieval().getSimilarityThreshold() : options.getSimilarityThreshold();
+                ? properties.getSearch().getSimilarityThreshold() : options.getSimilarityThreshold();
     }
 
     /**

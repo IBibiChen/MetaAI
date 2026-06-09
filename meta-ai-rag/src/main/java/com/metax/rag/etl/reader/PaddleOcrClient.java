@@ -1,6 +1,6 @@
 package com.metax.rag.etl.reader;
 
-import com.metax.rag.config.RagProperties;
+import com.metax.rag.config.MetaRetrievalProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.Resource;
@@ -53,9 +53,9 @@ public class PaddleOcrClient {
             "png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff", "image"
     );
 
-    private final RagProperties properties;
+    private final MetaRetrievalProperties properties;
 
-    public PaddleOcrClient(RagProperties properties) {
+    public PaddleOcrClient(MetaRetrievalProperties properties) {
         this.properties = properties;
     }
 
@@ -73,7 +73,7 @@ public class PaddleOcrClient {
      */
     public List<String> recognize(Resource resource, String documentType) {
         Objects.requireNonNull(resource, "Resource must not be null");
-        RagProperties.Ocr ocr = properties.getOcr();
+        MetaRetrievalProperties.Ocr ocr = properties.getOcr();
         long start = System.nanoTime();
         String filename = resource.getFilename();
         int fileType = resolveFileType(documentType);
@@ -117,7 +117,7 @@ public class PaddleOcrClient {
      * @param ocr OCR 配置
      * @return RestClient
      */
-    private RestClient restClient(RagProperties.Ocr ocr) {
+    private RestClient restClient(MetaRetrievalProperties.Ocr ocr) {
         Duration timeout = ocr.getTimeout();
         HttpClient httpClient = HttpClient.newBuilder()
                 .connectTimeout(timeout)

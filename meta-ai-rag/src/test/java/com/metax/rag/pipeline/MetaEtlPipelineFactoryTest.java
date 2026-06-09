@@ -1,6 +1,6 @@
 package com.metax.rag.pipeline;
 
-import com.metax.rag.config.RagProperties;
+import com.metax.rag.config.MetaRetrievalProperties;
 import com.metax.rag.etl.reader.JsonDocumentReaderStrategy;
 import com.metax.rag.etl.reader.MarkdownDocumentReaderStrategy;
 import com.metax.rag.etl.reader.MetaDocumentReaderFactory;
@@ -34,7 +34,7 @@ class MetaEtlPipelineFactoryTest {
      */
     @Test
     void shouldCreateIndexingPipeline() throws Exception {
-        RagProperties properties = new RagProperties();
+        MetaRetrievalProperties properties = new MetaRetrievalProperties();
         VectorStore vectorStore = mock(VectorStore.class);
         MetaEtlPipelineFactory factory = new MetaEtlPipelineFactory(
                 properties,
@@ -65,7 +65,7 @@ class MetaEtlPipelineFactoryTest {
      */
     @Test
     void shouldCreateSnapshotWriterWhenEnabled() throws Exception {
-        RagProperties properties = new RagProperties();
+        MetaRetrievalProperties properties = new MetaRetrievalProperties();
         properties.getSnapshot().setEnabled(true);
         properties.getSnapshot().setOutputDir(Files.createTempDirectory("meta-rag-snapshot").toString());
         VectorStore vectorStore = mock(VectorStore.class);

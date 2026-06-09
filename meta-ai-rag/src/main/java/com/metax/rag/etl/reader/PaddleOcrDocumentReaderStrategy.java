@@ -1,6 +1,6 @@
 package com.metax.rag.etl.reader;
 
-import com.metax.rag.config.RagProperties;
+import com.metax.rag.config.MetaRetrievalProperties;
 import com.metax.rag.etl.resource.MetaDocumentResource;
 import org.springframework.ai.document.DocumentReader;
 import org.springframework.core.annotation.Order;
@@ -31,11 +31,11 @@ public class PaddleOcrDocumentReaderStrategy implements MetaDocumentReaderStrate
             "pdf", "png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff", "image"
     );
 
-    private final RagProperties properties;
+    private final MetaRetrievalProperties properties;
 
     private final PaddleOcrClient paddleOcrClient;
 
-    public PaddleOcrDocumentReaderStrategy(RagProperties properties, PaddleOcrClient paddleOcrClient) {
+    public PaddleOcrDocumentReaderStrategy(MetaRetrievalProperties properties, PaddleOcrClient paddleOcrClient) {
         this.properties = properties;
         this.paddleOcrClient = paddleOcrClient;
     }
@@ -52,7 +52,7 @@ public class PaddleOcrDocumentReaderStrategy implements MetaDocumentReaderStrate
      */
     @Override
     public boolean supports(String documentType) {
-        RagProperties.Ocr ocr = properties.getOcr();
+        MetaRetrievalProperties.Ocr ocr = properties.getOcr();
         return ocr.isEnabled()
                 && PROVIDER_PADDLE.equals(normalize(ocr.getProvider()))
                 && OCR_DOCUMENT_TYPES.contains(normalize(documentType));

@@ -1,6 +1,6 @@
 package com.metax.rag.retrieval.search;
 
-import com.metax.rag.config.RagProperties;
+import com.metax.rag.config.MetaRetrievalProperties;
 import com.metax.rag.model.MetadataKeys;
 import com.metax.rag.retrieval.filter.RetrievalFilterExpressionFactory;
 import com.metax.rag.retrieval.model.RetrievalOptions;
@@ -30,7 +30,7 @@ class RetrievalSearchServiceTest {
      */
     @Test
     void shouldReturnVectorStoreSearchHits() {
-        RagProperties properties = new RagProperties();
+        MetaRetrievalProperties properties = new MetaRetrievalProperties();
         RetrievalSearchService service = new RetrievalSearchService(properties,
                 new RetrievalFilterExpressionFactory(properties));
         TestVectorStore vectorStore = new TestVectorStore();

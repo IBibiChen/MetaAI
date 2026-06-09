@@ -1,6 +1,6 @@
 package com.metax.rag.retrieval.decision;
 
-import com.metax.rag.config.RagProperties;
+import com.metax.rag.config.MetaRetrievalProperties;
 import com.metax.rag.retrieval.model.RetrievalOptions;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -176,9 +176,9 @@ class RetrievalDecisionServiceTest {
         assertThat(result.reason()).isEqualTo("llm_error_default_retrieve");
     }
 
-    private RagProperties properties(String mode) {
-        RagProperties properties = new RagProperties();
-        properties.getRetrieval().getDecision().setMode(mode);
+    private MetaRetrievalProperties properties(String mode) {
+        MetaRetrievalProperties properties = new MetaRetrievalProperties();
+        properties.getSearch().getDecision().setMode(mode);
         return properties;
     }
 

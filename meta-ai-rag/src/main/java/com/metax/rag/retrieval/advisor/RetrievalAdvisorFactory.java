@@ -1,6 +1,6 @@
 package com.metax.rag.retrieval.advisor;
 
-import com.metax.rag.config.RagProperties;
+import com.metax.rag.config.MetaRetrievalProperties;
 import com.metax.rag.retrieval.model.RetrievalOptions;
 import com.metax.rag.retrieval.postprocess.DefaultDocumentPostProcessor;
 import com.metax.rag.retrieval.trace.TracingDocumentPostProcessor;
@@ -82,9 +82,9 @@ import java.util.List;
 @Component
 public class RetrievalAdvisorFactory {
 
-    private final RagProperties properties;
+    private final MetaRetrievalProperties properties;
 
-    public RetrievalAdvisorFactory(RagProperties properties) {
+    public RetrievalAdvisorFactory(MetaRetrievalProperties properties) {
         this.properties = properties;
     }
 
@@ -99,8 +99,8 @@ public class RetrievalAdvisorFactory {
      * @return Advisor
      */
     public Advisor create(VectorStore vectorStore) {
-        return create(vectorStore, properties.getRetrieval().getTopK(),
-                properties.getRetrieval().getSimilarityThreshold(), null, null);
+        return create(vectorStore, properties.getSearch().getTopK(),
+                properties.getSearch().getSimilarityThreshold(), null, null);
     }
 
     /**
@@ -175,9 +175,9 @@ public class RetrievalAdvisorFactory {
                            ChatModel chatModel) {
         // 阶段 1：解析本次请求最终生效的召回参数
         // 请求参数为空时回落到全局默认值，保证普通 RAG 调用不需要理解底层检索参数
-        int resolvedTopK = topK == null ? properties.getRetrieval().getTopK() : topK;
+        int resolvedTopK = topK == null ? properties.getSearch().getTopK() : topK;
         double resolvedSimilarityThreshold = similarityThreshold == null
-                ? properties.getRetrieval().getSimilarityThreshold() : similarityThreshold;
+                ? properties.getSearch().getSimilarityThreshold() : similarityThreshold;
 
         // 阶段 2：创建检索器，真正访问 VectorStore 的是 VectorStoreDocumentRetriever
         // retriever 是真正访问 VectorStore 的组件，负责把 query embedding 后做 similaritySearch
@@ -196,7 +196,7 @@ public class RetrievalAdvisorFactory {
                 .documentRetriever(retrieverBuilder.build())
                 .queryAugmenter(ContextualQueryAugmenter.builder()
                         // allowEmptyContext=true 表示知识库优先，空上下文时允许模型按通用能力回答
-                        .allowEmptyContext(properties.getRetrieval().isAllowEmptyContext())
+                        .allowEmptyContext(properties.getSearch().isAllowEmptyContext())
                         .build());
 
         // 阶段 4：按配置接入检索前 query transformer
@@ -244,7 +244,7 @@ public class RetrievalAdvisorFactory {
      * @return QueryTransformer 列表
      */
     private List<QueryTransformer> queryTransformers(ChatModel chatModel) {
-        RagProperties.QueryTransformer config = properties.getRetrieval().getQueryTransformer();
+        MetaRetrievalProperties.QueryTransformer config = properties.getSearch().getQueryTransformer();
         if (!config.isEnabled() || !StringUtils.hasText(config.getMode()) || "none".equalsIgnoreCase(config.getMode())) {
             // none 表示保留用户原始 query，适合简单单轮问题和排查召回质量
             return List.of();
@@ -289,8 +289,8 @@ public class RetrievalAdvisorFactory {
     private List<DocumentPostProcessor> documentPostProcessors(Integer topK,
                                                                Double similarityThreshold,
                                                                Filter.Expression filterExpression) {
-        RagProperties.PostProcessor config = properties.getRetrieval().getPostProcessor();
-        if (!config.isEnabled() && !properties.getRetrieval().getObservability().isEnabled()) {
+        MetaRetrievalProperties.PostProcessor config = properties.getSearch().getPostProcessor();
+        if (!config.isEnabled() && !properties.getSearch().getObservability().isEnabled()) {
             return List.of();
         }
         List<DocumentPostProcessor> processors = new ArrayList<>();

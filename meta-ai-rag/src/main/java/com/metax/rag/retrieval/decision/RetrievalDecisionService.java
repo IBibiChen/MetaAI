@@ -1,6 +1,6 @@
 package com.metax.rag.retrieval.decision;
 
-import com.metax.rag.config.RagProperties;
+import com.metax.rag.config.MetaRetrievalProperties;
 import com.metax.rag.retrieval.model.RetrievalOptions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -72,11 +72,11 @@ public class RetrievalDecisionService {
             "hi", "hello", "你能做什么", "你可以做什么", "介绍一下你自己", "帮我做什么"
     );
 
-    private final RagProperties properties;
+    private final MetaRetrievalProperties properties;
 
     private final ChatModel chatModel;
 
-    public RetrievalDecisionService(RagProperties properties, ChatModel chatModel) {
+    public RetrievalDecisionService(MetaRetrievalProperties properties, ChatModel chatModel) {
         this.properties = properties;
         this.chatModel = chatModel;
     }
@@ -178,8 +178,8 @@ public class RetrievalDecisionService {
      * @return 检索决策模型参数
      */
     private ChatOptions classifierOptions() {
-        double temperature = properties.getRetrieval().getDecision().getTemperature();
-        int maxTokens = properties.getRetrieval().getDecision().getMaxTokens();
+        double temperature = properties.getSearch().getDecision().getTemperature();
+        int maxTokens = properties.getSearch().getDecision().getMaxTokens();
         if (chatModel instanceof OllamaChatModel) {
             return OllamaChatOptions.builder()
                     .temperature(temperature)
@@ -202,7 +202,7 @@ public class RetrievalDecisionService {
      * @return 检索决策模式
      */
     private String normalizedMode() {
-        String mode = properties.getRetrieval().getDecision().getMode();
+        String mode = properties.getSearch().getDecision().getMode();
         if (!StringUtils.hasText(mode)) {
             return MODE_HYBRID;
         }

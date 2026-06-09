@@ -86,11 +86,11 @@
  * 6、Chunk 切分阶段
  * TokenTextSplitter 是 Spring AI 内置 DocumentTransformer
  * 它按 token 粒度切分文本，比按字符数切分更贴近模型上下文预算
- * metax.ai.rag.chunk.size 控制目标 chunk token 数，默认 800
- * metax.ai.rag.chunk.min-chars 控制最小 chunk 字符数，避免为了标点切出过短片段
- * metax.ai.rag.chunk.min-length-to-embed 控制最短索引文本，避免目录、页眉、页脚污染向量库
- * metax.ai.rag.chunk.max-num-chunks 控制单文档最大 chunk 数，避免异常大文件打爆 embedding 请求
- * metax.ai.rag.chunk.keep-separator 控制是否保留换行和分隔符，markdown、代码和列表文档建议保留
+ * metax.ai.retrieval.chunk.size 控制目标 chunk token 数，默认 800
+ * metax.ai.retrieval.chunk.min-chars 控制最小 chunk 字符数，避免为了标点切出过短片段
+ * metax.ai.retrieval.chunk.min-length-to-embed 控制最短索引文本，避免目录、页眉、页脚污染向量库
+ * metax.ai.retrieval.chunk.max-num-chunks 控制单文档最大 chunk 数，避免异常大文件打爆 embedding 请求
+ * metax.ai.retrieval.chunk.keep-separator 控制是否保留换行和分隔符，markdown、代码和列表文档建议保留
  *
  * <p>
  * 7、chunk 级 metadata 增强阶段
@@ -263,29 +263,29 @@
  * <p>
  * query transformer 配置示例
  * <pre>{@code
- * metax.ai.rag.retrieval.query-transformer.enabled=true
- * metax.ai.rag.retrieval.query-transformer.mode=compression
- * metax.ai.rag.retrieval.query-transformer.temperature=0.0
- * metax.ai.rag.retrieval.query-transformer.max-tokens=512
+ * metax.ai.retrieval.search.query-transformer.enabled=true
+ * metax.ai.retrieval.search.query-transformer.mode=compression
+ * metax.ai.retrieval.search.query-transformer.temperature=0.0
+ * metax.ai.retrieval.search.query-transformer.max-tokens=512
  * }</pre>
  *
  * <p>
  * document post processor 配置示例
  * <pre>{@code
- * metax.ai.rag.retrieval.post-processor.enabled=true
- * metax.ai.rag.retrieval.post-processor.deduplicate-enabled=true
- * metax.ai.rag.retrieval.post-processor.max-context-documents=5
- * metax.ai.rag.retrieval.post-processor.max-context-chars=12000
+ * metax.ai.retrieval.search.post-processor.enabled=true
+ * metax.ai.retrieval.search.post-processor.deduplicate-enabled=true
+ * metax.ai.retrieval.search.post-processor.max-context-documents=5
+ * metax.ai.retrieval.search.post-processor.max-context-chars=12000
  * }</pre>
  *
  * <p>
  * ETL 快照配置示例
  * <pre>{@code
- * metax.ai.rag.snapshot.enabled=true
- * metax.ai.rag.snapshot.output-dir=D:/meta-ai/rag-snapshots
- * metax.ai.rag.snapshot.with-document-markers=true
- * metax.ai.rag.snapshot.metadata-mode=ALL
- * metax.ai.rag.snapshot.append=false
+ * metax.ai.retrieval.snapshot.enabled=true
+ * metax.ai.retrieval.snapshot.output-dir=D:/meta-ai/rag-snapshots
+ * metax.ai.retrieval.snapshot.with-document-markers=true
+ * metax.ai.retrieval.snapshot.metadata-mode=ALL
+ * metax.ai.retrieval.snapshot.append=false
  * }</pre>
  *
  * <p>

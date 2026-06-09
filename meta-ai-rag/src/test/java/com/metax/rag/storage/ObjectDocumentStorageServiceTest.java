@@ -1,6 +1,6 @@
 package com.metax.rag.storage;
 
-import com.metax.rag.config.RagProperties;
+import com.metax.rag.config.MetaRetrievalProperties;
 import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
@@ -91,8 +91,8 @@ class ObjectDocumentStorageServiceTest {
         verify(s3Client, never()).createBucket(any(CreateBucketRequest.class));
     }
 
-    private RagProperties properties(boolean initializeBucket) {
-        RagProperties properties = new RagProperties();
+    private MetaRetrievalProperties properties(boolean initializeBucket) {
+        MetaRetrievalProperties properties = new MetaRetrievalProperties();
         properties.getStorage().setBucket("meta-ai-knowledge");
         properties.getStorage().setInitializeBucket(initializeBucket);
         return properties;

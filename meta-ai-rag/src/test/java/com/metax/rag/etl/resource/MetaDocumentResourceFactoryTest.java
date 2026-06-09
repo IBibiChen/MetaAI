@@ -1,6 +1,5 @@
 package com.metax.rag.etl.resource;
 
-import com.metax.rag.config.RagProperties;
 import com.metax.rag.indexing.DocumentIndexingRequest;
 import com.metax.rag.storage.DocumentStorageService;
 import org.junit.jupiter.api.Test;
@@ -83,8 +82,7 @@ class MetaDocumentResourceFactoryTest {
     }
 
     private MetaDocumentResourceFactory factory() {
-        return new MetaDocumentResourceFactory(new RagProperties(), new TestDocumentStorageService(),
-                new MetaDocumentTypeResolver());
+        return new MetaDocumentResourceFactory(new TestDocumentStorageService(), new MetaDocumentTypeResolver());
     }
 
     private DocumentIndexingRequest request(String documentType, String bucket, String objectKey) {

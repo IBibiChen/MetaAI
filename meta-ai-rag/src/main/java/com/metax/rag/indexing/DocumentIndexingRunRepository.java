@@ -1,6 +1,6 @@
 package com.metax.rag.indexing;
 
-import com.metax.rag.config.RagProperties;
+import com.metax.rag.config.MetaRetrievalProperties;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -22,9 +22,9 @@ public class DocumentIndexingRunRepository {
 
     private final RedisTemplate<String, Object> redisTemplate;
 
-    private final RagProperties properties;
+    private final MetaRetrievalProperties properties;
 
-    public DocumentIndexingRunRepository(RedisTemplate<String, Object> redisTemplate, RagProperties properties) {
+    public DocumentIndexingRunRepository(RedisTemplate<String, Object> redisTemplate, MetaRetrievalProperties properties) {
         this.redisTemplate = redisTemplate;
         this.properties = properties;
     }
@@ -36,7 +36,7 @@ public class DocumentIndexingRunRepository {
      */
     public void save(DocumentIndexingRun run) {
         redisTemplate.opsForValue().set(key(run.runId()), run,
-                Duration.ofSeconds(properties.getIngestion().getRunTtlSeconds()));
+                Duration.ofSeconds(properties.getIndexing().getRunTtlSeconds()));
     }
 
     /**
@@ -54,6 +54,6 @@ public class DocumentIndexingRunRepository {
     }
 
     private String key(String runId) {
-        return properties.getIngestion().getRedisKeyPrefix() + runId;
+        return properties.getIndexing().getRedisKeyPrefix() + runId;
     }
 }

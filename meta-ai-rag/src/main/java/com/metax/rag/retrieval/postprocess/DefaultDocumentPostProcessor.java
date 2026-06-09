@@ -1,6 +1,6 @@
 package com.metax.rag.retrieval.postprocess;
 
-import com.metax.rag.config.RagProperties;
+import com.metax.rag.config.MetaRetrievalProperties;
 import com.metax.rag.model.MetadataKeys;
 import com.metax.rag.retrieval.trace.RetrievalTrace;
 import com.metax.rag.retrieval.trace.RetrievalTraceContext;
@@ -48,15 +48,15 @@ import java.util.Set;
  */
 public class DefaultDocumentPostProcessor implements DocumentPostProcessor {
 
-    private final RagProperties.PostProcessor properties;
+    private final MetaRetrievalProperties.PostProcessor properties;
 
     private final DocumentReranker documentReranker;
 
-    public DefaultDocumentPostProcessor(RagProperties.PostProcessor properties) {
+    public DefaultDocumentPostProcessor(MetaRetrievalProperties.PostProcessor properties) {
         this(properties, new NoOpDocumentReranker());
     }
 
-    public DefaultDocumentPostProcessor(RagProperties.PostProcessor properties, DocumentReranker documentReranker) {
+    public DefaultDocumentPostProcessor(MetaRetrievalProperties.PostProcessor properties, DocumentReranker documentReranker) {
         this.properties = properties;
         this.documentReranker = documentReranker;
     }

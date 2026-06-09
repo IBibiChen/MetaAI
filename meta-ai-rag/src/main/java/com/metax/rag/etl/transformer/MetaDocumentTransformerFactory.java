@@ -1,6 +1,6 @@
 package com.metax.rag.etl.transformer;
 
-import com.metax.rag.config.RagProperties;
+import com.metax.rag.config.MetaRetrievalProperties;
 import com.metax.rag.indexing.DocumentIndexingRequest;
 import com.metax.rag.model.MetadataKeys;
 import org.springframework.ai.document.DefaultContentFormatter;
@@ -45,9 +45,9 @@ public class MetaDocumentTransformerFactory {
             MetadataKeys.CREATED_AT
     );
 
-    private final RagProperties properties;
+    private final MetaRetrievalProperties properties;
 
-    public MetaDocumentTransformerFactory(RagProperties properties) {
+    public MetaDocumentTransformerFactory(MetaRetrievalProperties properties) {
         this.properties = properties;
     }
 
@@ -69,7 +69,7 @@ public class MetaDocumentTransformerFactory {
      * 把带文档级 metadata 的原始 Document 切成多个 chunk Document
      * Spring AI 的 splitter 会把原 Document 的 metadata 带到切分后的 chunk 上
      * -
-     * 当前参数来自 metax.ai.rag.chunk，避免切分参数硬编码在 Pipeline 中
+     * 当前参数来自 metax.ai.retrieval.chunk，避免切分参数硬编码在 Pipeline 中
      *
      * @return DocumentTransformer
      */
