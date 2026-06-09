@@ -78,7 +78,7 @@ public class ChatMessageService {
     public ChatMessageResponse chat(ChatRequest request) {
         String msg = messageOrDefault(request.getMsg(), ChatDefaults.CHAT_MESSAGE);
         // 非流式和流式共享 fileIds 解析规则，避免 GET / POST 双协议产生文件选择差异
-        return fileIdChat(request.getChatId(), request.getTenantId(), request.getUserId(), msg,
+        return chatWithFiles(request.getChatId(), request.getTenantId(), request.getUserId(), msg,
                 request.getFileIds());
     }
 
@@ -91,7 +91,7 @@ public class ChatMessageService {
     public Flux<ServerSentEvent<Object>> chatStream(ChatRequest request) {
         String msg = messageOrDefault(request.getMsg(), ChatDefaults.CHAT_MESSAGE);
         // 流式入口同样先解析会话文件，再把文件来源写入 done 事件返回给前端
-        return fileIdStreamChat(request.getChatId(), request.getTenantId(), request.getUserId(), msg,
+        return streamChatWithFiles(request.getChatId(), request.getTenantId(), request.getUserId(), msg,
                 request.getFileIds());
     }
 
@@ -108,11 +108,11 @@ public class ChatMessageService {
      * @param fileIds     会话文件 ID 列表
      * @return 记忆对话响应
      */
-    private ChatMessageResponse fileIdChat(String chatId,
-                                           String tenantId,
-                                           String userId,
-                                           String msg,
-                                           List<String> fileIds) {
+    private ChatMessageResponse chatWithFiles(String chatId,
+                                              String tenantId,
+                                              String userId,
+                                              String msg,
+                                              List<String> fileIds) {
         // chatId 先兜底，后续 ChatMemory、历史归档和响应中的 chatId 都使用同一个值
         String resolvedChatId = chatScopeResolver.resolveChatId(chatId);
         ChatScope scope = chatScopeResolver.required(resolvedChatId, tenantId, userId);
@@ -158,11 +158,11 @@ public class ChatMessageService {
      * @param fileIds  会话文件 ID 列表
      * @return SSE 流式事件
      */
-    private Flux<ServerSentEvent<Object>> fileIdStreamChat(String chatId,
-                                                           String tenantId,
-                                                           String userId,
-                                                           String msg,
-                                                           List<String> fileIds) {
+    private Flux<ServerSentEvent<Object>> streamChatWithFiles(String chatId,
+                                                              String tenantId,
+                                                              String userId,
+                                                              String msg,
+                                                              List<String> fileIds) {
         // 流式链路在发送 meta 事件前就确定 chatId，避免前端和历史表出现两个会话标识
         String resolvedChatId = chatScopeResolver.resolveChatId(chatId);
         ChatScope scope = chatScopeResolver.required(resolvedChatId, tenantId, userId);

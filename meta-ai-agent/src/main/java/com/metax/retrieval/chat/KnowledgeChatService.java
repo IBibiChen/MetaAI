@@ -73,7 +73,7 @@ public class KnowledgeChatService {
     public RetrievalChatResponse chat(RetrievalChatRequest request) {
         String msg = messageOrDefault(request.getMsg(), ChatDefaults.CHAT_MESSAGE);
         // RAG 非流式也走 fileIds 解析，保证 GET / POST 与流式接口的文件行为一致
-        return ragChatWithFileIds(request.getChatId(), msg, retrievalOptionsFactory.create(request, msg),
+        return chatWithRetrieval(request.getChatId(), msg, retrievalOptionsFactory.create(request, msg),
                 MetaChatHistoryType.RAG, request.getFileIds());
     }
 
@@ -86,30 +86,8 @@ public class KnowledgeChatService {
     public Flux<ServerSentEvent<Object>> chatStream(RetrievalChatRequest request) {
         String msg = messageOrDefault(request.getMsg(), ChatDefaults.CHAT_MESSAGE);
         // 流式 RAG 使用深层响应流，done 事件需要同时组装 references 和 files
-        return ragStreamWithFileIds(request.getChatId(), msg, retrievalOptionsFactory.create(request, msg),
+        return streamChatWithRetrieval(request.getChatId(), msg, retrievalOptionsFactory.create(request, msg),
                 MetaChatHistoryType.RAG, request.getFileIds());
-    }
-
-    /**
-     * 执行知识库非流式对话
-     *
-     * <p>
-     * fileIds 为空时回退当前会话 READY 文件，非空时只使用显式指定文件
-     *
-     * @param chatId      会话 ID
-     * @param msg         用户消息
-     * @param options     检索参数
-     * @param historyType 历史类型
-     * @param fileIds     会话文件 ID 列表
-     * @return 知识库问答响应
-     */
-    private RetrievalChatResponse ragChatWithFileIds(String chatId,
-                                                     String msg,
-                                                     RetrievalOptions options,
-                                                     MetaChatHistoryType historyType,
-                                                     List<String> fileIds) {
-        // 先把 HTTP 层 fileIds 解析成领域对象，后续 RAG 编排只处理 MetaContextFile
-        return ragChatWithContextFiles(chatId, msg, options, historyType, contextFiles(chatId, options, fileIds));
     }
 
     /**
@@ -123,17 +101,19 @@ public class KnowledgeChatService {
      * @param msg         用户消息
      * @param options     检索参数
      * @param historyType 历史类型
-     * @param files       本次参与上下文增强的会话文件
+     * @param fileIds     会话文件 ID 列表
      * @return 知识库问答响应
      */
-    private RetrievalChatResponse ragChatWithContextFiles(String chatId,
-                                                          String msg,
-                                                          RetrievalOptions options,
-                                                          MetaChatHistoryType historyType,
-                                                          List<MetaContextFile> files) {
+    private RetrievalChatResponse chatWithRetrieval(String chatId,
+                                                    String msg,
+                                                    RetrievalOptions options,
+                                                    MetaChatHistoryType historyType,
+                                                    List<String> fileIds) {
         // 所有知识库问答先统一会话 ID，保证 ChatMemory、完整历史和流式 meta 使用同一标识
         String resolvedChatId = chatScopeResolver.resolveChatId(chatId);
         RetrievalOptions resolvedOptions = Objects.requireNonNull(options, "RetrievalOptions must not be null");
+        // 先把 HTTP 层 fileIds 解析成领域对象，后续 RAG 编排只处理 MetaContextFile
+        List<MetaContextFile> files = resolveContextFiles(resolvedChatId, resolvedOptions, fileIds);
 
         // 先创建会话主表并保存用户消息，后续不论是否检索都能完整回放本轮问答
         MetaChatDO chat = chatHistoryRecorder.getOrCreate(resolvedChatId, resolvedOptions.getTenantId(),
@@ -192,7 +172,8 @@ public class KnowledgeChatService {
      * 执行知识库流式对话
      *
      * <p>
-     * fileIds 为空时回退当前会话 READY 文件，非空时只使用显式指定文件
+     * 检索决策为 SKIP 时仍然保留会话文件上下文 Advisor，支持“只基于上传文件回答”的场景
+     * 检索决策为 RETRIEVE 时同时注入会话文件上下文和知识库 Advisor
      *
      * @param chatId      会话 ID
      * @param msg         用户消息
@@ -201,37 +182,16 @@ public class KnowledgeChatService {
      * @param fileIds     会话文件 ID 列表
      * @return SSE 流式事件
      */
-    private Flux<ServerSentEvent<Object>> ragStreamWithFileIds(String chatId,
-                                                               String msg,
-                                                               RetrievalOptions options,
-                                                               MetaChatHistoryType historyType,
-                                                               List<String> fileIds) {
-        // 流式链路和非流式链路共用 contextFiles 解析，避免同一 fileIds 得到不同文件集合
-        return ragStreamWithContextFiles(chatId, msg, options, historyType, contextFiles(chatId, options, fileIds));
-    }
-
-    /**
-     * 执行知识库流式对话
-     *
-     * <p>
-     * 检索决策为 SKIP 时仍然保留会话文件上下文 Advisor，支持“只基于上传文件回答”的场景
-     * 检索决策为 RETRIEVE 时同时注入会话文件上下文和知识库 Advisor
-     *
-     * @param chatId      会话 ID
-     * @param msg         用户消息
-     * @param options     检索参数
-     * @param historyType 历史类型
-     * @param files       本次参与上下文增强的会话文件
-     * @return SSE 流式事件
-     */
-    private Flux<ServerSentEvent<Object>> ragStreamWithContextFiles(String chatId,
-                                                                    String msg,
-                                                                    RetrievalOptions options,
-                                                                    MetaChatHistoryType historyType,
-                                                                    List<MetaContextFile> files) {
+    private Flux<ServerSentEvent<Object>> streamChatWithRetrieval(String chatId,
+                                                                  String msg,
+                                                                  RetrievalOptions options,
+                                                                  MetaChatHistoryType historyType,
+                                                                  List<String> fileIds) {
         // 流式链路同样先固定 chatId，确保 meta、ChatMemory 和历史归档一致
         String resolvedChatId = chatScopeResolver.resolveChatId(chatId);
         RetrievalOptions resolvedOptions = Objects.requireNonNull(options, "RetrievalOptions must not be null");
+        // 流式链路和非流式链路共用 fileIds 解析规则，避免同一请求得到不同文件集合
+        List<MetaContextFile> files = resolveContextFiles(resolvedChatId, resolvedOptions, fileIds);
 
         // 流式响应开始前保存用户消息，助手消息在 done 事件阶段统一保存完整文本
         MetaChatDO chat = chatHistoryRecorder.getOrCreate(resolvedChatId, resolvedOptions.getTenantId(),
@@ -279,7 +239,7 @@ public class KnowledgeChatService {
      * @param fileIds 会话文件 ID 列表
      * @return 本轮参与上下文增强的会话文件
      */
-    private List<MetaContextFile> contextFiles(String chatId, RetrievalOptions options, List<String> fileIds) {
+    private List<MetaContextFile> resolveContextFiles(String chatId, RetrievalOptions options, List<String> fileIds) {
         // RAG 文件上下文同样受 tenantId、userId、chatId 三重隔离约束
         String resolvedChatId = chatScopeResolver.resolveChatId(chatId);
         RetrievalOptions resolvedOptions = Objects.requireNonNull(options, "RetrievalOptions must not be null");

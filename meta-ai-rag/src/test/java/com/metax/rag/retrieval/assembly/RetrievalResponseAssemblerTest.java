@@ -115,7 +115,7 @@ class RetrievalResponseAssemblerTest {
                                 document("chunk-2", "doc1", "demo.docx")))
                 .build();
 
-        RetrievalChatResponse chatResponse = assembler.streamChat("answer", response, "c1");
+        RetrievalChatResponse chatResponse = assembler.streamResponse("answer", response, "c1");
 
         assertThat(chatResponse.answer()).isEqualTo("answer");
         assertThat(chatResponse.references()).containsExactly(new RetrievalDocumentReference("doc1", "demo.docx"));

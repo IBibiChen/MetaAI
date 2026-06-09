@@ -117,7 +117,7 @@ public class RetrievalResponseAssembler {
      * @param chatId   会话 ID
      * @return RAG 普通响应
      */
-    public RetrievalChatResponse streamChat(String answer, ChatClientResponse response, String chatId) {
+    public RetrievalChatResponse streamResponse(String answer, ChatClientResponse response, String chatId) {
         return new RetrievalChatResponse(answer, chatId, documentReferences(response), files(response));
     }
 

@@ -153,7 +153,8 @@ public class ChatStreamEventAssembler {
         List<MetaContextFile> files = files(lastResponse);
         if (includeReferences) {
             // 知识库流式问答需要从最后一次响应中解析 retrieval metadata，生成轻量 references
-            RetrievalChatResponse response = retrievalResponseAssembler.streamChat(fullAnswer, lastResponse, chatId);
+            RetrievalChatResponse response = retrievalResponseAssembler.streamResponse(fullAnswer, lastResponse,
+                    chatId);
             references = response.references();
             files = response.files();
             data = new ChatStreamDone(response.answer(), response.chatId(), response.references(), response.files());
