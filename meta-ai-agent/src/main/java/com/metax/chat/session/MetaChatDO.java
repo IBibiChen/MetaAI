@@ -121,11 +121,11 @@ public class MetaChatDO {
     private String lastRole;
 
     /**
-     * 会话模式
+     * 最后一轮对话模式
      */
     @Column(name = "chat_mode", length = 32, nullable = false)
-    @Comment("会话模式")
-    @Schema(description = "会话模式", example = "rag")
+    @Comment("最后一轮对话模式")
+    @Schema(description = "最后一轮对话模式", example = "rag")
     private String chatMode;
 
     /**

@@ -217,7 +217,7 @@ export interface MetaChat {
     lastMessage?: string
     /** 最后一条消息角色 */
     lastRole?: string
-    /** 会话模式 */
+    /** 最后一轮对话模式 */
     chatMode: string
     /** 知识库 ID */
     kbId?: string

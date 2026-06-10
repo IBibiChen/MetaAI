@@ -7,17 +7,22 @@
         </n-button>
       </div>
       <div class="panel-head">
-        <div>
-          <strong>历史对话</strong>
-          <span>{{ activeChat?.title || workspace.chatId }}</span>
-        </div>
-        <n-button class="history-refresh-button" size="tiny" tertiary :loading="chatListLoading" @click="loadChats">
+        <strong>历史对话</strong>
+        <n-button
+            class="history-refresh-button"
+            size="tiny"
+            tertiary
+            circle
+            title="刷新历史对话"
+            aria-label="刷新历史对话"
+            :loading="chatListLoading"
+            @click="loadChats"
+        >
           <template #icon>
             <n-icon>
               <RefreshCw/>
             </n-icon>
           </template>
-          刷新
         </n-button>
       </div>
       <div class="history-list">
@@ -1866,6 +1871,9 @@ function formatChatMode(value?: string) {
   if (normalized === 'chat' || normalized === 'plain') {
     return '普通聊天'
   }
+  if (normalized === 'file_chat') {
+    return '附件问答'
+  }
   return '对话'
 }
 
@@ -1876,6 +1884,9 @@ function modeClass(value?: string) {
   }
   if (normalized === 'chat' || normalized === 'plain') {
     return 'plain'
+  }
+  if (normalized === 'file_chat') {
+    return 'file'
   }
   return 'default'
 }
@@ -1916,33 +1927,30 @@ async function downloadReference(reference: RetrievalDocumentReference) {
 }
 
 .panel-head {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: flex-start;
-  gap: 8px;
-  margin-bottom: 11px;
-}
-
-.panel-head > div {
-  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
 }
 
 .panel-head strong {
-  display: block;
-  color: #f4f7fb;
-  font-size: 14px;
-  font-weight: 750;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #e7fff8;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.4;
+  text-shadow: 0 0 14px rgba(65, 214, 183, 0.12);
 }
 
-.panel-head span {
-  display: block;
-  max-width: 100%;
-  margin-top: 4px;
-  overflow: hidden;
-  color: #7f8b9b;
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.panel-head strong::before {
+  width: 3px;
+  height: 14px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(65, 214, 183, 0.95), rgba(65, 214, 183, 0.38));
+  content: "";
 }
 
 .history-controls {
@@ -1973,8 +1981,13 @@ async function downloadReference(reference: RetrievalDocumentReference) {
 }
 
 .history-refresh-button {
+  --n-text-color-hover: #b9fff0 !important;
+  --n-text-color-pressed: #8eeed9 !important;
+  --n-text-color-focus: #b9fff0 !important;
   flex: none;
-  justify-self: end;
+  width: 28px;
+  height: 28px;
+  color: #93a0b1;
 }
 
 .history-list {
@@ -2044,6 +2057,12 @@ async function downloadReference(reference: RetrievalDocumentReference) {
   border-color: rgba(126, 168, 255, 0.22);
   color: #a8c4ff;
   background: rgba(126, 168, 255, 0.08);
+}
+
+.history-mode.file {
+  border-color: rgba(247, 201, 72, 0.26);
+  color: #f3d275;
+  background: rgba(247, 201, 72, 0.1);
 }
 
 .history-mode.default {

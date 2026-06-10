@@ -255,7 +255,7 @@ public class MetaChatServiceImpl extends ServiceImpl<MetaChatMapper, MetaChatDO>
      * @param request 会话创建或获取请求
      */
     private void fillChatBinding(MetaChatDO entity, MetaChatUpsertRequest request) {
-        // chatMode 每次按当前入口刷新，其他绑定字段只在请求显式传入时覆盖
+        // chatMode 表示最后一轮对话模式，每次按当前入口刷新，历史明细类型由 meta_chat_history.chat_type 保存
         entity.setChatMode(request.chatMode().value());
         if (StringUtils.hasText(request.kbId())) {
             entity.setKbId(request.kbId());
