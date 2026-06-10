@@ -65,7 +65,7 @@ public class ChatMessageService {
      * 会话文件对话支持组件
      *
      * <p>
-     * 负责已上传文件解析、历史 READY 文件回退，以及 MetaContextFileAdvisor 参数写入
+     * 负责已上传文件解析、显式 fileIds 校验，以及 MetaContextFileAdvisor 参数写入
      */
     private final ContextFileChatSupport contextFileChatSupport;
 

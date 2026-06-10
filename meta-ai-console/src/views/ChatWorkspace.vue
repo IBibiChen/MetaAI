@@ -186,7 +186,7 @@
               </div>
 
               <div v-if="messageItem.references?.length" class="references">
-                <div class="section-label">引用来源</div>
+                <div class="section-label">知识库引用</div>
                 <div class="citation-list">
                   <button
                       v-for="reference in messageItem.references"
@@ -301,6 +301,13 @@
             <span class="chat-file-name">{{ file.fileName }}</span>
             <span class="chat-file-status">{{ fileStatusText(file) }}</span>
           </span>
+        </div>
+        <div v-if="showRagContextScope" class="context-scope-row">
+          <span class="context-scope-label">回答范围</span>
+          <n-radio-group v-model:value="ragContextScope" size="small">
+            <n-radio-button value="FILES_ONLY">附件</n-radio-button>
+            <n-radio-button value="FILES_AND_KNOWLEDGE">附件 + 知识库</n-radio-button>
+          </n-radio-group>
         </div>
         <n-input
             class="composer-input"
@@ -479,6 +486,7 @@ import {
 import {fetchStorageDocuments} from '@/api/storage'
 import {useWorkspaceStore} from '@/stores/workspace'
 import type {
+  ChatContextScope,
   ChatOptions,
   MetaChat,
   MetaChatFileItem,
@@ -531,6 +539,7 @@ const chats = ref<MetaChat[]>([])
 const chatFiles = ref<MetaChatFileItem[]>([])
 const pendingChatFilePlaceholders = ref<ChatFileItem[]>([])
 const selectedChatFileIds = ref<string[]>([])
+const ragContextScope = ref<ChatContextScope>('FILES_ONLY')
 const activeMetaChatId = ref<string | null>(null)
 const draft = ref('')
 const sending = ref(false)
@@ -665,6 +674,8 @@ const currentFileScopeKey = computed(() => fileScopeKey({
 const chatFileUploading = computed(() => uploadingChatFileScopeKey.value === currentFileScopeKey.value)
 const fileContextBusy = computed(() => chatFileUploading.value || visibleChatFiles.value.some((file) =>
     file.status === 'uploading' || file.status === 'parsing'))
+const selectedReadyFileCount = computed(() => selectedReadyChatFiles().length)
+const showRagContextScope = computed(() => chatMode.value === 'rag' && selectedReadyFileCount.value > 0)
 const canSend = computed(() => Boolean(draft.value.trim()) && !sending.value && !fileContextBusy.value)
 const sendButtonText = computed(() => fileContextBusy.value ? '处理中' : '发送')
 let stopActiveTyping: (() => void) | null = null
@@ -703,6 +714,7 @@ watch(() => workspace.contextVersion, async () => {
   chatFiles.value = []
   pendingChatFilePlaceholders.value = []
   selectedChatFileIds.value = []
+  resetRagContextScope()
   uploadingChatFileScopeKey.value = null
   stopChatFilePolling()
   scopeDocuments.value = []
@@ -799,14 +811,15 @@ async function sendMessageContent(content: string) {
 
   const selectedFileIds = selectedFiles.map((file) => file.fileId)
   if (chatMode.value === 'plain') {
-    activeStream = streamPlainChatJson(chatOptions(content), selectedFileIds, handlers)
+    activeStream = streamPlainChatJson(chatOptions(content, selectedFileIds.length), selectedFileIds, handlers)
   } else {
-    activeStream = streamRagChatJson(chatOptions(content), selectedFileIds, handlers)
+    activeStream = streamRagChatJson(chatOptions(content, selectedFileIds.length), selectedFileIds, handlers)
   }
   selectedChatFileIds.value = []
+  resetRagContextScope()
 }
 
-function chatOptions(content: string): ChatOptions {
+function chatOptions(content: string, selectedFileCount: number): ChatOptions {
   return {
     chatId: workspace.chatId,
     msg: content,
@@ -816,7 +829,34 @@ function chatOptions(content: string): ChatOptions {
     deptIds: workspace.deptIds,
     documentId: ragForm.documentId || undefined,
     documentType: ragForm.documentType || undefined,
+    contextScope: resolveRequestContextScope(selectedFileCount),
   }
+}
+
+/**
+ * 解析本轮请求上下文范围
+ *
+ * <p>
+ * 普通聊天只表达附件上下文，RAG 有附件时默认附件优先，只有用户显式切换时才混合知识库
+ */
+function resolveRequestContextScope(selectedFileCount: number): ChatContextScope {
+  if (chatMode.value === 'plain') {
+    return 'FILES_ONLY'
+  }
+  if (selectedFileCount <= 0) {
+    return 'KNOWLEDGE_ONLY'
+  }
+  return ragContextScope.value
+}
+
+/**
+ * 重置 RAG 附件范围选择
+ *
+ * <p>
+ * 每轮发送后回到附件优先，避免上轮“附件 + 知识库”选择无感影响下一轮文件问答
+ */
+function resetRagContextScope() {
+  ragContextScope.value = 'FILES_ONLY'
 }
 
 /**
@@ -868,9 +908,15 @@ function toggleChatFileSelection(file: ChatFileItem) {
   if (!file.fileId || !file.selectable) return
   if (selectedChatFileIds.value.includes(file.fileId)) {
     selectedChatFileIds.value = selectedChatFileIds.value.filter((id) => id !== file.fileId)
+    if (selectedChatFileIds.value.length === 0) {
+      resetRagContextScope()
+    }
     return
   }
   selectedChatFileIds.value = [...selectedChatFileIds.value, file.fileId]
+  if (selectedChatFileIds.value.length === 1) {
+    resetRagContextScope()
+  }
 }
 
 /**
@@ -910,6 +956,9 @@ function mergeSelectedFileIds(currentIds: string[], nextIds: string[]) {
 function pruneSelectedChatFiles() {
   const fileIds = new Set(chatFiles.value.map((file) => file.fileId))
   selectedChatFileIds.value = selectedChatFileIds.value.filter((fileId) => fileIds.has(fileId))
+  if (selectedChatFileIds.value.length === 0) {
+    resetRagContextScope()
+  }
 }
 
 /**
@@ -982,6 +1031,7 @@ async function handleChatFileChange(event: Event) {
     if (isCurrentFileScope(uploadScope)) {
       chatFiles.value = mergeChatFiles(chatFiles.value, uploadedFiles)
       selectedChatFileIds.value = mergeSelectedFileIds(selectedChatFileIds.value, uploadedFiles.map((file) => file.fileId))
+      resetRagContextScope()
       pendingChatFilePlaceholders.value = []
       startChatFilePolling()
     }
@@ -1136,6 +1186,7 @@ function handleNewSession() {
   chatFiles.value = []
   pendingChatFilePlaceholders.value = []
   selectedChatFileIds.value = []
+  resetRagContextScope()
   uploadingChatFileScopeKey.value = null
 }
 
@@ -1162,6 +1213,7 @@ async function selectChat(chat: MetaChat) {
   stopChatFilePolling()
   pendingChatFilePlaceholders.value = []
   selectedChatFileIds.value = []
+  resetRagContextScope()
   activeMetaChatId.value = chat.id
   workspace.selectChat(chat)
   await loadHistory(chat)
@@ -2660,6 +2712,19 @@ async function downloadReference(reference: RetrievalDocumentReference) {
   border-color: rgba(126, 168, 255, 0.24);
   color: #c9d8ff;
   background: rgba(126, 168, 255, 0.08);
+}
+
+.context-scope-row {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.context-scope-label {
+  color: #9fb0c6;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .composer {

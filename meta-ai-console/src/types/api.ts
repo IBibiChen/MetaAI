@@ -403,6 +403,11 @@ export interface ChatStreamError {
 export type ChatStreamEventName = 'meta' | 'delta' | 'done' | 'error'
 
 /**
+ * 聊天回答上下文范围
+ */
+export type ChatContextScope = 'FILES_ONLY' | 'KNOWLEDGE_ONLY' | 'FILES_AND_KNOWLEDGE'
+
+/**
  * 聊天请求参数
  *
  * <p>
@@ -430,4 +435,6 @@ export interface ChatOptions {
     deptIds?: string
     /** 会话文件 ID 列表，空值表示本轮不使用会话文件 */
     fileIds?: string[]
+    /** 回答上下文范围，用于控制本轮是否使用附件和知识库 */
+    contextScope?: ChatContextScope
 }

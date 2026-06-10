@@ -1,5 +1,6 @@
 package com.metax.retrieval.chat.request;
 
+import com.metax.chat.request.ChatContextScope;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
@@ -95,4 +96,14 @@ public class RetrievalChatRequest {
     @Parameter(description = "会话文件 ID 列表，空值表示本轮不使用会话文件", example = "2063846120613888002")
     @Schema(description = "会话文件 ID 列表，空值表示本轮不使用会话文件", example = "[\"2063846120613888002\"]")
     private List<String> fileIds;
+
+    /**
+     * 回答上下文范围
+     *
+     * <p>
+     * FILES_ONLY 只使用本轮 fileIds，KNOWLEDGE_ONLY 只检索知识库，FILES_AND_KNOWLEDGE 同时使用两者
+     */
+    @Parameter(description = "回答上下文范围：FILES_ONLY、KNOWLEDGE_ONLY、FILES_AND_KNOWLEDGE", example = "FILES_ONLY")
+    @Schema(description = "回答上下文范围：FILES_ONLY、KNOWLEDGE_ONLY、FILES_AND_KNOWLEDGE", example = "FILES_ONLY")
+    private ChatContextScope contextScope;
 }

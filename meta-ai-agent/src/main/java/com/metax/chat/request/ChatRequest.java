@@ -67,4 +67,14 @@ public class ChatRequest {
     @Parameter(description = "会话文件 ID 列表，空值表示本轮不使用会话文件", example = "2063846120613888002")
     @Schema(description = "会话文件 ID 列表，空值表示本轮不使用会话文件", example = "[\"2063846120613888002\"]")
     private List<String> fileIds;
+
+    /**
+     * 回答上下文范围
+     *
+     * <p>
+     * 普通聊天只使用 FILES_ONLY 语义，RAG 问答会根据该字段决定是否启用知识库检索
+     */
+    @Parameter(description = "回答上下文范围：FILES_ONLY、KNOWLEDGE_ONLY、FILES_AND_KNOWLEDGE", example = "FILES_ONLY")
+    @Schema(description = "回答上下文范围：FILES_ONLY、KNOWLEDGE_ONLY、FILES_AND_KNOWLEDGE", example = "FILES_ONLY")
+    private ChatContextScope contextScope;
 }

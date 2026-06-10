@@ -52,6 +52,7 @@ export async function sendPlainChat(chatId: string, tenantId: string, userId: st
             msg,
             stream: 'false',
             fileIds: toCsv(fileIds),
+            contextScope: fileIds.length > 0 ? 'FILES_ONLY' : undefined,
         },
     })
     return unwrapResult(response.data)
@@ -73,6 +74,7 @@ export async function sendPlainChatJson(options: ChatOptions, fileIds: string[] 
         msg: options.msg,
         stream: false,
         fileIds,
+        contextScope: options.contextScope || (fileIds.length > 0 ? 'FILES_ONLY' : undefined),
     }), {
         headers: {
             Authorization: METAX_AUTHORIZATION,
@@ -85,7 +87,7 @@ export async function sendPlainChatJson(options: ChatOptions, fileIds: string[] 
  * 上传会话临时文件
  *
  * <p>
- * 文件只绑定当前 chatId，后续问答通过 fileIds 显式选择或在 fileIds 为空时回退 READY 文件
+ * 文件只绑定当前 chatId，后续问答必须通过 fileIds 显式选择
  * 上传接口是唯一保留 multipart/form-data 的聊天文件入口
  */
 export async function uploadChatFiles(chatId: string, tenantId: string, userId: string, files: File[]) {
@@ -139,6 +141,7 @@ export function streamPlainChat(
         msg,
         stream: 'true',
         fileIds: toCsv(fileIds),
+        contextScope: fileIds.length > 0 ? 'FILES_ONLY' : undefined,
     }, handlers)
 }
 
@@ -158,6 +161,7 @@ export function streamPlainChatJson(options: ChatOptions, fileIds: string[], han
         msg: options.msg,
         stream: true,
         fileIds,
+        contextScope: options.contextScope || (fileIds.length > 0 ? 'FILES_ONLY' : undefined),
     }, handlers)
 }
 
@@ -181,6 +185,7 @@ export async function sendRagChat(options: ChatOptions) {
             userId: options.userId || undefined,
             deptIds: options.deptIds || undefined,
             fileIds: toCsv(options.fileIds),
+            contextScope: options.contextScope || resolveRagContextScope(options.fileIds || []),
         },
     })
     return unwrapResult(response.data)
@@ -206,6 +211,7 @@ export async function sendRagChatJson(options: ChatOptions, fileIds: string[] = 
         userId: options.userId,
         deptIds: options.deptIds || undefined,
         fileIds,
+        contextScope: options.contextScope || resolveRagContextScope(fileIds),
     }), {
         headers: {
             Authorization: METAX_AUTHORIZATION,
@@ -233,6 +239,7 @@ export function streamRagChat(options: ChatOptions, handlers: ChatStreamHandlers
         userId: options.userId,
         deptIds: options.deptIds,
         fileIds: toCsv(options.fileIds),
+        contextScope: options.contextScope || resolveRagContextScope(options.fileIds || []),
     }, handlers)
 }
 
@@ -256,7 +263,18 @@ export function streamRagChatJson(options: ChatOptions, fileIds: string[], handl
         userId: options.userId,
         deptIds: options.deptIds || undefined,
         fileIds,
+        contextScope: options.contextScope || resolveRagContextScope(fileIds),
     }, handlers)
+}
+
+/**
+ * 解析 RAG 默认回答范围
+ *
+ * <p>
+ * 有显式附件时默认只基于附件回答，无附件时默认只使用知识库
+ */
+function resolveRagContextScope(fileIds: string[] = []) {
+    return fileIds.length > 0 ? 'FILES_ONLY' : 'KNOWLEDGE_ONLY'
 }
 
 /**
