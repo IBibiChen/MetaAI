@@ -290,29 +290,31 @@
             multiple
             @change="handleChatFileChange"
         />
-        <div v-if="visibleChatFiles.length" class="chat-file-strip">
-          <span
-              v-for="file in visibleChatFiles"
-              :key="file.key"
-              :class="['chat-file-chip', `is-${file.status}`, { selected: file.selected, selectable: file.selectable }]"
-              :title="fileDisplayTitle(file)"
-              role="button"
-              tabindex="0"
-              @click="toggleChatFileSelection(file)"
-              @keydown.enter.prevent="toggleChatFileSelection(file)"
-              @keydown.space.prevent="toggleChatFileSelection(file)"
-          >
-            <span class="chat-file-indicator" aria-hidden="true"></span>
-            <span class="chat-file-name">{{ file.fileName }}</span>
-            <span class="chat-file-status">{{ fileStatusText(file) }}</span>
-          </span>
-        </div>
-        <div v-if="showRagContextScope" class="context-scope-row">
-          <span class="context-scope-label">回答范围</span>
-          <n-radio-group v-model:value="ragContextScope" size="small">
-            <n-radio-button value="FILES_ONLY">附件</n-radio-button>
-            <n-radio-button value="FILES_AND_KNOWLEDGE">附件 + 知识库</n-radio-button>
-          </n-radio-group>
+        <div v-if="visibleChatFiles.length || showRagContextScope" class="composer-context-row">
+          <div v-if="visibleChatFiles.length" class="chat-file-strip">
+            <span
+                v-for="file in visibleChatFiles"
+                :key="file.key"
+                :class="['chat-file-chip', `is-${file.status}`, { selected: file.selected, selectable: file.selectable }]"
+                :title="fileDisplayTitle(file)"
+                role="button"
+                tabindex="0"
+                @click="toggleChatFileSelection(file)"
+                @keydown.enter.prevent="toggleChatFileSelection(file)"
+                @keydown.space.prevent="toggleChatFileSelection(file)"
+            >
+              <span class="chat-file-indicator" aria-hidden="true"></span>
+              <span class="chat-file-name">{{ file.fileName }}</span>
+              <span class="chat-file-status">{{ fileStatusText(file) }}</span>
+            </span>
+          </div>
+          <div v-if="showRagContextScope" class="context-scope-row">
+            <span class="context-scope-label">回答范围</span>
+            <n-radio-group v-model:value="ragContextScope" class="context-scope-toggle" size="small">
+              <n-radio-button value="FILES_ONLY">附件</n-radio-button>
+              <n-radio-button value="FILES_AND_KNOWLEDGE">附件 + 知识库</n-radio-button>
+            </n-radio-group>
+          </div>
         </div>
         <n-input
             class="composer-input"
@@ -1410,11 +1412,11 @@ function handleEnter(event: KeyboardEvent) {
  * 文件状态展示文案
  *
  * <p>
- * READY 文件只有被用户显式选中后才会进入本轮 fileIds
+ * READY 文件展示的是本轮是否参与回答，而不是文件能否被点击
  */
 function fileStatusText(file: ChatFileItem) {
   if (file.status === 'ready') {
-    return file.selected ? '已选择' : '可选择'
+    return file.selected ? '已选' : '未选'
   }
   const statusText: Record<ChatFileItemStatus, string> = {
     uploading: '上传中',
@@ -2733,17 +2735,76 @@ async function downloadReference(reference: RetrievalDocumentReference) {
   background: rgba(126, 168, 255, 0.08);
 }
 
-.context-scope-row {
+.composer-context-row {
   grid-column: 1 / -1;
   display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px 14px;
+}
+
+.context-scope-row {
+  display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+  margin-left: auto;
+  padding-top: 1px;
 }
 
 .context-scope-label {
+  flex: none;
   color: #9fb0c6;
   font-size: 12px;
   font-weight: 700;
+  line-height: 28px;
+}
+
+.context-scope-toggle {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  border: 1px solid rgba(126, 168, 255, 0.22);
+  border-radius: 6px;
+  padding: 1px;
+  overflow: hidden;
+  background: rgba(15, 23, 42, 0.36);
+}
+
+.context-scope-toggle :deep(.n-radio-button) {
+  --n-button-border-color: transparent !important;
+  --n-button-border-color-active: transparent !important;
+  --n-button-border-color-hover: transparent !important;
+  --n-button-box-shadow-focus: 0 0 0 2px rgba(45, 212, 191, 0.12) !important;
+  --n-button-color: transparent !important;
+  --n-button-color-active: rgba(45, 212, 191, 0.18) !important;
+  --n-button-color-hover: rgba(126, 168, 255, 0.08) !important;
+  --n-button-text-color: #b8c8e8 !important;
+  --n-button-text-color-active: #d9fffb !important;
+  height: 26px;
+  border-radius: 5px !important;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 26px !important;
+  background: transparent;
+}
+
+.context-scope-toggle :deep(.n-radio-button::before),
+.context-scope-toggle :deep(.n-radio-button__state-border) {
+  display: none !important;
+}
+
+.context-scope-toggle :deep(.n-radio-button__label) {
+  padding: 0;
+  line-height: 26px;
+}
+
+.context-scope-toggle :deep(.n-radio-button.n-radio-button--checked) {
+  color: #d9fffb;
+  background: rgba(45, 212, 191, 0.18);
+  box-shadow: inset 0 0 0 1px rgba(45, 212, 191, 0.22);
 }
 
 .composer {
@@ -2760,9 +2821,10 @@ async function downloadReference(reference: RetrievalDocumentReference) {
 }
 
 .chat-file-strip {
-  grid-column: 1 / -1;
   display: flex;
+  flex: 1 1 520px;
   flex-wrap: wrap;
+  min-width: 0;
   gap: 8px;
 }
 
@@ -2771,7 +2833,7 @@ async function downloadReference(reference: RetrievalDocumentReference) {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  max-width: 220px;
+  width: min(250px, 100%);
   border: 1px solid rgba(126, 168, 255, 0.24);
   border-radius: 6px;
   padding: 5px 9px;
@@ -2873,6 +2935,7 @@ async function downloadReference(reference: RetrievalDocumentReference) {
 .chat-file-name {
   position: relative;
   z-index: 1;
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2882,6 +2945,7 @@ async function downloadReference(reference: RetrievalDocumentReference) {
   position: relative;
   z-index: 1;
   flex: none;
+  margin-left: auto;
   color: rgba(255, 255, 255, 0.62);
   font-size: 11px;
 }
