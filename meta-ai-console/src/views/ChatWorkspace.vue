@@ -1446,8 +1446,25 @@ function chatFileStatus(status: MetaChatFileParseStatus): ChatFileItemStatus {
  * @return 鼠标悬停提示
  */
 function fileDisplayTitle(file: ChatFileItem) {
-  const type = file.documentType ? ` · ${file.documentType}` : ''
+  const type = shouldShowDocumentType(file) ? ` · ${file.documentType}` : ''
   return `${file.fileName}${type} · ${fileStatusText(file)}`
+}
+
+/**
+ * 判断悬浮提示是否需要补充文档类型
+ *
+ * <p>
+ * 文件名已经包含同名扩展名时不重复展示 documentType，避免出现 file.docx · docx
+ *
+ * @param file 文件展示项
+ * @return true 表示需要追加文档类型
+ */
+function shouldShowDocumentType(file: ChatFileItem) {
+  const documentType = file.documentType?.trim()
+  if (!documentType) return false
+  const normalizedType = documentType.replace(/^\./, '').toLowerCase()
+  if (!normalizedType) return false
+  return !file.fileName.toLowerCase().endsWith(`.${normalizedType}`)
 }
 
 /**
@@ -2748,28 +2765,37 @@ async function downloadReference(reference: RetrievalDocumentReference) {
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: 8px;
   margin-left: auto;
   padding-top: 1px;
 }
 
 .context-scope-label {
+  display: inline-flex;
   flex: none;
-  color: #9fb0c6;
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 28px;
+  align-items: center;
+  justify-content: center;
+  width: 78px;
+  height: 30px;
+  border: 1px solid rgba(65, 214, 183, 0.3);
+  border-right: 0;
+  border-radius: 6px 0 0 6px;
+  color: #e7fff8;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 30px;
+  text-shadow: 0 0 14px rgba(65, 214, 183, 0.12);
+  background: rgba(65, 214, 183, 0.1);
 }
 
 .context-scope-toggle {
   display: inline-flex;
   align-items: center;
-  min-height: 28px;
-  border: 1px solid rgba(126, 168, 255, 0.22);
-  border-radius: 6px;
-  padding: 1px;
+  height: 30px;
+  min-height: 30px;
+  border: 1px solid rgba(65, 214, 183, 0.3);
+  border-radius: 0 6px 6px 0;
   overflow: hidden;
-  background: rgba(15, 23, 42, 0.36);
+  background: rgba(15, 23, 42, 0.42);
 }
 
 .context-scope-toggle :deep(.n-radio-button) {
@@ -2778,33 +2804,58 @@ async function downloadReference(reference: RetrievalDocumentReference) {
   --n-button-border-color-hover: transparent !important;
   --n-button-box-shadow-focus: 0 0 0 2px rgba(45, 212, 191, 0.12) !important;
   --n-button-color: transparent !important;
-  --n-button-color-active: rgba(45, 212, 191, 0.18) !important;
-  --n-button-color-hover: rgba(126, 168, 255, 0.08) !important;
-  --n-button-text-color: #b8c8e8 !important;
-  --n-button-text-color-active: #d9fffb !important;
-  height: 26px;
-  border-radius: 5px !important;
-  padding: 0 10px;
+  --n-button-color-active: rgba(65, 214, 183, 0.18) !important;
+  --n-button-color-hover: rgba(65, 214, 183, 0.08) !important;
+  --n-button-text-color: #a9bac8 !important;
+  --n-button-text-color-active: #d7fff7 !important;
+  display: inline-flex !important;
+  flex: 0 0 94px;
+  align-items: center;
+  justify-content: center;
+  width: 94px;
+  min-width: 94px;
+  height: 30px;
+  border: 0 !important;
+  border-left: 0 !important;
+  border-radius: 0 !important;
+  padding: 0 7px;
   font-size: 12px;
   font-weight: 700;
-  line-height: 26px !important;
+  line-height: 30px !important;
+  color: #a9bac8;
   background: transparent;
+  box-shadow: none !important;
+}
+
+.context-scope-toggle :deep(.n-radio-button + .n-radio-button) {
+  margin-left: 0 !important;
+  border-left: 0 !important;
 }
 
 .context-scope-toggle :deep(.n-radio-button::before),
+.context-scope-toggle :deep(.n-radio-button::after),
 .context-scope-toggle :deep(.n-radio-button__state-border) {
   display: none !important;
+  width: 0 !important;
+  border: 0 !important;
+  opacity: 0 !important;
 }
 
 .context-scope-toggle :deep(.n-radio-button__label) {
+  display: block;
+  width: 100%;
   padding: 0;
-  line-height: 26px;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 30px;
 }
 
 .context-scope-toggle :deep(.n-radio-button.n-radio-button--checked) {
-  color: #d9fffb;
-  background: rgba(45, 212, 191, 0.18);
-  box-shadow: inset 0 0 0 1px rgba(45, 212, 191, 0.22);
+  color: #d7fff7;
+  background: rgba(65, 214, 183, 0.24);
+  box-shadow: none !important;
 }
 
 .composer {
@@ -2937,6 +2988,7 @@ async function downloadReference(reference: RetrievalDocumentReference) {
   z-index: 1;
   flex: 1 1 auto;
   min-width: 0;
+  margin-right: 8px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -2944,7 +2996,7 @@ async function downloadReference(reference: RetrievalDocumentReference) {
 .chat-file-status {
   position: relative;
   z-index: 1;
-  flex: none;
+  flex: 0 0 auto;
   margin-left: auto;
   color: rgba(255, 255, 255, 0.62);
   font-size: 11px;
