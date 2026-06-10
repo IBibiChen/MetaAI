@@ -24,7 +24,7 @@
         <div
             v-for="item in chats"
             :key="item.id"
-            :class="['history-item', { active: item.id === activeChatId, pinned: item.pinned }]"
+            :class="['history-item', { active: item.id === activeMetaChatId, pinned: item.pinned }]"
             role="button"
             tabindex="0"
             @click="selectChat(item)"
@@ -285,14 +285,15 @@
             multiple
             @change="handleChatFileChange"
         />
-        <div v-if="chatFiles.length" class="chat-file-strip">
+        <div v-if="visibleChatFiles.length" class="chat-file-strip">
           <span
-              v-for="file in chatFiles"
-              :key="file.fileId"
-              class="chat-file-chip"
-              :title="file.fileName"
+              v-for="file in visibleChatFiles"
+              :key="file.key"
+              :class="['chat-file-chip', `is-${file.status}`]"
+              :title="fileDisplayTitle(file)"
           >
-            {{ file.fileName }}
+            <span class="chat-file-name">{{ file.fileName }}</span>
+            <span class="chat-file-status">{{ fileStatusText(file.status) }}</span>
           </span>
         </div>
         <n-input
@@ -307,7 +308,7 @@
             class="composer-button attachment-button"
             secondary
             :loading="chatFileUploading"
-            :disabled="sending || chatFileUploading"
+            :disabled="sending || fileContextBusy"
             @click="openChatFilePicker"
         >
           <template #icon>
@@ -333,7 +334,7 @@
             v-else
             class="composer-button"
             type="primary"
-            :disabled="!draft.trim()"
+            :disabled="!canSend"
             @click="sendMessage"
         >
           <template #icon>
@@ -341,7 +342,7 @@
               <Send/>
             </n-icon>
           </template>
-          发送
+          {{ sendButtonText }}
         </n-button>
       </footer>
     </main>
@@ -492,6 +493,16 @@ interface ChatMessage {
   trace?: RetrievalTrace
 }
 
+type ChatFileItemStatus = 'parsing' | 'ready'
+
+interface ChatFileItem {
+  key: string
+  fileId?: string
+  fileName: string
+  documentType?: string
+  status: ChatFileItemStatus
+}
+
 interface TypingRenderer {
   enqueue: (text: string) => void
   complete: (answer?: string) => void
@@ -508,7 +519,8 @@ const chatFileInputRef = ref<HTMLInputElement | null>(null)
 const messages = ref<ChatMessage[]>([])
 const chats = ref<MetaChat[]>([])
 const chatFiles = ref<MetaContextFile[]>([])
-const activeChatId = ref<string | null>(null)
+const parsingChatFiles = ref<ChatFileItem[]>([])
+const activeMetaChatId = ref<string | null>(null)
 const draft = ref('')
 const sending = ref(false)
 const chatFileUploading = ref(false)
@@ -621,7 +633,20 @@ const ragForm = reactive({
   documentType: null as string | null,
 })
 
-const activeChat = computed(() => chats.value.find((item) => item.id === activeChatId.value) || null)
+const activeChat = computed(() => chats.value.find((item) => item.id === activeMetaChatId.value) || null)
+const visibleChatFiles = computed<ChatFileItem[]>(() => [
+  ...parsingChatFiles.value,
+  ...chatFiles.value.map((file) => ({
+    key: file.fileId,
+    fileId: file.fileId,
+    fileName: file.fileName,
+    documentType: file.documentType,
+    status: 'ready' as const,
+  })),
+])
+const fileContextBusy = computed(() => chatFileUploading.value || parsingChatFiles.value.length > 0)
+const canSend = computed(() => Boolean(draft.value.trim()) && !sending.value && !fileContextBusy.value)
+const sendButtonText = computed(() => fileContextBusy.value ? '解析中' : '发送')
 let stopActiveTyping: (() => void) | null = null
 let activeTypingRenderer: TypingRenderer | null = null
 let activeStream: ChatStreamHandle | null = null
@@ -638,7 +663,7 @@ onMounted(async () => {
   await nextTick()
   setupMessageScrollbar()
   await loadChats()
-  if (activeChatId.value && messages.value.length === 0) {
+  if (activeMetaChatId.value && messages.value.length === 0) {
     await loadHistory()
     await loadChatFiles()
   }
@@ -651,9 +676,10 @@ onUnmounted(() => {
 
 watch(() => workspace.contextVersion, async () => {
   stopStreaming()
-  activeChatId.value = null
+  activeMetaChatId.value = null
   messages.value = []
   chatFiles.value = []
+  parsingChatFiles.value = []
   scopeDocuments.value = []
   clearRetrievalScope()
   await loadChats()
@@ -673,6 +699,11 @@ watch(messages, async () => {
  */
 async function sendMessage() {
   const content = draft.value.trim()
+  if (fileContextBusy.value) {
+    message.warning('文件解析完成后再发送')
+    return
+  }
+  if (sending.value || !content) return
   if (content) {
     draft.value = ''
   }
@@ -681,6 +712,10 @@ async function sendMessage() {
 
 async function sendMessageContent(content: string) {
   if (!content || sending.value) return
+  if (fileContextBusy.value) {
+    message.warning('文件解析完成后再发送')
+    return
+  }
 
   workspace.persist()
   stopStreaming()
@@ -715,7 +750,7 @@ async function sendMessageContent(content: string) {
   const handlers = {
     onMeta: (payload: { chatId: string }) => {
       if (streamStoppedByUser) return
-      workspace.selectChat(payload.chatId)
+      workspace.setChatId(payload.chatId)
     },
     onDelta: (payload: { content: string }) => {
       if (streamStoppedByUser) return
@@ -769,22 +804,51 @@ async function handleChatFileChange(event: Event) {
   if (!files.length || chatFileUploading.value) return
 
   workspace.persist()
+  const uploadScope = {
+    chatId: workspace.chatId,
+    tenantId: workspace.tenantId,
+    userId: workspace.userId,
+  }
   chatFileUploading.value = true
+  // 上传接口同步完成解析和临时索引，返回前先用本地占位告诉用户文件正在处理中
+  parsingChatFiles.value = files.map((file, index) => ({
+    key: `parsing-${Date.now()}-${index}-${file.name}`,
+    fileName: file.name,
+    documentType: file.name.includes('.') ? file.name.split('.').pop() : undefined,
+    status: 'parsing',
+  }))
   try {
-    chatFiles.value = await uploadChatFiles(workspace.chatId, workspace.tenantId, workspace.userId, files)
+    await uploadChatFiles(uploadScope.chatId, uploadScope.tenantId, uploadScope.userId, files)
+    await loadChatFiles(uploadScope)
     message.success('会话文件已上传')
   } catch (error) {
     message.error(error instanceof Error ? error.message : '上传会话文件失败')
   } finally {
+    parsingChatFiles.value = []
     chatFileUploading.value = false
   }
 }
 
-async function loadChatFiles() {
+/**
+ * 加载会话 READY 文件
+ *
+ * <p>
+ * 未传 scope 时读取当前工作区，上传完成回刷时传入上传开始时的 scope，避免切换会话后串位
+ */
+async function loadChatFiles(scope = {
+  chatId: workspace.chatId,
+  tenantId: workspace.tenantId,
+  userId: workspace.userId,
+}) {
   try {
-    chatFiles.value = await fetchChatFiles(workspace.chatId, workspace.tenantId, workspace.userId)
+    const files = await fetchChatFiles(scope.chatId, scope.tenantId, scope.userId)
+    if (scope.chatId === workspace.chatId && scope.tenantId === workspace.tenantId && scope.userId === workspace.userId) {
+      chatFiles.value = files
+    }
   } catch {
-    chatFiles.value = []
+    if (scope.chatId === workspace.chatId && scope.tenantId === workspace.tenantId && scope.userId === workspace.userId) {
+      chatFiles.value = []
+    }
   }
 }
 
@@ -857,8 +921,7 @@ function stopStreaming() {
  * 历史记录来自后端 MetaChatHistory
  * 加载后会同步转换成当前页面消息列表
  */
-async function loadHistory() {
-  const chat = activeChat.value
+async function loadHistory(chat: MetaChat | null = activeChat.value) {
   if (!chat) return
   historyLoading.value = true
   messageTransitioning.value = true
@@ -869,7 +932,7 @@ async function loadHistory() {
         createMessage(
             item.role.toLowerCase() === 'user' ? 'user' : 'assistant',
             item.content,
-            parseReferences(item.referencesJson),
+            parseReferences(item.reference),
             undefined,
             item.createdAt,
         ),
@@ -889,15 +952,16 @@ async function loadHistory() {
  * 新建会话
  *
  * <p>
- * 只刷新 sessionId
+ * 只刷新 chatId
  * 当前租户、知识库和用户保持不变
  */
 function handleNewSession() {
   stopStreaming()
   workspace.resetSession()
-  activeChatId.value = null
+  activeMetaChatId.value = null
   messages.value = []
   chatFiles.value = []
+  parsingChatFiles.value = []
 }
 
 async function loadChats() {
@@ -908,7 +972,7 @@ async function loadChats() {
     sortChats()
     const current = chats.value.find((item) => item.chatId === workspace.chatId)
     if (current) {
-      activeChatId.value = current.id
+      activeMetaChatId.value = current.id
       await loadChatFiles()
     }
   } catch (error) {
@@ -920,9 +984,10 @@ async function loadChats() {
 
 async function selectChat(chat: MetaChat) {
   stopStreaming()
-  activeChatId.value = chat.id
-  workspace.selectChat(chat.chatId)
-  await loadHistory()
+  parsingChatFiles.value = []
+  activeMetaChatId.value = chat.id
+  workspace.selectChat(chat)
+  await loadHistory(chat)
   await loadChatFiles()
 }
 
@@ -1010,8 +1075,8 @@ async function submitDelete() {
   deleteSubmitting.value = true
   try {
     await deleteChat(chat.id)
-    if (activeChatId.value === chat.id) {
-      activeChatId.value = null
+    if (activeMetaChatId.value === chat.id) {
+      activeMetaChatId.value = null
       messages.value = []
       workspace.resetSession()
     }
@@ -1079,6 +1144,10 @@ function copyMessage(messageItem: ChatMessage) {
 
 function resendUserMessage(messageItem: ChatMessage) {
   if (messageItem.role !== 'user' || sending.value || !messageItem.content) return
+  if (fileContextBusy.value) {
+    message.warning('文件解析完成后再发送')
+    return
+  }
   sendMessageContent(messageItem.content)
 }
 
@@ -1101,6 +1170,27 @@ function handleEnter(event: KeyboardEvent) {
   if (event.shiftKey) return
   event.preventDefault()
   sendMessage()
+}
+
+/**
+ * 文件状态展示文案
+ *
+ * <p>
+ * READY 文件可以进入 fileIds，解析中文件只作为本地占位展示
+ */
+function fileStatusText(status: ChatFileItemStatus) {
+  return status === 'ready' ? '已就绪' : '解析中'
+}
+
+/**
+ * 文件状态提示
+ *
+ * @param file 文件展示项
+ * @return 鼠标悬停提示
+ */
+function fileDisplayTitle(file: ChatFileItem) {
+  const type = file.documentType ? ` · ${file.documentType}` : ''
+  return `${file.fileName}${type} · ${fileStatusText(file.status)}`
 }
 
 /**
@@ -2383,6 +2473,9 @@ async function downloadReference(reference: RetrievalDocumentReference) {
 }
 
 .chat-file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   max-width: 220px;
   border: 1px solid rgba(126, 168, 255, 0.24);
   border-radius: 6px;
@@ -2393,6 +2486,24 @@ async function downloadReference(reference: RetrievalDocumentReference) {
   text-overflow: ellipsis;
   white-space: nowrap;
   background: rgba(126, 168, 255, 0.08);
+}
+
+.chat-file-chip.is-parsing {
+  border-color: rgba(255, 203, 104, 0.35);
+  color: #ffe2a3;
+  background: rgba(255, 203, 104, 0.1);
+}
+
+.chat-file-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chat-file-status {
+  flex: none;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 11px;
 }
 
 .composer-input :deep(.n-input__textarea-el::placeholder) {

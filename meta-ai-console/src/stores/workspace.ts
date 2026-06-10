@@ -1,4 +1,5 @@
 import {defineStore} from 'pinia'
+import type {MetaChat} from '@/types/api'
 
 const DEFAULT_TENANT_ID = 't1'
 const DEFAULT_KB_ID = 'kb1'
@@ -6,14 +7,37 @@ const DEFAULT_USER_ID = 'u1'
 const DEFAULT_DEPT_IDS = ''
 
 /**
- * 创建短会话 ID
+ * 创建短会话后缀
  *
  * <p>
- * chatId 采用 tenantId:userId:sessionId
- * sessionId 用于区分同一用户的多次独立对话
+ * 后缀只用于区分同一租户、同一用户下的多次独立对话
  */
-function createSessionId() {
+function createSessionSuffix() {
     return crypto.randomUUID ? crypto.randomUUID().slice(0, 8) : String(Date.now())
+}
+
+/**
+ * 创建完整会话 ID
+ *
+ * <p>
+ * chatId 是独立业务会话 ID，不再从既有 chatId 中反向解析 tenantId 或 userId
+ */
+function createChatId(tenantId: string, userId: string) {
+    return `${tenantId}-${userId}-${createSessionSuffix()}`
+}
+
+/**
+ * 读取安全的本地缓存值
+ *
+ * <p>
+ * 旧版本可能把冒号格式 chatId 写入 tenantId 或 chatId，启动时直接丢弃这类开发期脏值
+ */
+function safeStorageValue(key: string, fallback: string, rejectColon = false) {
+    const value = localStorage.getItem(key)
+    if (!value || (rejectColon && value.includes(':'))) {
+        return fallback
+    }
+    return value
 }
 
 /**
@@ -21,34 +45,27 @@ function createSessionId() {
  *
  * <p>
  * tenantId、kbId、userId 和 deptIds 会被文件管理与 RAG 聊天复用
- * 当前阶段没有登录系统，因此先存到 localStorage
+ * chatId 作为独立会话 ID 保存，不能再拆分反推租户和用户
  */
 export const useWorkspaceStore = defineStore('workspace', {
-    state: () => ({
-        tenantId: localStorage.getItem('meta-ai.tenantId') || DEFAULT_TENANT_ID,
-        kbId: localStorage.getItem('meta-ai.kbId') || DEFAULT_KB_ID,
-        userId: localStorage.getItem('meta-ai.userId') || DEFAULT_USER_ID,
-        deptIds: localStorage.getItem('meta-ai.deptIds') || DEFAULT_DEPT_IDS,
-        sessionId: localStorage.getItem('meta-ai.sessionId') || createSessionId(),
-        contextVersion: 0,
-    }),
-    getters: {
-        /**
-         * 后端推荐格式的会话 ID
-         *
-         * @example
-         * t1:u1:9a8b7c6d
-         */
-        chatId(state) {
-            return `${state.tenantId}:${state.userId}:${state.sessionId}`
-        },
+    state: () => {
+        const tenantId = safeStorageValue('meta-ai.tenantId', DEFAULT_TENANT_ID, true)
+        const userId = safeStorageValue('meta-ai.userId', DEFAULT_USER_ID, true)
+        const cachedChatId = safeStorageValue('meta-ai.chatId', '', true)
+        return {
+            tenantId,
+            kbId: safeStorageValue('meta-ai.kbId', DEFAULT_KB_ID),
+            userId,
+            deptIds: safeStorageValue('meta-ai.deptIds', DEFAULT_DEPT_IDS),
+            chatId: cachedChatId || createChatId(tenantId, userId),
+            contextVersion: 0,
+        }
     },
     actions: {
         /**
          * 持久化工作区上下文
          *
          * <p>
-         * 顶部输入框失焦时会调用
          * 页面刷新后仍然保留上一次使用的上下文
          */
         persist() {
@@ -56,17 +73,17 @@ export const useWorkspaceStore = defineStore('workspace', {
             localStorage.setItem('meta-ai.kbId', this.kbId)
             localStorage.setItem('meta-ai.userId', this.userId)
             localStorage.setItem('meta-ai.deptIds', this.deptIds)
-            localStorage.setItem('meta-ai.sessionId', this.sessionId)
+            localStorage.setItem('meta-ai.chatId', this.chatId)
+            localStorage.removeItem('meta-ai.sessionId')
         },
         /**
          * 创建新的聊天会话
          *
          * <p>
-         * 只更换 sessionId
-         * tenantId、kbId 和 userId 不变
+         * 当前租户、知识库和用户不变，只生成新的完整 chatId
          */
         resetSession() {
-            this.sessionId = createSessionId()
+            this.chatId = createChatId(this.tenantId, this.userId)
             this.persist()
         },
         /**
@@ -77,7 +94,7 @@ export const useWorkspaceStore = defineStore('workspace', {
          * contextVersion 用于通知聊天页清理当前窗口并刷新会话列表
          */
         applyContext() {
-            this.sessionId = createSessionId()
+            this.chatId = createChatId(this.tenantId, this.userId)
             this.contextVersion += 1
             this.persist()
         },
@@ -85,15 +102,14 @@ export const useWorkspaceStore = defineStore('workspace', {
          * 重置顶部调试区默认值
          *
          * <p>
-         * 恢复默认租户、用户、部门和知识库
-         * 同时创建新会话并通知聊天页清空当前窗口
+         * 恢复默认租户、用户、部门和知识库，同时创建新会话
          */
         resetDefaults() {
             this.tenantId = DEFAULT_TENANT_ID
             this.kbId = DEFAULT_KB_ID
             this.userId = DEFAULT_USER_ID
             this.deptIds = DEFAULT_DEPT_IDS
-            this.sessionId = createSessionId()
+            this.chatId = createChatId(this.tenantId, this.userId)
             this.contextVersion += 1
             this.persist()
         },
@@ -101,14 +117,25 @@ export const useWorkspaceStore = defineStore('workspace', {
          * 选择已有聊天会话
          *
          * <p>
-         * chatId 格式保持 tenantId:userId:sessionId
-         * 点击左侧历史会话时同步工作区上下文
+         * 使用会话主表的独立字段同步工作区，严禁从 chatId 中拆分 tenantId 或 userId
          */
-        selectChat(chatId: string) {
-            const [tenantId, userId, sessionId] = chatId.split(':')
-            if (tenantId) this.tenantId = tenantId
-            if (userId) this.userId = userId
-            if (sessionId) this.sessionId = sessionId
+        selectChat(chat: Pick<MetaChat, 'tenantId' | 'userId' | 'chatId'>) {
+            this.tenantId = chat.tenantId
+            this.userId = chat.userId
+            this.chatId = chat.chatId
+            this.persist()
+        },
+        /**
+         * 同步后端解析后的会话 ID
+         *
+         * <p>
+         * 流式 meta 事件只更新 chatId，不允许改写 tenantId 或 userId
+         */
+        setChatId(chatId: string) {
+            if (!chatId || chatId.includes(':')) {
+                return
+            }
+            this.chatId = chatId
             this.persist()
         },
     },

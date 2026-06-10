@@ -41,7 +41,7 @@ export interface ChatStreamHandle {
  * 该接口返回 answer、chatId 和本次参与上下文的 files，不包 CommonResult
  *
  * @example
- * const answer = await sendPlainChat('t1:u1:s1', 't1', 'u1', '你是谁')
+ * const answer = await sendPlainChat('t1-u1-s1', 't1', 'u1', '你是谁')
  */
 export async function sendPlainChat(chatId: string, tenantId: string, userId: string, msg: string, fileIds: string[] = []) {
     const response = await request.get<CommonResult<ChatMessageResponse>>('/v1/chat', {

@@ -180,7 +180,7 @@ export interface MetaChatHistory {
     id: string
     /** 会话主表 ID */
     fkId?: string
-    /** 会话 ID，建议格式 tenantId:userId:sessionId */
+    /** 会话 ID，建议格式 tenantId-userId-sessionId */
     chatId: string
     /** 对话类型，chat / rag / rag_details */
     chatType: string
@@ -188,8 +188,8 @@ export interface MetaChatHistory {
     role: string
     /** 消息正文 */
     content: string
-    /** 回答引用来源 JSON */
-    referencesJson?: string
+    /** 回答引用来源 */
+    reference?: string
     /** 消息创建时间 */
     createdAt: string
 }

@@ -100,7 +100,7 @@ deptIds
 chatId 会自动生成：
 
 ```text
-tenantId:userId:sessionId
+tenantId-userId-sessionId
 ```
 
 示例：
