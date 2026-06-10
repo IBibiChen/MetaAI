@@ -2,14 +2,13 @@ package com.metax.rag.pipeline;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.document.Document;
-import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.vectorstore.filter.Filter;
 
-import java.util.ArrayList;
 import java.util.List;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 /**
  * MetaVectorStoreSinkTest .
@@ -25,49 +24,15 @@ class MetaVectorStoreSinkTest {
      */
     @Test
     void shouldDeleteBeforeWrite() {
-        List<String> steps = new ArrayList<>();
-        TestVectorStore vectorStore = new TestVectorStore(steps);
-        MetaVectorStoreSink sink = new MetaVectorStoreSink(vectorStore, mock(Filter.Expression.class));
+        MetaVectorStoreWriter vectorStoreWriter = mock(MetaVectorStoreWriter.class);
+        Filter.Expression deleteFilter = mock(Filter.Expression.class);
+        MetaVectorStoreSink sink = new MetaVectorStoreSink(vectorStoreWriter, deleteFilter);
         List<Document> documents = List.of(new Document("chunk"));
 
         sink.upsert(documents);
 
-        assertThat(steps).containsExactly("delete", "write");
-        assertThat(vectorStore.writtenDocuments()).containsExactlyElementsOf(documents);
-    }
-
-    private static class TestVectorStore implements VectorStore {
-
-        private final List<String> steps;
-
-        private List<Document> writtenDocuments = List.of();
-
-        TestVectorStore(List<String> steps) {
-            this.steps = steps;
-        }
-
-        @Override
-        public void add(List<Document> documents) {
-            steps.add("write");
-            writtenDocuments = documents;
-        }
-
-        @Override
-        public void delete(List<String> idList) {
-        }
-
-        @Override
-        public void delete(Filter.Expression filterExpression) {
-            steps.add("delete");
-        }
-
-        @Override
-        public List<Document> similaritySearch(org.springframework.ai.vectorstore.SearchRequest request) {
-            return List.of();
-        }
-
-        List<Document> writtenDocuments() {
-            return writtenDocuments;
-        }
+        // upsert 的顺序必须稳定为先删后写，避免旧 chunk 和新 chunk 混在同一文档范围内
+        inOrder(vectorStoreWriter).verify(vectorStoreWriter).delete(deleteFilter);
+        verify(vectorStoreWriter).write(documents);
     }
 }

@@ -19,6 +19,7 @@ import java.time.Duration;
  * chunk 参数影响入库质量和 embedding 成本
  * search 参数影响召回质量和模型上下文占用
  * indexing 参数影响异步索引执行状态保存周期
+ * vectorStore 参数影响向量库写入批次和 embedding provider 兼容性
  * storage 参数决定文档存储实现和连接方式
  *
  * <p>
@@ -29,6 +30,7 @@ import java.time.Duration;
  * metax.ai.retrieval.search.top-k=5
  * metax.ai.retrieval.search.similarity-threshold=0.50
  * metax.ai.retrieval.indexing.redis-key-prefix=retrieval:indexing:run:
+ * metax.ai.retrieval.vector-store.write-batch-size=10
  * metax.ai.retrieval.snapshot.enabled=false
  * metax.ai.retrieval.snapshot.output-dir=D:/meta-ai/rag-snapshots
  * metax.ai.retrieval.storage.provider=object
@@ -57,6 +59,11 @@ public class MetaRetrievalProperties {
      * 异步文档索引执行状态配置
      */
     private final Indexing indexing = new Indexing();
+
+    /**
+     * 向量库写入配置
+     */
+    private final VectorStore vectorStore = new VectorStore();
 
     /**
      * ETL 快照导出配置
@@ -295,6 +302,20 @@ public class MetaRetrievalProperties {
          * 第一版 run 状态放 Redis，适合短期查询进度，长期审计后续应落 JDBC
          */
         private long runTtlSeconds = 86400;
+    }
+
+    @Getter
+    @Setter
+    public static class VectorStore {
+
+        /**
+         * 单次 VectorStore 写入的最大 Document 数量
+         *
+         * <p>
+         * Spring AI BatchingStrategy 主要控制 token 维度
+         * 这里控制 Document 条数，兼容 DashScope、OpenAI、Ollama 等 provider 的输入数组长度限制
+         */
+        private int writeBatchSize = 10;
     }
 
     @Getter

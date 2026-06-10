@@ -1,7 +1,6 @@
 package com.metax.rag.pipeline;
 
 import org.springframework.ai.document.Document;
-import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.vectorstore.filter.Filter;
 
 import java.util.List;
@@ -11,16 +10,16 @@ import java.util.List;
  *
  * <p>
  * VectorStore 写入端，封装 RAG upsert 所需的删除旧 chunk 和写入新 chunk 操作
- * VectorStore 仍然是最终 Spring AI DocumentWriter，这里只收敛项目级 upsert policy
+ * MetaVectorStoreWriter 仍然委托 Spring AI VectorStore，这里只收敛项目级 upsert policy
  *
- * @param vectorStore  目标 VectorStore
- * @param deleteFilter 删除旧 chunk 的过滤条件
+ * @param vectorStoreWriter 向量库写入器
+ * @param deleteFilter      删除旧 chunk 的过滤条件
  * @author IBibiChen
  * @version v1.0
  * @since 2026/6/1
  */
 public record MetaVectorStoreSink(
-        VectorStore vectorStore,
+        MetaVectorStoreWriter vectorStoreWriter,
         Filter.Expression deleteFilter
 ) {
 
@@ -30,7 +29,8 @@ public record MetaVectorStoreSink(
      * @param documents chunk Document 列表
      */
     public void upsert(List<Document> documents) {
-        vectorStore.delete(deleteFilter);
-        vectorStore.write(documents);
+        // upsert 必须先按文档范围删除旧 chunk，然后再分批写入新 chunk
+        vectorStoreWriter.delete(deleteFilter);
+        vectorStoreWriter.write(documents);
     }
 }

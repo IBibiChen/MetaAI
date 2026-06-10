@@ -8,6 +8,7 @@ import com.metax.rag.etl.resource.MetaDocumentResource;
 import com.metax.rag.etl.resource.MetaDocumentTypeResolver;
 import com.metax.rag.etl.transformer.MetaDocumentTransformerFactory;
 import com.metax.rag.model.MetadataKeys;
+import com.metax.rag.pipeline.MetaVectorStoreWriter;
 import com.metax.rag.retrieval.advisor.MetaContextFile;
 import com.metax.rag.storage.ObjectStorageClient;
 import lombok.RequiredArgsConstructor;
@@ -84,6 +85,8 @@ public class MetaChatFileServiceImpl extends ServiceImpl<MetaChatFileMapper, Met
     private final MetaDocumentTransformerFactory documentTransformerFactory;
 
     private final VectorStore vectorStore;
+
+    private final MetaVectorStoreWriter vectorStoreWriter;
 
     /**
      * 上传并解析聊天文件
@@ -295,8 +298,10 @@ public class MetaChatFileServiceImpl extends ServiceImpl<MetaChatFileMapper, Met
         documents = documentTransformerFactory.tokenTextSplitter().transform(documents);
         documents = fileMetadataTransformer(file).transform(documents);
         documents = documentTransformerFactory.contentFormatTransformer().transform(documents);
-        vectorStore.delete(fileDeleteFilter(file));
-        vectorStore.write(documents);
+        // 删除只按当前文件执行一次，避免后续分批写入时误删已经写入的新 chunk
+        vectorStoreWriter.delete(fileDeleteFilter(file));
+        // 写入统一走项目级批次控制，兼容不同 embedding provider 的单次输入条数限制
+        vectorStoreWriter.write(documents);
         log.info("聊天文件临时索引完成：chatId = {}，fileId = {}，fileName = {}，chunks = {}",
                 file.getChatId(), file.getFileId(), file.getOriginalFilename(),
                 documents.size());

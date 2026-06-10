@@ -10,7 +10,6 @@ import com.metax.rag.model.MetadataKeys;
 import org.springframework.ai.document.DocumentReader;
 import org.springframework.ai.document.DocumentTransformer;
 import org.springframework.ai.document.DocumentWriter;
-import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
 import org.springframework.stereotype.Component;
 
@@ -37,18 +36,18 @@ public class MetaEtlPipelineFactory {
 
     private final MetaRetrievalProperties properties;
 
-    private final VectorStore vectorStore;
+    private final MetaVectorStoreWriter vectorStoreWriter;
 
     private final MetaDocumentReaderFactory documentReaderFactory;
 
     private final MetaDocumentTransformerFactory documentTransformerFactory;
 
     public MetaEtlPipelineFactory(MetaRetrievalProperties properties,
-                                  VectorStore vectorStore,
+                                  MetaVectorStoreWriter vectorStoreWriter,
                                   MetaDocumentReaderFactory documentReaderFactory,
                                   MetaDocumentTransformerFactory documentTransformerFactory) {
         this.properties = properties;
-        this.vectorStore = vectorStore;
+        this.vectorStoreWriter = vectorStoreWriter;
         this.documentReaderFactory = documentReaderFactory;
         this.documentTransformerFactory = documentTransformerFactory;
     }
@@ -65,8 +64,6 @@ public class MetaEtlPipelineFactory {
      */
     public MetaEtlUpsertPipeline createIndexingPipeline(DocumentIndexingContext context) {
         DocumentIndexingRequest request = context.request();
-        // 当前应用只启用一套 VectorStore，写入和查询都使用配置文件选中的同一个向量库
-        VectorStore resolvedVectorStore = vectorStore;
         // Reader 阶段把对象存储文件解析为 Spring AI Document
         DocumentReader reader = documentReaderFactory.create(context.documentResource());
         // Transformer 顺序固定为文档 metadata -> chunk 切分 -> chunk metadata -> 内容格式化
@@ -79,7 +76,7 @@ public class MetaEtlPipelineFactory {
         // snapshot writer 用于导出 ETL 快照，排查实际写入向量库前的 chunk 内容
         List<DocumentWriter> snapshotWriters = snapshotWriters(request);
         // Sink 收敛 delete + write 策略，最终写入仍委托 Spring AI VectorStore
-        MetaVectorStoreSink sink = new MetaVectorStoreSink(resolvedVectorStore, documentFilter(request));
+        MetaVectorStoreSink sink = new MetaVectorStoreSink(vectorStoreWriter, documentFilter(request));
         return new MetaEtlUpsertPipeline(request, reader, transformers, snapshotWriters, sink);
     }
 

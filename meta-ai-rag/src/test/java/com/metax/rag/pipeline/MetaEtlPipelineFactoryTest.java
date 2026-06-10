@@ -36,9 +36,10 @@ class MetaEtlPipelineFactoryTest {
     void shouldCreateIndexingPipeline() throws Exception {
         MetaRetrievalProperties properties = new MetaRetrievalProperties();
         VectorStore vectorStore = mock(VectorStore.class);
+        MetaVectorStoreWriter vectorStoreWriter = new MetaVectorStoreWriter(vectorStore, properties);
         MetaEtlPipelineFactory factory = new MetaEtlPipelineFactory(
                 properties,
-                vectorStore,
+                vectorStoreWriter,
                 readerFactory(),
                 new MetaDocumentTransformerFactory(properties)
         );
@@ -51,7 +52,7 @@ class MetaEtlPipelineFactoryTest {
         assertThat(pipeline.reader()).isNotNull();
         assertThat(pipeline.transformers()).hasSize(4);
         assertThat(pipeline.snapshotWriters()).isEmpty();
-        assertThat(pipeline.sink().vectorStore()).isSameAs(vectorStore);
+        assertThat(pipeline.sink().vectorStoreWriter()).isSameAs(vectorStoreWriter);
         assertThat(pipeline.sink().deleteFilter().toString())
                 .contains("scope")
                 .contains("knowledge")
@@ -69,9 +70,10 @@ class MetaEtlPipelineFactoryTest {
         properties.getSnapshot().setEnabled(true);
         properties.getSnapshot().setOutputDir(Files.createTempDirectory("meta-rag-snapshot").toString());
         VectorStore vectorStore = mock(VectorStore.class);
+        MetaVectorStoreWriter vectorStoreWriter = new MetaVectorStoreWriter(vectorStore, properties);
         MetaEtlPipelineFactory factory = new MetaEtlPipelineFactory(
                 properties,
-                vectorStore,
+                vectorStoreWriter,
                 readerFactory(),
                 new MetaDocumentTransformerFactory(properties)
         );

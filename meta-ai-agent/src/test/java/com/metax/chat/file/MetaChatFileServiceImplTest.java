@@ -3,7 +3,9 @@ package com.metax.chat.file;
 import com.metax.rag.etl.reader.MetaDocumentReaderFactory;
 import com.metax.rag.etl.resource.MetaDocumentTypeResolver;
 import com.metax.rag.etl.transformer.MetaDocumentTransformerFactory;
+import com.metax.rag.config.MetaRetrievalProperties;
 import com.metax.rag.model.MetadataKeys;
+import com.metax.rag.pipeline.MetaVectorStoreWriter;
 import com.metax.rag.storage.ObjectStorageClient;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.document.Document;
@@ -51,8 +53,9 @@ class MetaChatFileServiceImplTest {
         when(readerFactory.create(any())).thenReturn(reader(List.of(new Document("文件内容"))));
         when(transformerFactory.tokenTextSplitter()).thenReturn(identityTransformer());
         when(transformerFactory.contentFormatTransformer()).thenReturn(identityTransformer());
+        MetaVectorStoreWriter vectorStoreWriter = new MetaVectorStoreWriter(vectorStore, new MetaRetrievalProperties());
         MetaChatFileServiceImpl service = new TestMetaChatFileServiceImpl(objectStorageClient,
-                new MetaDocumentTypeResolver(), readerFactory, transformerFactory, vectorStore);
+                new MetaDocumentTypeResolver(), readerFactory, transformerFactory, vectorStore, vectorStoreWriter);
         MockMultipartFile file = new MockMultipartFile("files", "demo.pdf", "application/pdf",
                 "test".getBytes(java.nio.charset.StandardCharsets.UTF_8));
 
@@ -98,9 +101,10 @@ class MetaChatFileServiceImplTest {
                                             MetaDocumentTypeResolver documentTypeResolver,
                                             MetaDocumentReaderFactory documentReaderFactory,
                                             MetaDocumentTransformerFactory documentTransformerFactory,
-                                            VectorStore vectorStore) {
+                                            VectorStore vectorStore,
+                                            MetaVectorStoreWriter vectorStoreWriter) {
             super(objectStorageClient, documentTypeResolver, documentReaderFactory, documentTransformerFactory,
-                    vectorStore);
+                    vectorStore, vectorStoreWriter);
         }
 
         @Override

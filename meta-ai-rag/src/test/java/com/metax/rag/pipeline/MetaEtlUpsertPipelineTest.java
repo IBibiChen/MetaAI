@@ -1,6 +1,7 @@
 package com.metax.rag.pipeline;
 
 import com.metax.rag.indexing.DocumentIndexingRequest;
+import com.metax.rag.config.MetaRetrievalProperties;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.document.DocumentReader;
@@ -43,7 +44,8 @@ class MetaEtlUpsertPipelineTest {
             return List.of(new Document("second"));
         };
         TestVectorStore vectorStore = new TestVectorStore(steps);
-        MetaVectorStoreSink sink = new MetaVectorStoreSink(vectorStore, mock(Filter.Expression.class));
+        MetaVectorStoreWriter vectorStoreWriter = new MetaVectorStoreWriter(vectorStore, new MetaRetrievalProperties());
+        MetaVectorStoreSink sink = new MetaVectorStoreSink(vectorStoreWriter, mock(Filter.Expression.class));
         MetaEtlUpsertPipeline pipeline = new MetaEtlUpsertPipeline(request(), reader,
                 List.of(firstTransformer, secondTransformer), List.of(), sink);
 
@@ -70,7 +72,8 @@ class MetaEtlUpsertPipelineTest {
         };
         DocumentWriter snapshotWriter = documents -> steps.add("snapshot");
         TestVectorStore vectorStore = new TestVectorStore(steps);
-        MetaVectorStoreSink sink = new MetaVectorStoreSink(vectorStore, mock(Filter.Expression.class));
+        MetaVectorStoreWriter vectorStoreWriter = new MetaVectorStoreWriter(vectorStore, new MetaRetrievalProperties());
+        MetaVectorStoreSink sink = new MetaVectorStoreSink(vectorStoreWriter, mock(Filter.Expression.class));
         MetaEtlUpsertPipeline pipeline = new MetaEtlUpsertPipeline(request(), reader,
                 List.of(transformer), List.of(snapshotWriter), sink);
 
