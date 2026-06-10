@@ -3,6 +3,7 @@ package com.metax.chat.history;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.metax.chat.session.MetaChatDO;
+import com.metax.rag.retrieval.advisor.MetaContextFile;
 import com.metax.rag.retrieval.model.RetrievalDocumentReference;
 
 import java.util.List;
@@ -29,6 +30,20 @@ public interface MetaChatHistoryService extends IService<MetaChatHistoryDO> {
      * @param content 消息内容
      */
     void saveUserMessage(MetaChatDO chat, MetaChatHistoryType type, String content);
+
+    /**
+     * 保存用户消息
+     *
+     * <p>
+     * files 表示本条用户消息显式选择参与上下文增强的会话文件
+     *
+     * @param chat    会话主表记录，提供落库 fkId 和业务 chatId
+     * @param type    对话类型
+     * @param content 消息内容
+     * @param files   本条消息关联的会话文件
+     */
+    void saveUserMessage(MetaChatDO chat, MetaChatHistoryType type, String content,
+                         List<MetaContextFile> files);
 
     /**
      * 保存模型回答

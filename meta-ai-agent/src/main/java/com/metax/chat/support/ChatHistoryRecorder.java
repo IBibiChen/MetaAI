@@ -6,6 +6,7 @@ import com.metax.chat.history.MetaChatHistoryType;
 import com.metax.chat.session.MetaChatDO;
 import com.metax.chat.session.MetaChatService;
 import com.metax.chat.session.MetaChatUpsertRequest;
+import com.metax.rag.retrieval.advisor.MetaContextFile;
 import com.metax.rag.retrieval.model.RetrievalDocumentReference;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -63,9 +64,27 @@ public class ChatHistoryRecorder {
      * @param msg         用户消息
      */
     public void saveUserMessage(MetaChatDO chat, MetaChatHistoryType historyType, String msg) {
+        saveUserMessage(chat, historyType, msg, List.of());
+    }
+
+    /**
+     * 保存用户消息并同步会话主表最后消息
+     *
+     * <p>
+     * files 表示用户本轮显式选择的会话文件，用于历史消息恢复本轮附件展示
+     *
+     * @param chat        会话主表记录，提供历史表 fkId 和业务 chatId
+     * @param historyType 历史类型
+     * @param msg         用户消息
+     * @param files       用户本轮选择的会话文件
+     */
+    public void saveUserMessage(MetaChatDO chat,
+                                MetaChatHistoryType historyType,
+                                String msg,
+                                List<MetaContextFile> files) {
         MetaChatDO resolvedChat = requirePersistedChat(chat);
         // 完整历史先落 meta_chat_history，随后同步 meta_chat 会话列表的最后消息预览
-        metaChatHistoryService.saveUserMessage(resolvedChat, historyType, msg);
+        metaChatHistoryService.saveUserMessage(resolvedChat, historyType, msg, files);
         metaChatService.updateLastMessage(resolvedChat.getId(), MetaChatHistoryRole.USER, msg);
     }
 

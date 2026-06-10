@@ -53,7 +53,7 @@ public interface MetaChatFileService extends MetaContextFileService {
      * 查询当前会话可用文件
      *
      * <p>
-     * 用于 fileIds 为空时的多轮追问回退策略
+     * 用于文件池展示或明确需要读取当前会话全部 READY 文件的内部场景
      *
      * @param tenantId 租户 ID
      * @param userId   用户 ID

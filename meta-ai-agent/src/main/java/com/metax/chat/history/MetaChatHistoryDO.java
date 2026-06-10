@@ -99,6 +99,14 @@ public class MetaChatHistoryDO {
     private String reference;
 
     /**
+     * 消息关联会话文件
+     */
+    @Column(name = "files", columnDefinition = "text")
+    @Comment("消息关联会话文件")
+    @Schema(description = "消息关联会话文件")
+    private String files;
+
+    /**
      * 创建时间
      */
     @Column(name = "created_at", nullable = false)

@@ -90,9 +90,9 @@ public class RetrievalChatRequest {
      * 会话文件 ID 列表
      *
      * <p>
-     * 为空时回退当前会话 READY 文件，非空时只使用显式指定文件
+     * 为空时不使用会话文件，非空时只使用显式指定文件
      */
-    @Parameter(description = "会话文件 ID 列表，空值表示回退当前会话 READY 文件", example = "2063846120613888002")
-    @Schema(description = "会话文件 ID 列表，空值表示回退当前会话 READY 文件", example = "[\"2063846120613888002\"]")
+    @Parameter(description = "会话文件 ID 列表，空值表示本轮不使用会话文件", example = "2063846120613888002")
+    @Schema(description = "会话文件 ID 列表，空值表示本轮不使用会话文件", example = "[\"2063846120613888002\"]")
     private List<String> fileIds;
 }

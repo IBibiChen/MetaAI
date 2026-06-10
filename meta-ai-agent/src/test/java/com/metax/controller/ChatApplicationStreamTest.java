@@ -52,6 +52,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -88,7 +89,7 @@ class ChatApplicationStreamTest {
         assertThat(result.get(3).event()).isEqualTo("done");
         assertThat(result.get(3).data()).isEqualTo(new ChatStreamDone("你好", "c1", List.of()));
         verify(metaChatHistoryService).saveUserMessage(argThat(chat -> persistedChat(chat, "c1")),
-                eq(MetaChatHistoryType.CHAT), eq("你好"));
+                eq(MetaChatHistoryType.CHAT), eq("你好"), eq(List.of()));
         verify(metaChatHistoryService).saveAssistantMessage(argThat(chat -> persistedChat(chat, "c1")),
                 eq(MetaChatHistoryType.CHAT), eq("你好"), eq(List.of()));
         verify(metaChatService).updateLastMessage(1L, MetaChatHistoryRole.USER, "你好");
@@ -116,7 +117,7 @@ class ChatApplicationStreamTest {
         assertThat(result.get(3).event()).isEqualTo("done");
         assertThat(result.get(3).data()).isEqualTo(new ChatStreamDone("回答", "c1", List.of()));
         verify(metaChatHistoryService).saveUserMessage(argThat(chat -> persistedChat(chat, "c1")),
-                eq(MetaChatHistoryType.RAG), eq("你是谁"));
+                eq(MetaChatHistoryType.RAG), eq("你是谁"), eq(List.of()));
         verify(metaChatHistoryService).saveAssistantMessage(argThat(chat -> persistedChat(chat, "c1")),
                 eq(MetaChatHistoryType.RAG), eq("回答"), eq(List.of()));
         verify(metaChatService).updateLastMessage(1L, MetaChatHistoryRole.USER, "你是谁");
@@ -176,19 +177,12 @@ class ChatApplicationStreamTest {
     }
 
     @Test
-    void ragJsonStreamShouldFallbackReadyFilesWhenFileIdsEmpty() {
+    void ragJsonStreamShouldNotUseReadyFilesWhenFileIdsEmpty() {
         MetaChatHistoryService metaChatHistoryService = mock(MetaChatHistoryService.class);
         MetaChatService metaChatService = metaChatService();
         MetaChatFileService fileService = mock(MetaChatFileService.class);
         RetrievalDecisionService decisionService = mock(RetrievalDecisionService.class);
-        MetaContextFile file = file("file-1", "demo.pdf", "pdf");
         when(decisionService.decide(any())).thenReturn(RetrievalDecisionResult.skip("skip_pattern"));
-        when(fileService.readyFiles("t1", "u1", "c1")).thenReturn(List.of(file));
-        when(fileService.retrieve(eq("t1"), eq("u1"), eq("c1"), eq(List.of(file)), eq("继续总结")))
-                .thenReturn(List.of(Document.builder()
-                        .text("历史文件内容")
-                        .metadata(Map.of(MetadataKeys.FILE_NAME, "demo.pdf", MetadataKeys.CHUNK_INDEX, 0))
-                        .build()));
         KnowledgeChatService service = knowledgeChatService(new TestChatModel("回", "答"),
                 metaChatHistoryService, metaChatService, decisionService, fileService);
 
@@ -197,9 +191,9 @@ class ChatApplicationStreamTest {
 
         assertThat(result).hasSize(4);
         assertThat(result.get(3).event()).isEqualTo("done");
-        assertThat(result.get(3).data()).isEqualTo(new ChatStreamDone("回答", "c1", List.of(), List.of(file)));
-        verify(fileService).readyFiles("t1", "u1", "c1");
-        verify(fileService).retrieve("t1", "u1", "c1", List.of(file), "继续总结");
+        assertThat(result.get(3).data()).isEqualTo(new ChatStreamDone("回答", "c1", List.of(), List.of()));
+        verify(fileService, never()).readyFiles("t1", "u1", "c1");
+        verify(fileService, never()).retrieve(eq("t1"), eq("u1"), eq("c1"), any(), eq("继续总结"));
     }
 
     @Test
@@ -252,25 +246,18 @@ class ChatApplicationStreamTest {
         verify(fileService).readyFiles("t1", "u1", "c1", List.of("file-1"));
         verify(fileService).retrieve("t1", "u1", "c1", List.of(file), "总结文件");
         verify(metaChatHistoryService).saveUserMessage(argThat(chat -> persistedChat(chat, "c1")),
-                eq(MetaChatHistoryType.FILE_CHAT), eq("总结文件"));
+                eq(MetaChatHistoryType.FILE_CHAT), eq("总结文件"), eq(List.of(file)));
         verify(metaChatHistoryService).saveAssistantMessage(argThat(chat -> persistedChat(chat, "c1")),
                 eq(MetaChatHistoryType.FILE_CHAT), eq("文件回答"));
     }
 
     @Test
-    void ragChatShouldFallbackReadyFilesWhenFileIdsEmpty() {
+    void ragChatShouldNotUseReadyFilesWhenFileIdsEmpty() {
         MetaChatHistoryService metaChatHistoryService = mock(MetaChatHistoryService.class);
         MetaChatService metaChatService = metaChatService();
         MetaChatFileService fileService = mock(MetaChatFileService.class);
         RetrievalDecisionService decisionService = mock(RetrievalDecisionService.class);
-        MetaContextFile file = file("file-1", "demo.pdf", "pdf");
         when(decisionService.decide(any())).thenReturn(RetrievalDecisionResult.skip("skip_pattern"));
-        when(fileService.readyFiles("t1", "u1", "c1")).thenReturn(List.of(file));
-        when(fileService.retrieve(eq("t1"), eq("u1"), eq("c1"), eq(List.of(file)), eq("继续总结")))
-                .thenReturn(List.of(Document.builder()
-                        .text("历史文件内容")
-                        .metadata(Map.of(MetadataKeys.FILE_NAME, "demo.pdf", MetadataKeys.CHUNK_INDEX, 0))
-                        .build()));
         KnowledgeChatService service = knowledgeChatService(new TestChatModel("RAG 文件回答"),
                 metaChatHistoryService, metaChatService, decisionService, fileService);
 
@@ -280,9 +267,11 @@ class ChatApplicationStreamTest {
         assertThat(response.answer()).isEqualTo("RAG 文件回答");
         assertThat(response.chatId()).isEqualTo("c1");
         assertThat(response.references()).isEmpty();
-        assertThat(response.files()).containsExactly(file);
-        verify(fileService).readyFiles("t1", "u1", "c1");
-        verify(fileService).retrieve("t1", "u1", "c1", List.of(file), "继续总结");
+        assertThat(response.files()).isEmpty();
+        verify(fileService, never()).readyFiles("t1", "u1", "c1");
+        verify(fileService, never()).retrieve(eq("t1"), eq("u1"), eq("c1"), any(), eq("继续总结"));
+        verify(metaChatHistoryService).saveUserMessage(argThat(chat -> persistedChat(chat, "c1")),
+                eq(MetaChatHistoryType.RAG), eq("继续总结"), eq(List.of()));
     }
 
     @Test
@@ -301,7 +290,7 @@ class ChatApplicationStreamTest {
         assertThat(response.references()).isEmpty();
         assertThat(response.files()).isEmpty();
         verify(metaChatHistoryService).saveUserMessage(argThat(chat -> persistedChat(chat, "c1")),
-                eq(MetaChatHistoryType.RAG), eq("你是谁"));
+                eq(MetaChatHistoryType.RAG), eq("你是谁"), eq(List.of()));
         verify(metaChatHistoryService).saveAssistantMessage(argThat(chat -> persistedChat(chat, "c1")),
                 eq(MetaChatHistoryType.RAG), eq("RAG 普通回答"), eq(List.of()));
     }

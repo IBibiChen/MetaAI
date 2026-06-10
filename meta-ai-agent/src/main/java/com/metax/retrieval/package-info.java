@@ -30,7 +30,7 @@
  * RAG 文件对话复用 com.metax.chat 的会话文件能力
  * 文件必须先通过 POST /v1/chat/files 上传并写入 scope = session 的临时向量索引
  * /v1/rag 问答阶段只传 fileIds，不再接收 MultipartFile
- * fileIds 为空表示回退当前会话 READY 文件，非空表示只使用用户显式选择的文件
+ * fileIds 为空表示本轮不使用会话文件，非空表示只使用用户显式选择的文件
  * 会话文件受 tenantId、userId 和 chatId 隔离，不会进入知识库 references
  *
  * <p>

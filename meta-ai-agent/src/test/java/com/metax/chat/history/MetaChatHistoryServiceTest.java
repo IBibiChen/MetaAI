@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.metax.chat.session.MetaChatDO;
+import com.metax.rag.retrieval.advisor.MetaContextFile;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -41,12 +42,14 @@ class MetaChatHistoryServiceTest {
         MetaChatHistoryMapper mapper = mock(MetaChatHistoryMapper.class);
         MetaChatHistoryServiceImpl service = service(mapper);
 
-        service.saveUserMessage(chat(), MetaChatHistoryType.CHAT, "你好");
+        service.saveUserMessage(chat(), MetaChatHistoryType.CHAT, "你好",
+                java.util.List.of(new MetaContextFile("f1", "demo.pdf", "pdf")));
 
         ArgumentCaptor<MetaChatHistoryDO> captor = forClass(MetaChatHistoryDO.class);
         verify(mapper).insert(captor.capture());
         assertThat(captor.getValue().getFkId()).isEqualTo(1L);
         assertThat(captor.getValue().getChatId()).isEqualTo("c1");
+        assertThat(captor.getValue().getFiles()).contains("demo.pdf");
     }
 
     /**
@@ -101,6 +104,6 @@ class MetaChatHistoryServiceTest {
 
     private MetaChatHistoryDO entity(String chatId, MetaChatHistoryRole role) {
         return new MetaChatHistoryDO(1L, null, chatId, MetaChatHistoryType.CHAT.value(),
-                role.value(), "content", null, Instant.now());
+                role.value(), "content", null, null, Instant.now());
     }
 }

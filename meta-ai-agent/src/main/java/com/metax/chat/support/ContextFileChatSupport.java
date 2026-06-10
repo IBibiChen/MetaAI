@@ -35,7 +35,7 @@ public class ContextFileChatSupport {
      * 按文件 ID 解析本次可用 READY 会话文件
      *
      * <p>
-     * fileIds 为空时回退当前会话 READY 文件，非空时只使用显式指定文件
+     * fileIds 为空时不使用会话文件，非空时只使用显式指定文件
      * 这是问答链路唯一的 fileIds 解析入口，Advisor 不再自行查询 READY 文件
      *
      * @param tenantId 租户 ID
@@ -51,14 +51,13 @@ public class ContextFileChatSupport {
         // 先解析并校验会话归属，防止跨租户、跨用户或跨会话引用文件
         ChatScope scope = chatScopeResolver.required(chatId, tenantId, userId);
         List<String> resolvedFileIds = normalizeFileIds(fileIds);
-        List<MetaContextFile> files;
         if (resolvedFileIds.isEmpty()) {
-            // 空 fileIds 表示多轮追问沿用当前会话已解析完成的 READY 文件
-            files = metaChatFileService.readyFiles(scope.tenantId(), scope.userId(), chatId);
-        } else {
-            // 显式 fileIds 表示用户指定本轮文件集合，不混入历史 READY 文件
-            files = metaChatFileService.readyFiles(scope.tenantId(), scope.userId(), chatId, resolvedFileIds);
+            // 空 fileIds 表示用户本轮没有选择会话文件，避免历史 READY 文件被无感混入新问题
+            return List.of();
         }
+        // 显式 fileIds 表示用户指定本轮文件集合，不混入其他历史 READY 文件
+        List<MetaContextFile> files = metaChatFileService.readyFiles(scope.tenantId(), scope.userId(), chatId,
+                resolvedFileIds);
         return files == null ? List.of() : files;
     }
 

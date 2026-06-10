@@ -63,7 +63,7 @@ export async function sendPlainChat(chatId: string, tenantId: string, userId: st
  * <p>
  * 对应后端 POST /v1/chat
  * 使用 JSON body 携带复杂参数和 Authorization Header
- * fileIds 为空时由后端回退当前会话 READY 文件
+ * fileIds 为空时本轮不使用会话文件
  */
 export async function sendPlainChatJson(options: ChatOptions, fileIds: string[] = []) {
     const response = await request.post<CommonResult<ChatMessageResponse>>('/v1/chat', removeEmptyFields({

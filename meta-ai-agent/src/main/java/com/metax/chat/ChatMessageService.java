@@ -99,7 +99,7 @@ public class ChatMessageService {
      * 执行已上传文件 ID 非流式对话
      *
      * <p>
-     * fileIds 为空时回退当前会话 READY 文件，非空时只使用显式指定文件
+     * fileIds 为空时不使用会话文件，非空时只使用显式指定文件
      *
      * @param chatId   会话 ID
      * @param tenantId 租户 ID
@@ -117,7 +117,7 @@ public class ChatMessageService {
         String resolvedChatId = chatScopeResolver.resolveChatId(chatId);
         ChatScope scope = chatScopeResolver.required(resolvedChatId, tenantId, userId);
 
-        // fileIds 为空代表沿用当前会话 READY 文件，非空代表只使用用户显式选择的文件
+        // fileIds 为空代表本轮未选择文件，非空代表只使用用户显式选择的文件
         List<MetaContextFile> resolvedFiles = contextFileChatSupport.resolveReadyFiles(scope.tenantId(),
                 scope.userId(), resolvedChatId, fileIds);
         MetaChatHistoryType historyType = resolvedFiles.isEmpty()
@@ -128,7 +128,7 @@ public class ChatMessageService {
         MetaChatDO chat = chatHistoryRecorder.getOrCreate(resolvedChatId, scope.tenantId(), scope.userId(),
                 historyType, msg, null);
 
-        chatHistoryRecorder.saveUserMessage(chat, historyType, msg);
+        chatHistoryRecorder.saveUserMessage(chat, historyType, msg, resolvedFiles);
 
         ChatClient.ChatClientRequestSpec requestSpec = chatClient.prompt();
         if (resolvedFiles.isEmpty()) {
@@ -149,7 +149,7 @@ public class ChatMessageService {
      * 执行已上传文件 ID 流式对话
      *
      * <p>
-     * fileIds 为空时回退当前会话 READY 文件，非空时只使用显式指定文件
+     * fileIds 为空时不使用会话文件，非空时只使用显式指定文件
      *
      * @param chatId   会话 ID
      * @param tenantId 租户 ID
@@ -167,7 +167,7 @@ public class ChatMessageService {
         String resolvedChatId = chatScopeResolver.resolveChatId(chatId);
         ChatScope scope = chatScopeResolver.required(resolvedChatId, tenantId, userId);
 
-        // 与非流式保持同一套文件策略：空 fileIds 回退 READY 文件，非空只使用显式文件
+        // 与非流式保持同一套文件策略：空 fileIds 不使用文件，非空只使用显式文件
         List<MetaContextFile> resolvedFiles = contextFileChatSupport.resolveReadyFiles(scope.tenantId(),
                 scope.userId(), resolvedChatId, fileIds);
         MetaChatHistoryType historyType = resolvedFiles.isEmpty()
@@ -176,7 +176,7 @@ public class ChatMessageService {
 
         MetaChatDO chat = chatHistoryRecorder.getOrCreate(resolvedChatId, scope.tenantId(), scope.userId(),
                 historyType, msg, null);
-        chatHistoryRecorder.saveUserMessage(chat, historyType, msg);
+        chatHistoryRecorder.saveUserMessage(chat, historyType, msg, resolvedFiles);
 
         // 流式 done 事件需要读取 Advisor 写入的 metadata，所以这里使用 chatClientResponseStream
         ChatClient.ChatClientRequestSpec requestSpec = chatClient.prompt()

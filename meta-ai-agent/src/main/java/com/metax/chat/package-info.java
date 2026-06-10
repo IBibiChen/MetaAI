@@ -27,10 +27,10 @@
  *
  * <p>
  * MetaChatFileController 的 POST /v1/chat/files 是唯一保留 multipart/form-data 的聊天文件入口
- * 上传文件后 MetaChatFileServiceImpl 同步完成对象存储归档、Reader 解析、chunk 切分和 VectorStore 写入
+ * 上传文件后 MetaChatFileServiceImpl 同步完成对象存储归档和元数据落库，索引由事务事件异步触发
  * 会话文件写入 scope = session 的临时向量索引，不进入知识库文档表
  * 问答接口不再接收 MultipartFile，只通过 fileIds 引用已经 READY 的会话文件
- * fileIds 为空表示回退当前 tenantId、userId、chatId 下的 READY 文件
+ * fileIds 为空表示本轮不使用会话文件
  * fileIds 非空表示只使用用户本轮显式选择的文件，任何不可用或越权文件都会失败
  *
  * <p>

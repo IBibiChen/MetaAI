@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.metax.chat.session.MetaChatDO;
+import com.metax.rag.retrieval.advisor.MetaContextFile;
 import com.metax.rag.retrieval.model.RetrievalDocumentReference;
 import org.springframework.stereotype.Service;
 import org.springframework.util.Assert;
@@ -47,7 +48,24 @@ public class MetaChatHistoryServiceImpl extends ServiceImpl<MetaChatHistoryMappe
      */
     @Override
     public void saveUserMessage(MetaChatDO chat, MetaChatHistoryType type, String content) {
-        save(chat, type, MetaChatHistoryRole.USER, content, null);
+        saveUserMessage(chat, type, content, List.of());
+    }
+
+    /**
+     * 保存用户消息
+     *
+     * <p>
+     * files 只记录本条用户消息显式选择的会话文件，不记录当前会话全部 READY 文件
+     *
+     * @param chat    会话主表记录，提供落库 fkId 和业务 chatId
+     * @param type    对话类型
+     * @param content 消息内容
+     * @param files   本条消息关联的会话文件
+     */
+    @Override
+    public void saveUserMessage(MetaChatDO chat, MetaChatHistoryType type, String content,
+                                List<MetaContextFile> files) {
+        save(chat, type, MetaChatHistoryRole.USER, content, null, files(files));
     }
 
     /**
@@ -73,7 +91,7 @@ public class MetaChatHistoryServiceImpl extends ServiceImpl<MetaChatHistoryMappe
     @Override
     public void saveAssistantMessage(MetaChatDO chat, MetaChatHistoryType type, String content,
                                      List<RetrievalDocumentReference> references) {
-        save(chat, type, MetaChatHistoryRole.ASSISTANT, content, reference(references));
+        save(chat, type, MetaChatHistoryRole.ASSISTANT, content, reference(references), null);
     }
 
     /**
@@ -102,9 +120,10 @@ public class MetaChatHistoryServiceImpl extends ServiceImpl<MetaChatHistoryMappe
      * @param role      消息角色
      * @param content   消息内容
      * @param reference 回答引用来源 JSON
+     * @param files     用户消息关联文件 JSON
      */
     private void save(MetaChatDO chat, MetaChatHistoryType type, MetaChatHistoryRole role, String content,
-                      String reference) {
+                      String reference, String files) {
         Assert.notNull(chat, "MetaChatDO must not be null");
         Assert.notNull(chat.getId(), "MetaChatDO id must not be null");
         Assert.hasText(chat.getChatId(), "MetaChatDO chatId must not be blank");
@@ -114,7 +133,7 @@ public class MetaChatHistoryServiceImpl extends ServiceImpl<MetaChatHistoryMappe
 
         // 历史表同时保存 fkId 和 chatId，查询链路按 chatId，数据库关联按 fkId
         MetaChatHistoryDO entity = new MetaChatHistoryDO(null, chat.getId(), chat.getChatId(),
-                type.value(), role.value(), content, reference, Instant.now());
+                type.value(), role.value(), content, reference, files, Instant.now());
         save(entity);
     }
 
@@ -145,6 +164,23 @@ public class MetaChatHistoryServiceImpl extends ServiceImpl<MetaChatHistoryMappe
             return objectMapper.writeValueAsString(references);
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("回答引用来源序列化失败", e);
+        }
+    }
+
+    /**
+     * 序列化用户消息关联文件
+     *
+     * @param files 用户本轮显式选择的会话文件
+     * @return 会话文件 JSON，空文件返回 null
+     */
+    private String files(List<MetaContextFile> files) {
+        if (files == null || files.isEmpty()) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(files);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("消息关联会话文件序列化失败", e);
         }
     }
 

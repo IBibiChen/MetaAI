@@ -200,8 +200,8 @@
                 </div>
               </div>
 
-              <div v-if="messageItem.files?.length" class="references session-files">
-                <div class="section-label">会话文件</div>
+              <div v-if="messageItem.role === 'user' && messageItem.files?.length" class="references session-files">
+                <div class="section-label">附件</div>
                 <div class="citation-list">
                   <span
                       v-for="file in messageItem.files"
@@ -289,11 +289,17 @@
           <span
               v-for="file in visibleChatFiles"
               :key="file.key"
-              :class="['chat-file-chip', `is-${file.status}`]"
+              :class="['chat-file-chip', `is-${file.status}`, { selected: file.selected, selectable: file.selectable }]"
               :title="fileDisplayTitle(file)"
+              role="button"
+              tabindex="0"
+              @click="toggleChatFileSelection(file)"
+              @keydown.enter.prevent="toggleChatFileSelection(file)"
+              @keydown.space.prevent="toggleChatFileSelection(file)"
           >
+            <span class="chat-file-indicator" aria-hidden="true"></span>
             <span class="chat-file-name">{{ file.fileName }}</span>
-            <span class="chat-file-status">{{ fileStatusText(file.status) }}</span>
+            <span class="chat-file-status">{{ fileStatusText(file) }}</span>
           </span>
         </div>
         <n-input
@@ -313,7 +319,7 @@
         >
           <template #icon>
             <n-icon>
-              <Paperclip/>
+              <FileUp/>
             </n-icon>
           </template>
           附件
@@ -446,8 +452,8 @@ import {
   CircleUserRound,
   Copy,
   Eraser,
+  FileUp,
   ListFilter,
-  Paperclip,
   Pencil,
   Pin,
   RefreshCw,
@@ -503,6 +509,8 @@ interface ChatFileItem {
   fileName: string
   documentType?: string
   status: ChatFileItemStatus
+  selected?: boolean
+  selectable?: boolean
 }
 
 interface TypingRenderer {
@@ -522,6 +530,7 @@ const messages = ref<ChatMessage[]>([])
 const chats = ref<MetaChat[]>([])
 const chatFiles = ref<MetaChatFileItem[]>([])
 const pendingChatFilePlaceholders = ref<ChatFileItem[]>([])
+const selectedChatFileIds = ref<string[]>([])
 const activeMetaChatId = ref<string | null>(null)
 const draft = ref('')
 const sending = ref(false)
@@ -644,6 +653,8 @@ const visibleChatFiles = computed<ChatFileItem[]>(() => [
     fileName: file.fileName,
     documentType: file.documentType,
     status: chatFileStatus(file.parseStatus),
+    selected: selectedChatFileIds.value.includes(file.fileId),
+    selectable: file.parseStatus === 'READY',
   })),
 ])
 const currentFileScopeKey = computed(() => fileScopeKey({
@@ -691,6 +702,7 @@ watch(() => workspace.contextVersion, async () => {
   messages.value = []
   chatFiles.value = []
   pendingChatFilePlaceholders.value = []
+  selectedChatFileIds.value = []
   uploadingChatFileScopeKey.value = null
   stopChatFilePolling()
   scopeDocuments.value = []
@@ -732,7 +744,8 @@ async function sendMessageContent(content: string) {
 
   workspace.persist()
   stopStreaming()
-  messages.value.push(createMessage('user', content))
+  const selectedFiles = selectedReadyChatFiles()
+  messages.value.push(createMessage('user', content, undefined, undefined, undefined, selectedFiles))
   const assistantMessage = reactive(createMessage('assistant', ''))
   assistantMessage.typing = true
   messages.value.push(assistantMessage)
@@ -772,7 +785,6 @@ async function sendMessageContent(content: string) {
     onDone: (payload: { answer?: string, references?: RetrievalDocumentReference[], files?: MetaContextFile[] }) => {
       if (streamStoppedByUser) return
       assistantMessage.references = payload.references
-      assistantMessage.files = payload.files
       typingRenderer.complete(payload.answer)
     },
     onError: (payload: { message?: string }) => {
@@ -785,14 +797,13 @@ async function sendMessageContent(content: string) {
     },
   }
 
-  const selectedFileIds = chatFiles.value
-      .filter((file) => file.parseStatus === 'READY')
-      .map((file) => file.fileId)
+  const selectedFileIds = selectedFiles.map((file) => file.fileId)
   if (chatMode.value === 'plain') {
     activeStream = streamPlainChatJson(chatOptions(content), selectedFileIds, handlers)
   } else {
     activeStream = streamRagChatJson(chatOptions(content), selectedFileIds, handlers)
   }
+  selectedChatFileIds.value = []
 }
 
 function chatOptions(content: string): ChatOptions {
@@ -829,6 +840,40 @@ function fileScopeKey(scope: { chatId: string, tenantId: string, userId: string 
 }
 
 /**
+ * 当前本轮选中的 READY 会话文件
+ *
+ * <p>
+ * 输入框上方展示的是会话文件池，只有用户显式选中的 READY 文件才进入本轮 fileIds
+ */
+function selectedReadyChatFiles() {
+  const selected = new Set(selectedChatFileIds.value)
+  return chatFiles.value
+      .filter((file) => file.parseStatus === 'READY' && selected.has(file.fileId))
+      .map((file) => ({
+        fileId: file.fileId,
+        fileName: file.fileName,
+        documentType: file.documentType || '',
+      }))
+}
+
+/**
+ * 切换本轮会话文件选择状态
+ *
+ * <p>
+ * 只有 READY 文件可以选择，解析中和失败文件只展示状态，不参与本轮问答
+ *
+ * @param file 文件展示项
+ */
+function toggleChatFileSelection(file: ChatFileItem) {
+  if (!file.fileId || !file.selectable) return
+  if (selectedChatFileIds.value.includes(file.fileId)) {
+    selectedChatFileIds.value = selectedChatFileIds.value.filter((id) => id !== file.fileId)
+    return
+  }
+  selectedChatFileIds.value = [...selectedChatFileIds.value, file.fileId]
+}
+
+/**
  * 合并会话文件状态列表
  *
  * <p>
@@ -840,6 +885,31 @@ function mergeChatFiles(currentFiles: MetaChatFileItem[], nextFiles: MetaChatFil
   currentFiles.forEach((file) => merged.set(file.fileId, file))
   nextFiles.forEach((file) => merged.set(file.fileId, file))
   return Array.from(merged.values()).sort((left, right) => toTime(right.createdAt) - toTime(left.createdAt))
+}
+
+/**
+ * 合并本轮已选文件 ID
+ *
+ * <p>
+ * 上传完成的新文件默认加入本轮选择，历史文件需要用户手动点击选择
+ *
+ * @param currentIds 当前已选文件 ID
+ * @param nextIds    需要追加的文件 ID
+ * @return 去重后的文件 ID
+ */
+function mergeSelectedFileIds(currentIds: string[], nextIds: string[]) {
+  return Array.from(new Set([...currentIds, ...nextIds.filter(Boolean)]))
+}
+
+/**
+ * 清理已经不在当前会话文件池中的选择
+ *
+ * <p>
+ * 轮询返回全量文件状态后执行，避免本轮选择引用不存在的 fileId
+ */
+function pruneSelectedChatFiles() {
+  const fileIds = new Set(chatFiles.value.map((file) => file.fileId))
+  selectedChatFileIds.value = selectedChatFileIds.value.filter((fileId) => fileIds.has(fileId))
 }
 
 /**
@@ -911,6 +981,7 @@ async function handleChatFileChange(event: Event) {
     const uploadedFiles = await uploadChatFiles(uploadScope.chatId, uploadScope.tenantId, uploadScope.userId, files)
     if (isCurrentFileScope(uploadScope)) {
       chatFiles.value = mergeChatFiles(chatFiles.value, uploadedFiles)
+      selectedChatFileIds.value = mergeSelectedFileIds(selectedChatFileIds.value, uploadedFiles.map((file) => file.fileId))
       pendingChatFilePlaceholders.value = []
       startChatFilePolling()
     }
@@ -941,6 +1012,7 @@ async function loadChatFiles(scope = {
     const files = await fetchChatFiles(scope.chatId, scope.tenantId, scope.userId)
     if (isCurrentFileScope(scope)) {
       chatFiles.value = files
+      pruneSelectedChatFiles()
       updateChatFilePolling()
     }
   } catch {
@@ -1034,6 +1106,7 @@ async function loadHistory(chat: MetaChat | null = activeChat.value) {
             parseReferences(item.reference),
             undefined,
             item.createdAt,
+            parseFiles(item.files),
         ),
     )
     await nextTick()
@@ -1062,6 +1135,7 @@ function handleNewSession() {
   messages.value = []
   chatFiles.value = []
   pendingChatFilePlaceholders.value = []
+  selectedChatFileIds.value = []
   uploadingChatFileScopeKey.value = null
 }
 
@@ -1087,6 +1161,7 @@ async function selectChat(chat: MetaChat) {
   stopStreaming()
   stopChatFilePolling()
   pendingChatFilePlaceholders.value = []
+  selectedChatFileIds.value = []
   activeMetaChatId.value = chat.id
   workspace.selectChat(chat)
   await loadHistory(chat)
@@ -1278,23 +1353,26 @@ function handleEnter(event: KeyboardEvent) {
  * 文件状态展示文案
  *
  * <p>
- * READY 文件可以进入 fileIds，解析中文件只作为本地占位展示
+ * READY 文件只有被用户显式选中后才会进入本轮 fileIds
  */
-function fileStatusText(status: ChatFileItemStatus) {
+function fileStatusText(file: ChatFileItem) {
+  if (file.status === 'ready') {
+    return file.selected ? '已选择' : '可选择'
+  }
   const statusText: Record<ChatFileItemStatus, string> = {
     uploading: '上传中',
     parsing: '解析中',
     ready: '已就绪',
     failed: '解析失败',
   }
-  return statusText[status]
+  return statusText[file.status]
 }
 
 /**
  * 转换后端解析状态为前端展示状态
  *
  * <p>
- * READY 文件可以进入 fileIds，其他状态只展示，不参与问答上下文
+ * READY 文件可被用户选择，其他状态只展示，不参与问答上下文
  */
 function chatFileStatus(status: MetaChatFileParseStatus): ChatFileItemStatus {
   if (status === 'READY') return 'ready'
@@ -1310,7 +1388,7 @@ function chatFileStatus(status: MetaChatFileParseStatus): ChatFileItemStatus {
  */
 function fileDisplayTitle(file: ChatFileItem) {
   const type = file.documentType ? ` · ${file.documentType}` : ''
-  return `${file.fileName}${type} · ${fileStatusText(file.status)}`
+  return `${file.fileName}${type} · ${fileStatusText(file)}`
 }
 
 /**
@@ -1325,12 +1403,14 @@ function createMessage(
     references?: RetrievalDocumentReference[],
     trace?: RetrievalTrace,
     createdAt?: string,
+    files?: MetaContextFile[],
 ): ChatMessage {
   return {
     id: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
     role,
     content,
     references,
+    files,
     trace,
     time: formatMessageTime(createdAt),
   }
@@ -1687,6 +1767,16 @@ function appendTypingCaret(html: string) {
 }
 
 function parseReferences(value?: string): RetrievalDocumentReference[] | undefined {
+  if (!value) return undefined
+  try {
+    const parsed = JSON.parse(value)
+    return Array.isArray(parsed) ? parsed : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function parseFiles(value?: string): MetaContextFile[] | undefined {
   if (!value) return undefined
   try {
     const parsed = JSON.parse(value)
@@ -2593,6 +2683,7 @@ async function downloadReference(reference: RetrievalDocumentReference) {
 }
 
 .chat-file-chip {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -2608,10 +2699,46 @@ async function downloadReference(reference: RetrievalDocumentReference) {
   background: rgba(126, 168, 255, 0.08);
 }
 
+.chat-file-chip.selectable {
+  cursor: pointer;
+}
+
+.chat-file-chip.selectable:hover {
+  border-color: rgba(45, 212, 191, 0.45);
+  background: rgba(45, 212, 191, 0.08);
+}
+
+.chat-file-chip.selected {
+  border-color: rgba(45, 212, 191, 0.62);
+  color: #d9fffb;
+  background: rgba(45, 212, 191, 0.14);
+}
+
+.chat-file-chip.selected .chat-file-status {
+  color: #8ef7e7;
+}
+
 .chat-file-chip.is-parsing {
   border-color: rgba(255, 203, 104, 0.35);
   color: #ffe2a3;
   background: rgba(255, 203, 104, 0.1);
+}
+
+.chat-file-chip.is-parsing::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  pointer-events: none;
+  background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255, 226, 163, 0.08) 42%,
+      rgba(255, 226, 163, 0.22) 50%,
+      rgba(255, 226, 163, 0.08) 58%,
+      transparent 100%
+  );
+  transform: translateX(-110%);
+  animation: chat-file-parsing-scan 1.65s ease-in-out infinite;
 }
 
 .chat-file-chip.is-uploading {
@@ -2626,16 +2753,87 @@ async function downloadReference(reference: RetrievalDocumentReference) {
   background: rgba(255, 117, 117, 0.1);
 }
 
+.chat-file-indicator {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 8px;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #7ea8ff;
+  box-shadow: 0 0 0 2px rgba(126, 168, 255, 0.14);
+}
+
+.chat-file-chip.is-uploading .chat-file-indicator {
+  background: #9ebcff;
+  box-shadow: 0 0 0 0 rgba(126, 168, 255, 0.34);
+  animation: chat-file-uploading-breathe 1.18s ease-in-out infinite;
+}
+
+.chat-file-chip.is-parsing .chat-file-indicator {
+  background: #ffcb68;
+  box-shadow: 0 0 0 0 rgba(255, 203, 104, 0.38);
+  animation: chat-file-parsing-pulse 1.18s ease-out infinite;
+}
+
+.chat-file-chip.is-ready .chat-file-indicator {
+  background: #76e0b6;
+  box-shadow: 0 0 0 2px rgba(118, 224, 182, 0.14);
+}
+
+.chat-file-chip.is-failed .chat-file-indicator {
+  background: #ff7575;
+  box-shadow: 0 0 0 2px rgba(255, 117, 117, 0.16);
+}
+
 .chat-file-name {
+  position: relative;
+  z-index: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .chat-file-status {
+  position: relative;
+  z-index: 1;
   flex: none;
   color: rgba(255, 255, 255, 0.62);
   font-size: 11px;
+}
+
+@keyframes chat-file-uploading-breathe {
+  0%,
+  100% {
+    opacity: 0.62;
+    box-shadow: 0 0 0 0 rgba(126, 168, 255, 0.18);
+  }
+  50% {
+    opacity: 1;
+    box-shadow: 0 0 0 5px rgba(126, 168, 255, 0);
+  }
+}
+
+@keyframes chat-file-parsing-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 203, 104, 0.42);
+  }
+  70% {
+    box-shadow: 0 0 0 7px rgba(255, 203, 104, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 203, 104, 0);
+  }
+}
+
+@keyframes chat-file-parsing-scan {
+  0% {
+    transform: translateX(-110%);
+  }
+  54%,
+  100% {
+    transform: translateX(110%);
+  }
 }
 
 .composer-input :deep(.n-input__textarea-el::placeholder) {

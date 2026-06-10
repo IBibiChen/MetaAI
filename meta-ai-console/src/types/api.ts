@@ -190,6 +190,8 @@ export interface MetaChatHistory {
     content: string
     /** 回答引用来源 */
     reference?: string
+    /** 用户消息关联会话文件 */
+    files?: string
     /** 消息创建时间 */
     createdAt: string
 }
@@ -426,6 +428,6 @@ export interface ChatOptions {
     documentType?: string
     /** 当前用户可访问部门 ID，多个值用英文逗号分隔 */
     deptIds?: string
-    /** 会话文件 ID 列表，空值表示回退当前会话 READY 文件 */
+    /** 会话文件 ID 列表，空值表示本轮不使用会话文件 */
     fileIds?: string[]
 }

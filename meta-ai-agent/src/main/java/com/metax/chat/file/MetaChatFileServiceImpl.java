@@ -142,7 +142,7 @@ public class MetaChatFileServiceImpl extends ServiceImpl<MetaChatFileMapper, Met
      * 查询当前会话可用文件
      *
      * <p>
-     * 只返回 READY 且未删除的文件，用于 fileIds 为空时的会话文件回退
+     * 只返回 READY 且未删除的文件，用于文件池展示或内部显式读取
      *
      * @param tenantId 租户 ID
      * @param userId   用户 ID
@@ -181,8 +181,8 @@ public class MetaChatFileServiceImpl extends ServiceImpl<MetaChatFileMapper, Met
         validateScope(tenantId, userId, chatId);
         List<String> resolvedFileIds = normalizeFileIds(fileIds);
         if (resolvedFileIds.isEmpty()) {
-            // 空 fileIds 的语义由上层定义为回退当前会话 READY 文件
-            return readyFiles(tenantId, userId, chatId);
+            // 显式文件查询不接受空集合，避免调用方误以为会自动使用历史 READY 文件
+            return List.of();
         }
         List<MetaContextFile> files = list(new LambdaQueryWrapper<MetaChatFileDO>()
                 .eq(MetaChatFileDO::getTenantId, tenantId)

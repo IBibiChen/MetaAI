@@ -120,7 +120,7 @@ public class KnowledgeChatService {
         MetaChatDO chat = chatHistoryRecorder.getOrCreate(resolvedChatId, resolvedOptions.getTenantId(),
                 resolvedOptions.getUserId(), historyType, msg, resolvedOptions.getKbId());
 
-        chatHistoryRecorder.saveUserMessage(chat, historyType, msg);
+        chatHistoryRecorder.saveUserMessage(chat, historyType, msg, files);
 
         // 检索决策用于短路明显不需要知识库的请求，避免无意义召回和上下文污染
         RetrievalDecisionResult decision = retrievalDecisionService.decide(resolvedOptions);
@@ -199,7 +199,7 @@ public class KnowledgeChatService {
         MetaChatDO chat = chatHistoryRecorder.getOrCreate(resolvedChatId, resolvedOptions.getTenantId(),
                 resolvedOptions.getUserId(), historyType, msg, resolvedOptions.getKbId());
 
-        chatHistoryRecorder.saveUserMessage(chat, historyType, msg);
+        chatHistoryRecorder.saveUserMessage(chat, historyType, msg, files);
 
         // 先决策再组装 Advisor，避免 SKIP 场景误把知识库上下文塞进 prompt
         RetrievalDecisionResult decision = retrievalDecisionService.decide(resolvedOptions);
@@ -236,7 +236,7 @@ public class KnowledgeChatService {
      * 解析 RAG 本轮会话文件上下文
      *
      * <p>
-     * fileIds 为空时回退当前会话 READY 文件，非空时只返回显式指定文件
+     * fileIds 为空时不使用会话文件，非空时只返回显式指定文件
      *
      * @param chatId  会话 ID
      * @param options 检索参数
