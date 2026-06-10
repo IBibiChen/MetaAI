@@ -1,6 +1,7 @@
 package com.metax.chat.support;
 
 import com.metax.chat.history.MetaChatHistoryType;
+import com.metax.chat.session.MetaChatDO;
 import com.metax.rag.retrieval.advisor.MetaContextFile;
 import com.metax.rag.retrieval.advisor.MetaContextFileKeys;
 import com.metax.rag.retrieval.assembly.RetrievalResponseAssembler;
@@ -18,6 +19,7 @@ import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.stereotype.Component;
+import org.springframework.util.Assert;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -63,17 +65,20 @@ public class ChatStreamEventAssembler {
      * 这里必须使用 stream().chatClientResponse()，不能退化成只返回文本的 content()
      *
      * @param requestSpec       ChatClient 请求
-     * @param fkId              会话主表 ID
-     * @param chatId            会话 ID
+     * @param chat              会话主表记录，提供历史归档和 SSE meta 所需 chatId
      * @param historyType       历史类型
      * @param includeReferences 是否组装知识库引用
      * @return SSE 流式事件
      */
     public Flux<ServerSentEvent<Object>> chatClientResponseStream(ChatClient.ChatClientRequestSpec requestSpec,
-                                                                  Long fkId,
-                                                                  String chatId,
+                                                                  MetaChatDO chat,
                                                                   MetaChatHistoryType historyType,
                                                                   boolean includeReferences) {
+        // 流式响应一开始就会发送 meta 事件，所以进入响应流前必须确认会话上下文完整
+        Assert.notNull(chat, "MetaChatDO must not be null");
+        Assert.notNull(chat.getId(), "MetaChatDO id must not be null");
+        Assert.hasText(chat.getChatId(), "MetaChatDO chatId must not be blank");
+        String chatId = chat.getChatId();
         StringBuilder answer = new StringBuilder();
         AtomicReference<ChatClientResponse> lastResponse = new AtomicReference<>(ChatClientResponse.builder().build());
 
@@ -90,7 +95,7 @@ public class ChatStreamEventAssembler {
                 .map(content -> event("delta", new ChatStreamDelta(content)));
 
         // done 阶段统一组装 answer、references 和 files，并完成历史归档
-        Mono<ServerSentEvent<Object>> done = Mono.fromSupplier(() -> doneEvent(fkId, chatId, historyType,
+        Mono<ServerSentEvent<Object>> done = Mono.fromSupplier(() -> doneEvent(chat, historyType,
                 includeReferences, answer.toString(), lastResponse.get()));
         return meta.concatWith(body).concatWith(done)
                 .onErrorResume(ex -> {
@@ -99,12 +104,22 @@ public class ChatStreamEventAssembler {
                 });
     }
 
-    private ServerSentEvent<Object> doneEvent(Long fkId,
-                                              String chatId,
+    /**
+     * 构造流式完成事件并归档助手完整消息
+     *
+     * @param chat              会话主表记录
+     * @param historyType       历史类型
+     * @param includeReferences 是否组装知识库引用
+     * @param fullAnswer        聚合后的完整回答
+     * @param lastResponse      最后一次 Spring AI 深层响应
+     * @return SSE done 事件
+     */
+    private ServerSentEvent<Object> doneEvent(MetaChatDO chat,
                                               MetaChatHistoryType historyType,
                                               boolean includeReferences,
                                               String fullAnswer,
                                               ChatClientResponse lastResponse) {
+        String chatId = chat.getChatId();
         // done 是流式响应的收口点，统一决定前端收尾数据和后端历史归档内容
         ChatStreamDone data;
         List<RetrievalDocumentReference> references = List.of();
@@ -122,7 +137,7 @@ public class ChatStreamEventAssembler {
         }
 
         // 历史归档保存完整 answer 和 references，delta 事件只负责前端实时展示
-        chatHistoryRecorder.saveAssistantMessage(fkId, chatId, historyType, fullAnswer, references);
+        chatHistoryRecorder.saveAssistantMessage(chat, historyType, fullAnswer, references);
         return event("done", data);
     }
 

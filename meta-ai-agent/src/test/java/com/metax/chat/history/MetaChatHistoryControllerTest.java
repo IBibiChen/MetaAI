@@ -56,4 +56,5 @@ class MetaChatHistoryControllerTest {
                 .andExpect(jsonPath("$.code").value(400))
                 .andExpect(jsonPath("$.message").value("size 不能大于 500"));
     }
+
 }

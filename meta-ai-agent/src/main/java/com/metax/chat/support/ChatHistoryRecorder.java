@@ -9,6 +9,7 @@ import com.metax.chat.session.MetaChatUpsertRequest;
 import com.metax.rag.retrieval.model.RetrievalDocumentReference;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+import org.springframework.util.Assert;
 
 import java.util.List;
 
@@ -57,44 +58,59 @@ public class ChatHistoryRecorder {
     /**
      * 保存用户消息并同步会话主表最后消息
      *
-     * @param fkId        会话主表 ID
-     * @param chatId      会话 ID
+     * @param chat        会话主表记录，提供历史表 fkId 和业务 chatId
      * @param historyType 历史类型
      * @param msg         用户消息
      */
-    public void saveUserMessage(Long fkId, String chatId, MetaChatHistoryType historyType, String msg) {
-        metaChatHistoryService.saveUserMessage(fkId, chatId, historyType, msg);
-        metaChatService.updateLastMessage(fkId, MetaChatHistoryRole.USER, msg);
+    public void saveUserMessage(MetaChatDO chat, MetaChatHistoryType historyType, String msg) {
+        MetaChatDO resolvedChat = requirePersistedChat(chat);
+        // 完整历史先落 meta_chat_history，随后同步 meta_chat 会话列表的最后消息预览
+        metaChatHistoryService.saveUserMessage(resolvedChat, historyType, msg);
+        metaChatService.updateLastMessage(resolvedChat.getId(), MetaChatHistoryRole.USER, msg);
     }
 
     /**
      * 保存助手消息并同步会话主表最后消息
      *
-     * @param fkId        会话主表 ID
-     * @param chatId      会话 ID
+     * @param chat        会话主表记录，提供历史表 fkId 和业务 chatId
      * @param historyType 历史类型
      * @param answer      助手回答
      */
-    public void saveAssistantMessage(Long fkId, String chatId, MetaChatHistoryType historyType, String answer) {
-        metaChatHistoryService.saveAssistantMessage(fkId, chatId, historyType, answer);
-        metaChatService.updateLastMessage(fkId, MetaChatHistoryRole.ASSISTANT, answer);
+    public void saveAssistantMessage(MetaChatDO chat, MetaChatHistoryType historyType, String answer) {
+        MetaChatDO resolvedChat = requirePersistedChat(chat);
+        // 无知识库引用的普通回答只保存 answer，不写空 references JSON
+        metaChatHistoryService.saveAssistantMessage(resolvedChat, historyType, answer);
+        metaChatService.updateLastMessage(resolvedChat.getId(), MetaChatHistoryRole.ASSISTANT, answer);
     }
 
     /**
      * 保存带引用来源的助手消息并同步会话主表最后消息
      *
-     * @param fkId        会话主表 ID
-     * @param chatId      会话 ID
+     * @param chat        会话主表记录，提供历史表 fkId 和业务 chatId
      * @param historyType 历史类型
      * @param answer      助手回答
      * @param references  引用来源
      */
-    public void saveAssistantMessage(Long fkId,
-                                     String chatId,
+    public void saveAssistantMessage(MetaChatDO chat,
                                      MetaChatHistoryType historyType,
                                      String answer,
                                      List<RetrievalDocumentReference> references) {
-        metaChatHistoryService.saveAssistantMessage(fkId, chatId, historyType, answer, references);
-        metaChatService.updateLastMessage(fkId, MetaChatHistoryRole.ASSISTANT, answer);
+        MetaChatDO resolvedChat = requirePersistedChat(chat);
+        // 助手消息在普通响应完成后或 SSE done 阶段统一保存，避免流式 delta 片段进入历史
+        metaChatHistoryService.saveAssistantMessage(resolvedChat, historyType, answer, references);
+        metaChatService.updateLastMessage(resolvedChat.getId(), MetaChatHistoryRole.ASSISTANT, answer);
+    }
+
+    /**
+     * 校验历史归档需要的会话主表上下文
+     *
+     * @param chat 会话主表记录
+     * @return 已持久化且带业务 chatId 的会话主表记录
+     */
+    private MetaChatDO requirePersistedChat(MetaChatDO chat) {
+        Assert.notNull(chat, "MetaChatDO must not be null");
+        Assert.notNull(chat.getId(), "MetaChatDO id must not be null");
+        Assert.hasText(chat.getChatId(), "MetaChatDO chatId must not be blank");
+        return chat;
     }
 }

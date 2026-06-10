@@ -36,7 +36,7 @@ import java.util.Objects;
  * <pre>{@code
  * {
  *   "answer": "Spring AI ETL 由 Reader、Transformer、Writer 组成",
- *   "chatId": "tenantId:userId:sessionId",
+ *   "chatId": "tenantId-userId-sessionId",
  *   "references": [
  *     {
  *       "score": 0.82,

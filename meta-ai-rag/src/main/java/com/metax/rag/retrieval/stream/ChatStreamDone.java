@@ -30,7 +30,7 @@ public record ChatStreamDone(
         /**
          * 会话 ID
          */
-        @Schema(description = "会话 ID", example = "t1:u1:s1")
+        @Schema(description = "会话 ID", example = "t1-u1-s1")
         String chatId,
         /**
          * 回答引用的来源文档

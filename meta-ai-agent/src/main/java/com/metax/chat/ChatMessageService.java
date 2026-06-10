@@ -128,7 +128,7 @@ public class ChatMessageService {
         MetaChatDO chat = chatHistoryRecorder.getOrCreate(resolvedChatId, scope.tenantId(), scope.userId(),
                 historyType, msg, null);
 
-        chatHistoryRecorder.saveUserMessage(chat.getId(), resolvedChatId, historyType, msg);
+        chatHistoryRecorder.saveUserMessage(chat, historyType, msg);
 
         ChatClient.ChatClientRequestSpec requestSpec = chatClient.prompt();
         if (resolvedFiles.isEmpty()) {
@@ -140,7 +140,7 @@ public class ChatMessageService {
                     scope.userId(), resolvedChatId, msg, resolvedFiles));
         }
         String answer = requestSpec.user(msg).call().content();
-        chatHistoryRecorder.saveAssistantMessage(chat.getId(), resolvedChatId, historyType, answer);
+        chatHistoryRecorder.saveAssistantMessage(chat, historyType, answer);
         // 非流式响应也返回本轮实际使用的文件，方便前端展示和排查 fileIds 是否生效
         return new ChatMessageResponse(answer, resolvedChatId, resolvedFiles);
     }
@@ -176,15 +176,14 @@ public class ChatMessageService {
 
         MetaChatDO chat = chatHistoryRecorder.getOrCreate(resolvedChatId, scope.tenantId(), scope.userId(),
                 historyType, msg, null);
-        chatHistoryRecorder.saveUserMessage(chat.getId(), resolvedChatId, historyType, msg);
+        chatHistoryRecorder.saveUserMessage(chat, historyType, msg);
 
         // 流式 done 事件需要读取 Advisor 写入的 metadata，所以这里使用 chatClientResponseStream
         ChatClient.ChatClientRequestSpec requestSpec = chatClient.prompt()
                 .advisors(spec -> contextFileChatSupport.contextFileParams(spec, scope.tenantId(), scope.userId(),
                         resolvedChatId, msg, resolvedFiles))
                 .user(msg);
-        return chatStreamEventAssembler.chatClientResponseStream(requestSpec, chat.getId(), resolvedChatId,
-                historyType, false);
+        return chatStreamEventAssembler.chatClientResponseStream(requestSpec, chat, historyType, false);
     }
 
     /**

@@ -18,7 +18,7 @@ public record ChatStreamMeta(
         /**
          * 会话 ID
          */
-        @Schema(description = "会话 ID", example = "t1:u1:s1")
+        @Schema(description = "会话 ID", example = "t1-u1-s1")
         String chatId
 ) {
 }

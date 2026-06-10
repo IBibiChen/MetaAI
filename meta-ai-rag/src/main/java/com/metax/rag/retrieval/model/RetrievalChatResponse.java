@@ -21,7 +21,7 @@ import java.util.List;
  * <pre>{@code
  * {
  *   "answer": "知识库问答由检索和生成两部分组成",
- *   "chatId": "tenantId:userId:sessionId",
+ *   "chatId": "tenantId-userId-sessionId",
  *   "references": [
  *     {
  *       "documentId": "1938200000000000001",
@@ -52,7 +52,7 @@ public record RetrievalChatResponse(
         /**
          * 会话 ID
          */
-        @Schema(description = "会话 ID", example = "t1:u1:s1")
+        @Schema(description = "会话 ID", example = "t1-u1-s1")
         String chatId,
         /**
          * 本次回答引用的来源文档

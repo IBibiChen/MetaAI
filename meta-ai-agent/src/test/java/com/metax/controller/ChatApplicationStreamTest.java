@@ -30,6 +30,10 @@ import com.metax.rag.retrieval.stream.ChatStreamDone;
 import com.metax.rag.retrieval.stream.ChatStreamMeta;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
+import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.memory.InMemoryChatMemoryRepository;
+import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
@@ -45,6 +49,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -82,9 +87,10 @@ class ChatApplicationStreamTest {
         assertThat(result.get(2).data()).isEqualTo(new ChatStreamDelta("好"));
         assertThat(result.get(3).event()).isEqualTo("done");
         assertThat(result.get(3).data()).isEqualTo(new ChatStreamDone("你好", "c1", List.of()));
-        verify(metaChatHistoryService).saveUserMessage(1L, "c1", MetaChatHistoryType.CHAT, "你好");
-        verify(metaChatHistoryService).saveAssistantMessage(eq(1L), eq("c1"), eq(MetaChatHistoryType.CHAT),
-                eq("你好"), eq(List.of()));
+        verify(metaChatHistoryService).saveUserMessage(argThat(chat -> persistedChat(chat, "c1")),
+                eq(MetaChatHistoryType.CHAT), eq("你好"));
+        verify(metaChatHistoryService).saveAssistantMessage(argThat(chat -> persistedChat(chat, "c1")),
+                eq(MetaChatHistoryType.CHAT), eq("你好"), eq(List.of()));
         verify(metaChatService).updateLastMessage(1L, MetaChatHistoryRole.USER, "你好");
         verify(metaChatService).updateLastMessage(1L, MetaChatHistoryRole.ASSISTANT, "你好");
     }
@@ -109,9 +115,10 @@ class ChatApplicationStreamTest {
         assertThat(result.get(2).event()).isEqualTo("delta");
         assertThat(result.get(3).event()).isEqualTo("done");
         assertThat(result.get(3).data()).isEqualTo(new ChatStreamDone("回答", "c1", List.of()));
-        verify(metaChatHistoryService).saveUserMessage(1L, "c1", MetaChatHistoryType.RAG, "你是谁");
-        verify(metaChatHistoryService).saveAssistantMessage(eq(1L), eq("c1"), eq(MetaChatHistoryType.RAG),
-                eq("回答"), eq(List.of()));
+        verify(metaChatHistoryService).saveUserMessage(argThat(chat -> persistedChat(chat, "c1")),
+                eq(MetaChatHistoryType.RAG), eq("你是谁"));
+        verify(metaChatHistoryService).saveAssistantMessage(argThat(chat -> persistedChat(chat, "c1")),
+                eq(MetaChatHistoryType.RAG), eq("回答"), eq(List.of()));
         verify(metaChatService).updateLastMessage(1L, MetaChatHistoryRole.USER, "你是谁");
         verify(metaChatService).updateLastMessage(1L, MetaChatHistoryRole.ASSISTANT, "回答");
     }
@@ -244,9 +251,10 @@ class ChatApplicationStreamTest {
         assertThat(response.files()).containsExactly(file);
         verify(fileService).readyFiles("t1", "u1", "c1", List.of("file-1"));
         verify(fileService).retrieve("t1", "u1", "c1", List.of(file), "总结文件");
-        verify(metaChatHistoryService).saveUserMessage(1L, "c1", MetaChatHistoryType.FILE_CHAT, "总结文件");
-        verify(metaChatHistoryService).saveAssistantMessage(1L, "c1", MetaChatHistoryType.FILE_CHAT,
-                "文件回答");
+        verify(metaChatHistoryService).saveUserMessage(argThat(chat -> persistedChat(chat, "c1")),
+                eq(MetaChatHistoryType.FILE_CHAT), eq("总结文件"));
+        verify(metaChatHistoryService).saveAssistantMessage(argThat(chat -> persistedChat(chat, "c1")),
+                eq(MetaChatHistoryType.FILE_CHAT), eq("文件回答"));
     }
 
     @Test
@@ -277,10 +285,30 @@ class ChatApplicationStreamTest {
         verify(fileService).retrieve("t1", "u1", "c1", List.of(file), "继续总结");
     }
 
+    @Test
+    void ragChatShouldBindConversationIdWhenDecisionSkipAndNoFiles() {
+        MetaChatHistoryService metaChatHistoryService = mock(MetaChatHistoryService.class);
+        MetaChatService metaChatService = metaChatService();
+        RetrievalDecisionService decisionService = mock(RetrievalDecisionService.class);
+        when(decisionService.decide(any())).thenReturn(RetrievalDecisionResult.skip("skip_pattern"));
+        KnowledgeChatService service = knowledgeChatService(new TestChatModel("RAG 普通回答"),
+                metaChatHistoryService, metaChatService, decisionService);
+
+        RetrievalChatResponse response = service.chat(retrievalChatRequest("c1", "你是谁", "t1", "kb1"));
+
+        assertThat(response.answer()).isEqualTo("RAG 普通回答");
+        assertThat(response.chatId()).isEqualTo("c1");
+        assertThat(response.references()).isEmpty();
+        assertThat(response.files()).isEmpty();
+        verify(metaChatHistoryService).saveUserMessage(argThat(chat -> persistedChat(chat, "c1")),
+                eq(MetaChatHistoryType.RAG), eq("你是谁"));
+        verify(metaChatHistoryService).saveAssistantMessage(argThat(chat -> persistedChat(chat, "c1")),
+                eq(MetaChatHistoryType.RAG), eq("RAG 普通回答"), eq(List.of()));
+    }
+
     private ChatMessageService chatMessageService(ChatModel chatModel,
                                                   MetaChatHistoryService metaChatHistoryService,
                                                   MetaChatService metaChatService) {
-        ChatClient chatClient = ChatClient.builder(chatModel).build();
         MetaChatFileService fileService = mock(MetaChatFileService.class);
         return chatMessageService(chatModel, metaChatHistoryService, metaChatService, fileService);
     }
@@ -289,7 +317,7 @@ class ChatApplicationStreamTest {
                                                   MetaChatHistoryService metaChatHistoryService,
                                                   MetaChatService metaChatService,
                                                   MetaChatFileService fileService) {
-        ChatClient chatClient = ChatClient.builder(chatModel).build();
+        ChatClient chatClient = memoryChatClient(chatModel);
         ChatScopeResolver chatScopeResolver = new ChatScopeResolver();
         ChatHistoryRecorder chatHistoryRecorder = new ChatHistoryRecorder(metaChatService, metaChatHistoryService,
                 chatScopeResolver);
@@ -315,7 +343,7 @@ class ChatApplicationStreamTest {
                                                       MetaChatService metaChatService,
                                                       RetrievalDecisionService decisionService,
                                                       MetaChatFileService fileService) {
-        ChatClient chatClient = ChatClient.builder(chatModel).build();
+        ChatClient chatClient = memoryChatClient(chatModel);
         ChatScopeResolver chatScopeResolver = new ChatScopeResolver();
         ChatHistoryRecorder chatHistoryRecorder = new ChatHistoryRecorder(metaChatService, metaChatHistoryService,
                 chatScopeResolver);
@@ -330,12 +358,42 @@ class ChatApplicationStreamTest {
                 chatHistoryRecorder, streamEventAssembler, fileSupport);
     }
 
+    /**
+     * 构造接近生产配置的 RAG ChatClient
+     *
+     * <p>
+     * MessageChatMemoryAdvisor 会强制读取 conversationId，能覆盖真实启动后的记忆参数缺失问题
+     *
+     * @param chatModel 测试模型
+     * @return 带 ChatMemory Advisor 的 ChatClient
+     */
+    private ChatClient memoryChatClient(ChatModel chatModel) {
+        ChatMemory chatMemory = MessageWindowChatMemory.builder()
+                .chatMemoryRepository(new InMemoryChatMemoryRepository())
+                .build();
+        return ChatClient.builder(chatModel)
+                .defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build())
+                .build();
+    }
+
     private MetaChatService metaChatService() {
         MetaChatService metaChatService = mock(MetaChatService.class);
         MetaChatDO chat = new MetaChatDO();
         chat.setId(1L);
+        chat.setChatId("c1");
         when(metaChatService.getOrCreate(any())).thenReturn(chat);
         return metaChatService;
+    }
+
+    /**
+     * 匹配已持久化的会话主表记录
+     *
+     * @param chat   会话主表记录
+     * @param chatId 业务会话 ID
+     * @return 是否匹配测试期望
+     */
+    private boolean persistedChat(MetaChatDO chat, String chatId) {
+        return chat != null && Long.valueOf(1L).equals(chat.getId()) && chatId.equals(chat.getChatId());
     }
 
     private ChatRequest chatRequest(String chatId, String tenantId, String userId, String msg) {

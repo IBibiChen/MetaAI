@@ -6,7 +6,7 @@ import org.springframework.stereotype.Component;
  * ChatScopeResolver .
  *
  * <p>
- * 统一解析 chatId、tenantId 和 userId 的兜底关系
+ * 统一解析 tenantId 和 userId 的兜底关系
  *
  * @author IBibiChen
  * @version v1.0
@@ -29,7 +29,8 @@ public class ChatScopeResolver {
      * 解析租户和用户范围
      *
      * <p>
-     * tenantId 或 userId 为空时优先从 chatId 的 tenantId:userId:sessionId 结构中提取
+     * chatId 只是业务会话 ID，不能再用于反向解析 tenantId 或 userId
+     * 会话隔离边界必须由独立的 tenantId、userId 和 chatId 共同表达
      *
      * @param chatId   会话 ID
      * @param tenantId 租户 ID
@@ -39,16 +40,6 @@ public class ChatScopeResolver {
     public ChatScope resolve(String chatId, String tenantId, String userId) {
         String resolvedTenantId = tenantId;
         String resolvedUserId = userId;
-        if ((resolvedTenantId == null || resolvedTenantId.isBlank())
-                || (resolvedUserId == null || resolvedUserId.isBlank())) {
-            String[] parts = chatId == null ? new String[0] : chatId.split(":");
-            if ((resolvedTenantId == null || resolvedTenantId.isBlank()) && parts.length > 0) {
-                resolvedTenantId = parts[0];
-            }
-            if ((resolvedUserId == null || resolvedUserId.isBlank()) && parts.length > 1) {
-                resolvedUserId = parts[1];
-            }
-        }
         if (resolvedTenantId == null || resolvedTenantId.isBlank()) {
             resolvedTenantId = "tenantId";
         }

@@ -86,12 +86,11 @@ public class RetrievalDebugService {
         // 调试问答也进入完整历史，便于从会话页复盘本次 details 调试请求
         MetaChatDO chat = chatHistoryRecorder.getOrCreate(resolvedChatId, request.getTenantId(), request.getUserId(),
                 MetaChatHistoryType.RAG_DETAILS, request.getMsg(), request.getKbId());
-        chatHistoryRecorder.saveUserMessage(chat.getId(), resolvedChatId, MetaChatHistoryType.RAG_DETAILS,
-                request.getMsg());
+        chatHistoryRecorder.saveUserMessage(chat, MetaChatHistoryType.RAG_DETAILS, request.getMsg());
         RetrievalChatDetailsResponse response = retrievalResponseAssembler.details(requestSpec.call()
                 .chatClientResponse(), resolvedChatId);
-        chatHistoryRecorder.saveAssistantMessage(chat.getId(), resolvedChatId, MetaChatHistoryType.RAG_DETAILS,
-                response.answer(), List.of());
+        chatHistoryRecorder.saveAssistantMessage(chat, MetaChatHistoryType.RAG_DETAILS, response.answer(),
+                List.of());
         return response;
     }
 

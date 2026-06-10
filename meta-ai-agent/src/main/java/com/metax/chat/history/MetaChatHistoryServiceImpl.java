@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.metax.chat.session.MetaChatDO;
 import com.metax.rag.retrieval.model.RetrievalDocumentReference;
 import org.springframework.stereotype.Service;
 import org.springframework.util.Assert;
@@ -40,66 +41,39 @@ public class MetaChatHistoryServiceImpl extends ServiceImpl<MetaChatHistoryMappe
     /**
      * 保存用户消息
      *
-     * @param chatId  会话 ID
+     * @param chat    会话主表记录，提供落库 fkId 和业务 chatId
      * @param type    对话类型
      * @param content 消息内容
      */
     @Override
-    public void saveUserMessage(String chatId, MetaChatHistoryType type, String content) {
-        saveUserMessage(null, chatId, type, content);
-    }
-
-    /**
-     * 保存用户消息
-     *
-     * @param fkId    会话主表 ID
-     * @param chatId  会话 ID
-     * @param type    对话类型
-     * @param content 消息内容
-     */
-    @Override
-    public void saveUserMessage(Long fkId, String chatId, MetaChatHistoryType type, String content) {
-        save(fkId, chatId, type, MetaChatHistoryRole.USER, content, null);
+    public void saveUserMessage(MetaChatDO chat, MetaChatHistoryType type, String content) {
+        save(chat, type, MetaChatHistoryRole.USER, content, null);
     }
 
     /**
      * 保存模型回答
      *
-     * @param chatId  会话 ID
+     * @param chat    会话主表记录，提供落库 fkId 和业务 chatId
      * @param type    对话类型
      * @param content 消息内容
      */
     @Override
-    public void saveAssistantMessage(String chatId, MetaChatHistoryType type, String content) {
-        saveAssistantMessage(null, chatId, type, content);
+    public void saveAssistantMessage(MetaChatDO chat, MetaChatHistoryType type, String content) {
+        saveAssistantMessage(chat, type, content, List.of());
     }
 
     /**
      * 保存模型回答
      *
-     * @param fkId    会话主表 ID
-     * @param chatId  会话 ID
-     * @param type    对话类型
-     * @param content 消息内容
-     */
-    @Override
-    public void saveAssistantMessage(Long fkId, String chatId, MetaChatHistoryType type, String content) {
-        saveAssistantMessage(fkId, chatId, type, content, List.of());
-    }
-
-    /**
-     * 保存模型回答
-     *
-     * @param fkId       会话主表 ID
-     * @param chatId     会话 ID
+     * @param chat       会话主表记录，提供落库 fkId 和业务 chatId
      * @param type       对话类型
      * @param content    消息内容
      * @param references 回答引用的来源文档
      */
     @Override
-    public void saveAssistantMessage(Long fkId, String chatId, MetaChatHistoryType type, String content,
+    public void saveAssistantMessage(MetaChatDO chat, MetaChatHistoryType type, String content,
                                      List<RetrievalDocumentReference> references) {
-        save(fkId, chatId, type, MetaChatHistoryRole.ASSISTANT, content, referencesJson(references));
+        save(chat, type, MetaChatHistoryRole.ASSISTANT, content, reference(references));
     }
 
     /**
@@ -116,18 +90,40 @@ public class MetaChatHistoryServiceImpl extends ServiceImpl<MetaChatHistoryMappe
         return page(Page.of(resolveCurrent(current), resolveSize(size)), query(chatId));
     }
 
-    private void save(Long fkId, String chatId, MetaChatHistoryType type, MetaChatHistoryRole role, String content,
-                      String referencesJson) {
-        Assert.hasText(chatId, "chatId must not be blank");
+    /**
+     * 保存完整历史流水
+     *
+     * <p>
+     * fkId 来自 meta_chat.id，只作为数据库关联字段
+     * chatId 是前后端和 ChatMemory 共享的业务会话标识
+     *
+     * @param chat      会话主表记录
+     * @param type      对话类型
+     * @param role      消息角色
+     * @param content   消息内容
+     * @param reference 回答引用来源 JSON
+     */
+    private void save(MetaChatDO chat, MetaChatHistoryType type, MetaChatHistoryRole role, String content,
+                      String reference) {
+        Assert.notNull(chat, "MetaChatDO must not be null");
+        Assert.notNull(chat.getId(), "MetaChatDO id must not be null");
+        Assert.hasText(chat.getChatId(), "MetaChatDO chatId must not be blank");
         Assert.notNull(type, "MetaChatHistoryType must not be null");
         Assert.notNull(role, "MetaChatHistoryRole must not be null");
         Assert.hasText(content, "content must not be blank");
 
-        MetaChatHistoryDO entity = new MetaChatHistoryDO(null, fkId, chatId,
-                type.value(), role.value(), content, referencesJson, Instant.now());
+        // 历史表同时保存 fkId 和 chatId，查询链路按 chatId，数据库关联按 fkId
+        MetaChatHistoryDO entity = new MetaChatHistoryDO(null, chat.getId(), chat.getChatId(),
+                type.value(), role.value(), content, reference, Instant.now());
         save(entity);
     }
 
+    /**
+     * 构造按 chatId 正序读取完整历史的查询条件
+     *
+     * @param chatId 会话 ID
+     * @return MyBatis-Plus 查询条件
+     */
     private LambdaQueryWrapper<MetaChatHistoryDO> query(String chatId) {
         return new LambdaQueryWrapper<MetaChatHistoryDO>()
                 .eq(MetaChatHistoryDO::getChatId, chatId)
@@ -135,7 +131,13 @@ public class MetaChatHistoryServiceImpl extends ServiceImpl<MetaChatHistoryMappe
                 .orderByAsc(MetaChatHistoryDO::getId);
     }
 
-    private String referencesJson(List<RetrievalDocumentReference> references) {
+    /**
+     * 序列化回答引用来源
+     *
+     * @param references 回答引用来源
+     * @return 引用来源 JSON，空引用返回 null
+     */
+    private String reference(List<RetrievalDocumentReference> references) {
         if (references == null || references.isEmpty()) {
             return null;
         }
@@ -146,10 +148,22 @@ public class MetaChatHistoryServiceImpl extends ServiceImpl<MetaChatHistoryMappe
         }
     }
 
+    /**
+     * 解析当前页码
+     *
+     * @param current 原始页码
+     * @return 有效页码
+     */
     private long resolveCurrent(Long current) {
         return current == null || current < DEFAULT_CURRENT ? DEFAULT_CURRENT : current;
     }
 
+    /**
+     * 解析分页大小
+     *
+     * @param size 原始分页大小
+     * @return 有效分页大小
+     */
     private long resolveSize(Long size) {
         return size == null || size <= 0 ? DEFAULT_SIZE : size;
     }

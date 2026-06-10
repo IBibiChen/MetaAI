@@ -16,6 +16,7 @@ import com.metax.retrieval.chat.request.RetrievalChatRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.http.codec.ServerSentEvent;
@@ -119,14 +120,16 @@ public class KnowledgeChatService {
         MetaChatDO chat = chatHistoryRecorder.getOrCreate(resolvedChatId, resolvedOptions.getTenantId(),
                 resolvedOptions.getUserId(), historyType, msg, resolvedOptions.getKbId());
 
-        chatHistoryRecorder.saveUserMessage(chat.getId(), resolvedChatId, historyType, msg);
+        chatHistoryRecorder.saveUserMessage(chat, historyType, msg);
 
         // 检索决策用于短路明显不需要知识库的请求，避免无意义召回和上下文污染
         RetrievalDecisionResult decision = retrievalDecisionService.decide(resolvedOptions);
         log.info("RAG 检索决策：chatId = {}，decision = {}，reason = {}，query = {}",
                 resolvedChatId, decision.decision(), decision.reason(), resolvedOptions.getQuery());
         RetrievalChatResponse response;
-        ChatClient.ChatClientRequestSpec requestSpec = ragChatClient.prompt();
+        ChatClient.ChatClientRequestSpec requestSpec = ragChatClient.prompt()
+                // RAG ChatClient 默认挂载 MessageChatMemoryAdvisor，所有分支都必须先绑定 conversationId
+                .advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, resolvedChatId));
         if (decision.decision() == RetrievalDecision.SKIP) {
             // SKIP 时不注入知识库 Advisor，但保留文件上下文以支持上传文件问答
             if (files.isEmpty()) {
@@ -163,8 +166,7 @@ public class KnowledgeChatService {
         }
 
         // 助手完整回答和知识库 references 一起归档，前端历史页不依赖 ChatMemory
-        chatHistoryRecorder.saveAssistantMessage(chat.getId(), resolvedChatId, historyType, response.answer(),
-                response.references());
+        chatHistoryRecorder.saveAssistantMessage(chat, historyType, response.answer(), response.references());
         return response;
     }
 
@@ -197,13 +199,15 @@ public class KnowledgeChatService {
         MetaChatDO chat = chatHistoryRecorder.getOrCreate(resolvedChatId, resolvedOptions.getTenantId(),
                 resolvedOptions.getUserId(), historyType, msg, resolvedOptions.getKbId());
 
-        chatHistoryRecorder.saveUserMessage(chat.getId(), resolvedChatId, historyType, msg);
+        chatHistoryRecorder.saveUserMessage(chat, historyType, msg);
 
         // 先决策再组装 Advisor，避免 SKIP 场景误把知识库上下文塞进 prompt
         RetrievalDecisionResult decision = retrievalDecisionService.decide(resolvedOptions);
         log.info("RAG 检索决策：chatId = {}，decision = {}，reason = {}，query = {}",
                 resolvedChatId, decision.decision(), decision.reason(), resolvedOptions.getQuery());
-        ChatClient.ChatClientRequestSpec requestSpec = ragChatClient.prompt();
+        ChatClient.ChatClientRequestSpec requestSpec = ragChatClient.prompt()
+                // 流式 SKIP 且没有文件时不会进入 contextFileParams，这里统一兜住 ChatMemory conversationId
+                .advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, resolvedChatId));
         if (decision.decision() == RetrievalDecision.SKIP) {
             // SKIP 只启用会话文件上下文和 ChatMemory，不返回知识库 references
             if (!files.isEmpty()) {
@@ -224,8 +228,8 @@ public class KnowledgeChatService {
         requestSpec.user(msg);
 
         // includeReferences 控制 done 事件是否读取检索 metadata 并归档 references
-        return chatStreamEventAssembler.chatClientResponseStream(requestSpec, chat.getId(), resolvedChatId,
-                historyType, decision.decision() == RetrievalDecision.RETRIEVE);
+        return chatStreamEventAssembler.chatClientResponseStream(requestSpec, chat, historyType,
+                decision.decision() == RetrievalDecision.RETRIEVE);
     }
 
     /**

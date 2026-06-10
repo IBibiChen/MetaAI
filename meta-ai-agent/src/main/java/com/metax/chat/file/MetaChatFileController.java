@@ -88,8 +88,8 @@ public class MetaChatFileController {
         /**
          * 会话 ID
          */
-        @Parameter(description = "会话 ID", example = "t1:u1:s1")
-        @Schema(description = "会话 ID", example = "t1:u1:s1")
+        @Parameter(description = "会话 ID", example = "t1-u1-s1")
+        @Schema(description = "会话 ID", example = "t1-u1-s1")
         @NotBlank(message = "chatId 不能为空")
         private String chatId;
 

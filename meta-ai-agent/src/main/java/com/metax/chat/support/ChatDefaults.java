@@ -15,7 +15,7 @@ public final class ChatDefaults {
     /**
      * 默认会话 ID
      */
-    public static final String CHAT_ID = "tenantId:userId:sessionId";
+    public static final String CHAT_ID = "tenantId-userId-sessionId";
 
     /**
      * 默认普通对话消息

@@ -30,7 +30,7 @@ public record RetrievalChatDetailsResponse(
         /**
          * 会话 ID
          */
-        @Schema(description = "会话 ID", example = "t1:u1:s1")
+        @Schema(description = "会话 ID", example = "t1-u1-s1")
         String chatId,
         /**
          * 本次检索命中的片段详情

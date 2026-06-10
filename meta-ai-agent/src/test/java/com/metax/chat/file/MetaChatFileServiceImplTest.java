@@ -56,7 +56,7 @@ class MetaChatFileServiceImplTest {
         MockMultipartFile file = new MockMultipartFile("files", "demo.pdf", "application/pdf",
                 "test".getBytes(java.nio.charset.StandardCharsets.UTF_8));
 
-        service.uploadAndIndex("t1", "u1", "c1", new MockMultipartFile[]{file});
+        service.uploadAndIndex("t1", "u1", "t1-u1-s1", new MockMultipartFile[]{file});
 
         verify(vectorStore).write(org.mockito.ArgumentMatchers.argThat(documents -> {
             writtenDocuments.set(documents);
@@ -76,7 +76,7 @@ class MetaChatFileServiceImplTest {
                 .containsEntry(MetadataKeys.SCOPE, MetadataKeys.SCOPE_SESSION)
                 .containsEntry(MetadataKeys.TENANT_ID, "t1")
                 .containsEntry(MetadataKeys.USER_ID, "u1")
-                .containsEntry(MetadataKeys.CHAT_ID, "c1")
+                .containsEntry(MetadataKeys.CHAT_ID, "t1-u1-s1")
                 .containsEntry(MetadataKeys.FILE_NAME, "demo.pdf")
                 .containsEntry(MetadataKeys.CONTENT_HASH,
                         md5DigestAsHex("文件内容".getBytes(StandardCharsets.UTF_8)))

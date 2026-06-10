@@ -77,7 +77,7 @@ public class MetaChatDO {
      */
     @Column(name = "chat_id", length = 255, nullable = false, unique = true)
     @Comment("会话 ID")
-    @Schema(description = "会话 ID，建议格式：tenantId:userId:sessionId", example = "t1:u1:s1")
+    @Schema(description = "会话 ID，建议格式：tenantId-userId-sessionId", example = "t1-u1-s1")
     private String chatId;
 
     /**

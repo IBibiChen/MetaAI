@@ -63,7 +63,7 @@ public class MetaChatHistoryDO {
      */
     @Column(name = "chat_id", length = 255, nullable = false)
     @Comment("会话 ID")
-    @Schema(description = "会话 ID，建议格式：tenantId:userId:sessionId", example = "t1:u1:s1")
+    @Schema(description = "会话 ID，建议格式：tenantId-userId-sessionId", example = "t1-u1-s1")
     private String chatId;
 
     /**
@@ -91,12 +91,12 @@ public class MetaChatHistoryDO {
     private String content;
 
     /**
-     * 回答引用来源 JSON
+     * 回答引用来源
      */
-    @Column(name = "references_json", columnDefinition = "text")
-    @Comment("回答引用来源 JSON")
-    @Schema(description = "回答引用来源 JSON")
-    private String referencesJson;
+    @Column(name = "reference", columnDefinition = "text")
+    @Comment("回答引用来源")
+    @Schema(description = "回答引用来源")
+    private String reference;
 
     /**
      * 创建时间

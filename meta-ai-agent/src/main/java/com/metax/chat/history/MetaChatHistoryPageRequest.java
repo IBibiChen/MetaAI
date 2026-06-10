@@ -23,8 +23,8 @@ public class MetaChatHistoryPageRequest {
     /**
      * 会话 ID
      */
-    @Parameter(description = "会话 ID，建议格式：tenantId:userId:sessionId", example = "t1:u1:s1", required = true)
-    @Schema(description = "会话 ID，建议格式：tenantId:userId:sessionId", example = "t1:u1:s1")
+    @Parameter(description = "会话 ID，建议格式：tenantId-userId-sessionId", example = "t1-u1-s1", required = true)
+    @Schema(description = "会话 ID，建议格式：tenantId-userId-sessionId", example = "t1-u1-s1")
     private String chatId;
 
     /**

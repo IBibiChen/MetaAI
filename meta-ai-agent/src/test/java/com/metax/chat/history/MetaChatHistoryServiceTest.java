@@ -3,12 +3,15 @@ package com.metax.chat.history;
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.metax.chat.session.MetaChatDO;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentCaptor.forClass;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -38,9 +41,12 @@ class MetaChatHistoryServiceTest {
         MetaChatHistoryMapper mapper = mock(MetaChatHistoryMapper.class);
         MetaChatHistoryServiceImpl service = service(mapper);
 
-        service.saveUserMessage("c1", MetaChatHistoryType.CHAT, "你好");
+        service.saveUserMessage(chat(), MetaChatHistoryType.CHAT, "你好");
 
-        verify(mapper).insert(any(MetaChatHistoryDO.class));
+        ArgumentCaptor<MetaChatHistoryDO> captor = forClass(MetaChatHistoryDO.class);
+        verify(mapper).insert(captor.capture());
+        assertThat(captor.getValue().getFkId()).isEqualTo(1L);
+        assertThat(captor.getValue().getChatId()).isEqualTo("c1");
     }
 
     /**
@@ -84,6 +90,13 @@ class MetaChatHistoryServiceTest {
         MetaChatHistoryServiceImpl service = new MetaChatHistoryServiceImpl(new ObjectMapper());
         ReflectionTestUtils.setField(service, "baseMapper", mapper);
         return service;
+    }
+
+    private MetaChatDO chat() {
+        MetaChatDO chat = new MetaChatDO();
+        chat.setId(1L);
+        chat.setChatId("c1");
+        return chat;
     }
 
     private MetaChatHistoryDO entity(String chatId, MetaChatHistoryRole role) {
