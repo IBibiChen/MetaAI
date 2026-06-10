@@ -10,7 +10,7 @@ import type {
     ChatStreamError,
     ChatStreamMeta,
     CommonResult,
-    MetaContextFile,
+    MetaChatFileItem,
     MetaChat,
     PageResult,
     ChatMessageResponse,
@@ -95,7 +95,7 @@ export async function uploadChatFiles(chatId: string, tenantId: string, userId: 
     formData.append('userId', userId)
     files.forEach((file) => formData.append('files', file))
 
-    const response = await request.post<CommonResult<MetaContextFile[]>>('/v1/chat/files', formData, {
+    const response = await request.post<CommonResult<MetaChatFileItem[]>>('/v1/chat/files', formData, {
         headers: {
             Authorization: METAX_AUTHORIZATION,
         },
@@ -107,7 +107,7 @@ export async function uploadChatFiles(chatId: string, tenantId: string, userId: 
  * 查询当前会话临时文件
  */
 export async function fetchChatFiles(chatId: string, tenantId: string, userId: string) {
-    const response = await request.get<CommonResult<MetaContextFile[]>>('/v1/chat/files', {
+    const response = await request.get<CommonResult<MetaChatFileItem[]>>('/v1/chat/files', {
         params: {
             chatId,
             tenantId,

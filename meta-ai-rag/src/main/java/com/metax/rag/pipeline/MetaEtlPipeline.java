@@ -62,7 +62,7 @@ public class MetaEtlPipeline {
      * @param run     文档索引 run
      * @param context 文档索引上下文
      */
-    @Async
+    @Async("taskExecutor")
     public void runIndexing(DocumentIndexingRun run, DocumentIndexingContext context) {
         saveAndNotify(run.withStatus(DocumentIndexingStatus.RUNNING, 0, "RAG document indexing started"));
         try {

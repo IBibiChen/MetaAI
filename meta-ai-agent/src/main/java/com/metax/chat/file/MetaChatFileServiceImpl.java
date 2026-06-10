@@ -3,24 +3,19 @@ package com.metax.chat.file;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.IdWorker;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.metax.rag.etl.reader.MetaDocumentReaderFactory;
-import com.metax.rag.etl.resource.MetaDocumentResource;
+import com.metax.chat.file.event.MetaChatFileIndexingEvent;
 import com.metax.rag.etl.resource.MetaDocumentTypeResolver;
-import com.metax.rag.etl.transformer.MetaDocumentTransformerFactory;
 import com.metax.rag.model.MetadataKeys;
-import com.metax.rag.pipeline.MetaVectorStoreWriter;
 import com.metax.rag.retrieval.advisor.MetaContextFile;
 import com.metax.rag.storage.ObjectStorageClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
-import org.springframework.ai.document.DocumentReader;
-import org.springframework.ai.document.DocumentTransformer;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.vectorstore.filter.Filter;
 import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
-import org.springframework.core.io.AbstractResource;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.Assert;
@@ -80,38 +75,66 @@ public class MetaChatFileServiceImpl extends ServiceImpl<MetaChatFileMapper, Met
 
     private final MetaDocumentTypeResolver documentTypeResolver;
 
-    private final MetaDocumentReaderFactory documentReaderFactory;
-
-    private final MetaDocumentTransformerFactory documentTransformerFactory;
-
     private final VectorStore vectorStore;
 
-    private final MetaVectorStoreWriter vectorStoreWriter;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
-     * 上传并解析聊天文件
+     * 上传聊天文件并提交异步解析任务
      *
      * <p>
-     * 本方法同步完成对象存储归档、Reader 解析、chunk 切分和 VectorStore 写入
-     * v1 选择同步链路，是为了让后续问答流可以立即通过 fileIds 引用已上传文件
+     * 本方法同步完成对象存储归档和文件元数据落库
+     * OCR、chunk 切分和 VectorStore 写入由后台任务继续执行，前端通过 listFiles 轮询 parseStatus
      *
      * @param tenantId 租户 ID
      * @param userId   用户 ID
      * @param chatId   会话 ID
      * @param files    上传文件
-     * @return 已解析文件列表
+     * @return 已提交处理的文件状态列表
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public List<MetaContextFile> uploadAndIndex(String tenantId, String userId, String chatId, MultipartFile[] files) {
+    public List<MetaChatFileItemResponse> uploadAndSubmitIndex(String tenantId, String userId, String chatId,
+                                                               MultipartFile[] files) {
         if (files == null || files.length == 0) {
             return List.of();
         }
         validateScope(tenantId, userId, chatId);
-        return Arrays.stream(files)
+        List<MetaChatFileDO> uploadedFiles = Arrays.stream(files)
                 .filter(Objects::nonNull)
-                .map(file -> uploadAndIndexOne(tenantId, userId, chatId, file))
-                .map(this::contextFile)
+                .map(file -> uploadOne(tenantId, userId, chatId, file))
+                .toList();
+        // 发布事务事件，监听器会在上传事务提交后触发异步索引执行器
+        uploadedFiles.forEach(file -> eventPublisher.publishEvent(new MetaChatFileIndexingEvent(this,
+                file.getFileId())));
+        return uploadedFiles.stream()
+                .map(this::fileItem)
+                .toList();
+    }
+
+    /**
+     * 查询当前会话全部未删除文件
+     *
+     * <p>
+     * 前端展示需要看到 UPLOADED、PARSING、READY 和 PARSE_FAILED
+     * 问答链路不要使用本方法，避免非 READY 文件进入上下文增强
+     *
+     * @param tenantId 租户 ID
+     * @param userId   用户 ID
+     * @param chatId   会话 ID
+     * @return 文件状态列表
+     */
+    @Override
+    public List<MetaChatFileItemResponse> listFiles(String tenantId, String userId, String chatId) {
+        validateScope(tenantId, userId, chatId);
+        return list(new LambdaQueryWrapper<MetaChatFileDO>()
+                .eq(MetaChatFileDO::getTenantId, tenantId)
+                .eq(MetaChatFileDO::getUserId, userId)
+                .eq(MetaChatFileDO::getChatId, chatId)
+                .eq(MetaChatFileDO::getDeleted, Boolean.FALSE)
+                .orderByDesc(MetaChatFileDO::getCreatedAt))
+                .stream()
+                .map(this::fileItem)
                 .toList();
     }
 
@@ -214,22 +237,22 @@ public class MetaChatFileServiceImpl extends ServiceImpl<MetaChatFileMapper, Met
     }
 
     /**
-     * 上传并索引单个会话文件
+     * 上传单个会话文件并保存元数据
      *
      * <p>
-     * 文件先归档到对象存储，再写入元数据表，最后同步写入 scope = session 的临时向量索引
-     * 解析失败时回写 PARSE_FAILED，并删除本次已经归档的对象，避免无效文件继续被会话引用
+     * 文件先归档到对象存储，再写入元数据表
+     * 后台索引任务会基于这里生成的 fileId 继续执行解析和临时向量索引
      *
      * @param tenantId 租户 ID
      * @param userId   用户 ID
      * @param chatId   会话 ID
      * @param file     上传文件
-     * @return 已完成索引的文件元数据
+     * @return 已保存的文件元数据
      */
-    private MetaChatFileDO uploadAndIndexOne(String tenantId,
-                                             String userId,
-                                             String chatId,
-                                             MultipartFile file) {
+    private MetaChatFileDO uploadOne(String tenantId,
+                                     String userId,
+                                     String chatId,
+                                     MultipartFile file) {
         validateFile(file);
         String fileId = IdWorker.getIdStr();
         String originalFilename = resolveOriginalFilename(file);
@@ -259,142 +282,7 @@ public class MetaChatFileServiceImpl extends ServiceImpl<MetaChatFileMapper, Met
         entity.setCreatedAt(now);
         entity.setUpdatedAt(now);
         save(entity);
-
-        try {
-            entity.setParseStatus(MetaChatFileStatus.PARSING.name());
-            entity.setUpdatedAt(Instant.now());
-            updateById(entity);
-            int chunkCount = indexFile(entity);
-            entity.setParseStatus(MetaChatFileStatus.READY.name());
-            entity.setChunkCount(chunkCount);
-            entity.setUpdatedAt(Instant.now());
-            updateById(entity);
-            return entity;
-        } catch (RuntimeException ex) {
-            entity.setParseStatus(MetaChatFileStatus.PARSE_FAILED.name());
-            entity.setUpdatedAt(Instant.now());
-            updateById(entity);
-            // 已经写入对象存储但未成功索引的文件不应继续占用会话上下文
-            objectStorageClient.deleteObject(bucket, objectKey);
-            throw ex;
-        }
-    }
-
-    /**
-     * 把会话文件写入临时向量索引
-     *
-     * <p>
-     * 会话文件复用知识库 ETL 的 Reader、Splitter 和 ContentFormatter，保证 PDF / 图片 OCR、切分和格式化规则一致
-     * 但 metadata 由当前类重新补齐为 scope = session，避免被普通知识库 RAG 召回
-     *
-     * @param file 会话文件元数据
-     * @return 写入向量库的 chunk 数量
-     */
-    private int indexFile(MetaChatFileDO file) {
-        MetaDocumentResource resource = new MetaDocumentResource(new ObjectStorageResource(file),
-                file.getDocumentType(), file.getObjectKey());
-        DocumentReader reader = documentReaderFactory.create(resource);
-        List<Document> documents = reader.read();
-        documents = documentTransformerFactory.tokenTextSplitter().transform(documents);
-        documents = fileMetadataTransformer(file).transform(documents);
-        documents = documentTransformerFactory.contentFormatTransformer().transform(documents);
-        // 删除只按当前文件执行一次，避免后续分批写入时误删已经写入的新 chunk
-        vectorStoreWriter.delete(fileDeleteFilter(file));
-        // 写入统一走项目级批次控制，兼容不同 embedding provider 的单次输入条数限制
-        vectorStoreWriter.write(documents);
-        log.info("聊天文件临时索引完成：chatId = {}，fileId = {}，fileName = {}，chunks = {}",
-                file.getChatId(), file.getFileId(), file.getOriginalFilename(),
-                documents.size());
-        return documents.size();
-    }
-
-    /**
-     * 构造会话文件 metadata Transformer
-     *
-     * <p>
-     * 这里不复用知识库文档 metadata Transformer，因为会话文件使用 fileId / fileName 语义
-     *
-     * @param file 会话文件元数据
-     * @return 会话文件 metadata Transformer
-     */
-    private DocumentTransformer fileMetadataTransformer(MetaChatFileDO file) {
-        return documents -> java.util.stream.IntStream.range(0, documents.size())
-                .mapToObj(index -> withFileMetadata(documents.get(index), file, index))
-                .toList();
-    }
-
-    /**
-     * 为单个会话文件 chunk 补齐临时索引 metadata
-     *
-     * <p>
-     * scope = session 表示会话文件上下文，fileId 是文件边界，chatId 是会话隔离边界
-     * 这些字段必须同时写入，后续 Advisor 检索时才不会跨用户、跨会话或跨文件召回
-     *
-     * @param document Reader / Splitter 输出的 Document
-     * @param file     会话文件元数据
-     * @param index    chunk 序号
-     * @return 补齐会话文件 metadata 的 Document
-     */
-    private Document withFileMetadata(Document document, MetaChatFileDO file, int index) {
-        String chunkId = "%s:%s".formatted(file.getFileId(), index);
-        Map<String, Object> metadata = new java.util.HashMap<>(document.getMetadata());
-        metadata.put(MetadataKeys.SCOPE, MetadataKeys.SCOPE_SESSION);
-        metadata.put(MetadataKeys.TENANT_ID, file.getTenantId());
-        metadata.put(MetadataKeys.USER_ID, file.getUserId());
-        metadata.put(MetadataKeys.CHAT_ID, file.getChatId());
-        metadata.put(MetadataKeys.FILE_ID, file.getFileId());
-        metadata.put(MetadataKeys.DOCUMENT_TYPE, file.getDocumentType());
-        metadata.put(MetadataKeys.SOURCE, file.getObjectKey());
-        metadata.put(MetadataKeys.FILE_NAME, file.getOriginalFilename());
-        metadata.put(MetadataKeys.CHUNK_ID, chunkId);
-        metadata.put(MetadataKeys.CHUNK_INDEX, index);
-        metadata.put(MetadataKeys.CONTENT_HASH, contentHash(document.getText()));
-        metadata.put(MetadataKeys.CREATED_AT, file.getCreatedAt().toEpochMilli());
-        Document enriched = Document.builder()
-                .id(vectorStoreId(file, chunkId))
-                .text(document.getText())
-                .metadata(metadata)
-                .score(document.getScore())
-                .build();
-        // Document builder 不会自动继承 contentFormatter，需要显式恢复
-        enriched.setContentFormatter(document.getContentFormatter());
-        return enriched;
-    }
-
-    /**
-     * 构造单文件删除过滤表达式
-     *
-     * <p>
-     * 重复索引同一个 fileId 前先删旧 chunk，避免向量库中出现同一文件的重复片段
-     *
-     * @param file 会话文件元数据
-     * @return 单文件删除过滤表达式
-     */
-    private Filter.Expression fileDeleteFilter(MetaChatFileDO file) {
-        FilterExpressionBuilder builder = new FilterExpressionBuilder();
-        return builder.and(
-                builder.and(
-                        builder.eq(MetadataKeys.SCOPE, MetadataKeys.SCOPE_SESSION),
-                        builder.eq(MetadataKeys.TENANT_ID, file.getTenantId())),
-                builder.and(
-                        builder.eq(MetadataKeys.USER_ID, file.getUserId()),
-                        builder.and(builder.eq(MetadataKeys.CHAT_ID, file.getChatId()),
-                                builder.eq(MetadataKeys.FILE_ID, file.getFileId())))
-        ).build();
-    }
-
-    /**
-     * 计算 chunk 内容 hash
-     *
-     * <p>
-     * 会话文件与知识库文档使用同一套 contentHash 语义，便于后续审计和增量索引扩展
-     *
-     * @param text chunk 文本
-     * @return contentHash
-     */
-    private String contentHash(String text) {
-        String normalizedText = text == null ? "" : text;
-        return org.springframework.util.DigestUtils.md5DigestAsHex(normalizedText.getBytes(StandardCharsets.UTF_8));
+        return entity;
     }
 
     /**
@@ -432,23 +320,6 @@ public class MetaChatFileServiceImpl extends ServiceImpl<MetaChatFileMapper, Met
     }
 
     /**
-     * 生成向量库稳定 Document ID
-     *
-     * <p>
-     * 使用 scope、tenantId、chatId 和 chunkId 生成确定性 UUID
-     * 同一会话文件重复索引时 ID 稳定，Qdrant 等向量库也能接受标准 UUID 形式
-     *
-     * @param file    会话文件元数据
-     * @param chunkId chunk ID
-     * @return 向量库 Document ID
-     */
-    private String vectorStoreId(MetaChatFileDO file, String chunkId) {
-        String seed = "%s:%s:%s:%s".formatted(MetadataKeys.SCOPE_SESSION, file.getTenantId(),
-                file.getChatId(), chunkId);
-        return UUID.nameUUIDFromBytes(seed.getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString();
-    }
-
-    /**
      * 转换为对 RAG 模块暴露的会话文件上下文
      *
      * @param file 会话文件元数据
@@ -456,6 +327,17 @@ public class MetaChatFileServiceImpl extends ServiceImpl<MetaChatFileMapper, Met
      */
     private MetaContextFile contextFile(MetaChatFileDO file) {
         return new MetaContextFile(file.getFileId(), file.getOriginalFilename(), file.getDocumentType());
+    }
+
+    /**
+     * 转换为前端展示的会话文件状态
+     *
+     * @param file 会话文件元数据
+     * @return 会话文件展示响应
+     */
+    private MetaChatFileItemResponse fileItem(MetaChatFileDO file) {
+        return new MetaChatFileItemResponse(file.getFileId(), file.getOriginalFilename(), file.getDocumentType(),
+                file.getParseStatus(), file.getChunkCount(), file.getCreatedAt(), file.getUpdatedAt());
     }
 
     /**
@@ -620,33 +502,4 @@ public class MetaChatFileServiceImpl extends ServiceImpl<MetaChatFileMapper, Met
         return value.replaceAll("[^a-zA-Z0-9._-]", "_");
     }
 
-    /**
-     * 对象存储 Resource 适配器
-     *
-     * <p>
-     * Spring AI Reader 统一消费 Resource，这里把对象存储文件流适配成 Resource
-     */
-    private class ObjectStorageResource extends AbstractResource {
-
-        private final MetaChatFileDO file;
-
-        private ObjectStorageResource(MetaChatFileDO file) {
-            this.file = file;
-        }
-
-        @Override
-        public String getDescription() {
-            return "chat file object: " + file.getObjectKey();
-        }
-
-        @Override
-        public String getFilename() {
-            return file.getOriginalFilename();
-        }
-
-        @Override
-        public InputStream getInputStream() {
-            return objectStorageClient.getObject(file.getBucket(), file.getObjectKey());
-        }
-    }
 }

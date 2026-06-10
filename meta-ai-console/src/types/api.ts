@@ -282,6 +282,31 @@ export interface MetaContextFile {
     documentType: string
 }
 
+export type MetaChatFileParseStatus = 'UPLOADED' | 'PARSING' | 'READY' | 'PARSE_FAILED'
+
+/**
+ * 会话文件展示状态
+ *
+ * <p>
+ * 用于前端附件条展示和轮询，不等同于可参与问答的 MetaContextFile
+ */
+export interface MetaChatFileItem {
+    /** 文件 ID */
+    fileId: string
+    /** 文件名称 */
+    fileName: string
+    /** 文档类型 */
+    documentType?: string
+    /** 解析状态 */
+    parseStatus: MetaChatFileParseStatus
+    /** 已写入临时索引的 chunk 数 */
+    chunkCount?: number
+    /** 创建时间 */
+    createdAt?: string
+    /** 更新时间 */
+    updatedAt?: string
+}
+
 /**
  * 检索链路 Trace
  *

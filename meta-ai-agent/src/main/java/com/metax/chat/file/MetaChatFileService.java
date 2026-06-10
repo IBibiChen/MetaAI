@@ -20,18 +20,34 @@ import java.util.List;
 public interface MetaChatFileService extends MetaContextFileService {
 
     /**
-     * 上传并解析聊天文件
+     * 上传聊天文件并提交异步解析任务
      *
      * <p>
-     * 同步完成对象存储归档、文本解析、chunk 切分和 session scope 向量索引
+     * 本方法只同步完成对象存储归档和文件元数据落库
+     * OCR、chunk 切分和 session scope 向量索引由后台任务执行，前端通过 listFiles 轮询状态
      *
      * @param tenantId 租户 ID
      * @param userId   用户 ID
      * @param chatId   会话 ID
      * @param files    上传文件
-     * @return 已解析文件列表
+     * @return 已提交处理的文件状态列表
      */
-    List<MetaContextFile> uploadAndIndex(String tenantId, String userId, String chatId, MultipartFile[] files);
+    List<MetaChatFileItemResponse> uploadAndSubmitIndex(String tenantId, String userId, String chatId,
+                                                        MultipartFile[] files);
+
+    /**
+     * 查询当前会话全部未删除文件
+     *
+     * <p>
+     * 用于前端展示 UPLOADED、PARSING、READY 和 PARSE_FAILED 状态
+     * 问答链路不要调用本方法，必须继续通过 readyFiles 只解析 READY 文件
+     *
+     * @param tenantId 租户 ID
+     * @param userId   用户 ID
+     * @param chatId   会话 ID
+     * @return 文件状态列表
+     */
+    List<MetaChatFileItemResponse> listFiles(String tenantId, String userId, String chatId);
 
     /**
      * 查询当前会话可用文件
