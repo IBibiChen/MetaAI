@@ -561,7 +561,7 @@ const ragContextScope = ref<ChatContextScope>('FILES_ONLY')
 const contextScopeToggleRef = ref<HTMLElement | null>(null)
 const contextScopeButtonRefs = ref<(HTMLButtonElement | null)[]>([])
 const contextScopePillStyle = reactive({
-  left: '2px',
+  left: '1px',
   width: '0px',
 })
 const activeMetaChatId = ref<string | null>(null)
@@ -678,7 +678,7 @@ const ragForm = reactive({
 })
 const contextScopeOptions: Array<{ value: ChatContextScope, label: string }> = [
   {value: 'FILES_ONLY', label: '附件'},
-  {value: 'FILES_AND_KNOWLEDGE', label: '附件 + 知识库'},
+  {value: 'FILES_AND_KNOWLEDGE', label: '附件+知识库'},
 ]
 
 const activeChat = computed(() => chats.value.find((item) => item.id === activeMetaChatId.value) || null)
@@ -921,7 +921,7 @@ async function updateContextScopePill() {
   const index = contextScopeOptions.findIndex((option) => option.value === ragContextScope.value)
   const button = contextScopeButtonRefs.value[index]
   if (!container || !button) {
-    contextScopePillStyle.left = '2px'
+    contextScopePillStyle.left = '1px'
     contextScopePillStyle.width = '0px'
     return
   }
@@ -2843,12 +2843,12 @@ async function downloadReference(reference: RetrievalDocumentReference) {
   grid-column: 2 / 4;
   justify-self: stretch;
   box-sizing: border-box;
-  gap: 4px;
+  gap: 3px;
   width: 100%;
   height: 30px;
   border: 1px solid rgba(126, 168, 255, 0.18);
   border-radius: 7px;
-  padding: 2px 4px;
+  padding: 2px 3px;
   background: rgba(21, 27, 42, 0.88);
 }
 
@@ -2858,7 +2858,7 @@ async function downloadReference(reference: RetrievalDocumentReference) {
   align-items: center;
   height: 24px;
   border-right: 1px solid rgba(126, 168, 255, 0.16);
-  padding: 0 5px;
+  padding: 0 2px;
   color: #e7fff8;
   font-size: 12px;
   font-weight: 800;
@@ -2868,13 +2868,17 @@ async function downloadReference(reference: RetrievalDocumentReference) {
 
 .context-scope-toggle {
   position: relative;
-  display: inline-flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  flex: 1 1 auto;
   align-items: center;
+  width: 100%;
+  min-width: 0;
   height: 26px;
   min-height: 26px;
   border: 0;
   border-radius: 0;
-  padding: 2px;
+  padding: 2px 1px;
   overflow: visible;
   background: transparent;
 }
@@ -2883,7 +2887,7 @@ async function downloadReference(reference: RetrievalDocumentReference) {
   position: absolute;
   top: 2px;
   bottom: 2px;
-  left: 2px;
+  left: 1px;
   z-index: 0;
   border: 1px solid rgba(20, 184, 166, 0.7);
   border-radius: 6px;
@@ -2899,13 +2903,16 @@ async function downloadReference(reference: RetrievalDocumentReference) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  min-width: 0;
+  width: 100%;
   height: 22px;
   border: 0;
   border-radius: 6px;
-  padding: 0 5px;
-  font-size: 11px;
+  padding: 0 2px;
+  font-size: 10.5px;
   font-weight: 700;
   line-height: 22px;
+  text-align: center;
   color: rgba(255, 255, 255, 0.45);
   background: transparent;
   cursor: pointer;
