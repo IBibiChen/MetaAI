@@ -311,7 +311,11 @@
           <div v-if="showRagContextScope" class="context-scope-row">
             <span class="context-scope-label">回答范围</span>
             <div ref="contextScopeToggleRef" class="context-scope-toggle">
-              <span class="context-scope-pill" :style="contextScopePillStyle" aria-hidden="true"></span>
+              <span
+                  :class="['context-scope-pill', { animated: contextScopePillAnimated }]"
+                  :style="contextScopePillStyle"
+                  aria-hidden="true"
+              ></span>
               <button
                   v-for="(option, index) in contextScopeOptions"
                   :key="option.value"
@@ -564,6 +568,7 @@ const contextScopePillStyle = reactive({
   left: '1px',
   width: '0px',
 })
+const contextScopePillAnimated = ref(false)
 const activeMetaChatId = ref<string | null>(null)
 const draft = ref('')
 const sending = ref(false)
@@ -722,7 +727,7 @@ let thumbDragStartTop = 0
 onMounted(async () => {
   await nextTick()
   setupMessageScrollbar()
-  window.addEventListener('resize', updateContextScopePill)
+  window.addEventListener('resize', handleContextScopeResize)
   await loadChats()
   if (activeMetaChatId.value && messages.value.length === 0) {
     await loadHistory()
@@ -735,7 +740,7 @@ onUnmounted(() => {
   stopStreaming()
   stopChatFilePolling()
   teardownMessageScrollbar()
-  window.removeEventListener('resize', updateContextScopePill)
+  window.removeEventListener('resize', handleContextScopeResize)
 })
 
 watch(() => workspace.contextVersion, async () => {
@@ -758,8 +763,14 @@ watch(messages, async () => {
   updateMessageScrollbar()
 }, {deep: true})
 
-watch([ragContextScope, showRagContextScope], async () => {
-  await updateContextScopePill()
+watch(showRagContextScope, async (visible) => {
+  if (!visible) {
+    contextScopePillAnimated.value = false
+    contextScopePillStyle.left = '1px'
+    contextScopePillStyle.width = '0px'
+    return
+  }
+  await updateContextScopePill(false)
 })
 
 /**
@@ -893,7 +904,9 @@ function resolveRequestContextScope(selectedFileCount: number): ChatContextScope
  * @param value 回答范围
  */
 function selectRagContextScope(value: ChatContextScope) {
+  if (ragContextScope.value === value) return
   ragContextScope.value = value
+  void updateContextScopePill(true)
 }
 
 /**
@@ -915,12 +928,14 @@ function setContextScopeButtonRef(element: Element | ComponentPublicInstance | n
  * <p>
  * 控件只在有可用附件时渲染，计算前必须等待 DOM 更新
  */
-async function updateContextScopePill() {
+async function updateContextScopePill(animate = false) {
   await nextTick()
+  contextScopePillAnimated.value = animate
   const container = contextScopeToggleRef.value
   const index = contextScopeOptions.findIndex((option) => option.value === ragContextScope.value)
   const button = contextScopeButtonRefs.value[index]
   if (!container || !button) {
+    contextScopePillAnimated.value = false
     contextScopePillStyle.left = '1px'
     contextScopePillStyle.width = '0px'
     return
@@ -932,6 +947,16 @@ async function updateContextScopePill() {
 }
 
 /**
+ * 响应窗口尺寸变化时重算回答范围选中 pill
+ *
+ * <p>
+ * resize 属于布局同步，不是用户主动切换范围，必须避免播放滑动动画
+ */
+function handleContextScopeResize() {
+  void updateContextScopePill(false)
+}
+
+/**
  * 重置 RAG 附件范围选择
  *
  * <p>
@@ -939,7 +964,7 @@ async function updateContextScopePill() {
  */
 function resetRagContextScope() {
   ragContextScope.value = 'FILES_ONLY'
-  void updateContextScopePill()
+  void updateContextScopePill(false)
 }
 
 /**
@@ -2894,7 +2919,11 @@ async function downloadReference(reference: RetrievalDocumentReference) {
   background: rgba(20, 184, 166, 0.18);
   box-shadow: 0 0 8px rgba(20, 184, 166, 0.15);
   pointer-events: none;
-  transition: left 0.2s ease-out, width 0.2s ease-out;
+  transition: none;
+}
+
+.context-scope-pill.animated {
+  transition: left 0.2s ease-out;
 }
 
 .context-scope-option {
