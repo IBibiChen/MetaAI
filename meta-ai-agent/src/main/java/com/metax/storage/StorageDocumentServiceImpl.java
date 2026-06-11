@@ -168,6 +168,9 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
         String contentType = resolveContentType(file);
         // 原始文件先进入对象存储，后续下载和索引 Reader 都从对象存储读取
         StoredObject storedObject = putObject(bucket, objectKey, file, contentType);
+        log.info("对象存储文档上传完成：tenantId = {}，kbId = {}，documentId = {}，documentName = {}，documentType = {}，fileSize = {}，autoIndex = {}",
+                tenantId, kbId, documentId, originalFilename, resolvedDocumentType, file.getSize(),
+                request.getAutoIndex());
 
         StorageDocumentDO entity = new StorageDocumentDO();
         entity.setTenantId(tenantId);
@@ -209,8 +212,9 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
                 entity.setIndexStatus(StorageDocumentIndexStatus.INDEX_FAILED.name());
                 entity.setUpdatedAt(Instant.now());
                 updateById(entity);
-                log.warn("对象存储文档自动索引失败：documentId = {}，objectKey = {}",
-                        entity.getDocumentId(), entity.getObjectKey(), ex);
+                log.warn("对象存储文档自动索引失败：tenantId = {}，kbId = {}，documentId = {}，documentType = {}，objectKey = {}",
+                        entity.getTenantId(), entity.getKbId(), entity.getDocumentId(), entity.getDocumentType(),
+                        entity.getObjectKey(), ex);
             }
         }
         return response(entity);
@@ -351,6 +355,9 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
                 entity.setLatestIndexingRunId(run.runId());
                 entity.setUpdatedAt(Instant.now());
                 updateById(entity);
+                log.info("对象存储文档索引已提交：tenantId = {}，kbId = {}，documentId = {}，runId = {}，documentType = {}，source = {}",
+                        entity.getTenantId(), entity.getKbId(), entity.getDocumentId(), run.runId(),
+                        entity.getDocumentType(), entity.getSource());
             });
         } catch (RuntimeException ex) {
             // 提交失败说明本轮索引没有进入 RUNNING，立即回写失败状态

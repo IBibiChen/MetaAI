@@ -1,6 +1,8 @@
 package com.metax.rag.pipeline;
 
 import com.metax.rag.indexing.DocumentIndexingRequest;
+import cn.hutool.core.date.TimeInterval;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.document.DocumentReader;
 import org.springframework.ai.document.DocumentTransformer;
@@ -25,6 +27,7 @@ import java.util.List;
  * @version v1.0
  * @since 2026/6/1
  */
+@Slf4j
 public record MetaEtlUpsertPipeline(
         DocumentIndexingRequest request,
         DocumentReader reader,
@@ -140,18 +143,32 @@ public record MetaEtlUpsertPipeline(
      * @return Pipeline 执行结果
      */
     public MetaEtlPipelineResult execute() {
+        TimeInterval totalTimer = new TimeInterval();
+        TimeInterval stageTimer = new TimeInterval();
         // read 阶段只解析原始文件，不补业务 metadata，也不做切分
         List<Document> documents = reader.read();
+        log.info("RAG ETL read 完成：documentId = {}，documentType = {}，documents = {}，durationMs = {}",
+                request.documentId(), request.documentType(), documents.size(), stageTimer.intervalRestart());
         for (DocumentTransformer transformer : transformers) {
             // transform 阶段按工厂定义的顺序执行，前一个输出就是后一个输入
             documents = transformer.transform(documents);
+            log.info("RAG ETL transform 完成：documentId = {}，transformer = {}，documents = {}，durationMs = {}",
+                    request.documentId(), transformer.getClass().getSimpleName(), documents.size(),
+                    stageTimer.intervalRestart());
         }
         for (DocumentWriter snapshotWriter : snapshotWriters) {
             // snapshot writer 只记录本次 ETL 输出快照，不替代最终 VectorStore 写入
             snapshotWriter.write(documents);
+            log.info("RAG ETL snapshot 完成：documentId = {}，writer = {}，documents = {}，durationMs = {}",
+                    request.documentId(), snapshotWriter.getClass().getSimpleName(), documents.size(),
+                    stageTimer.intervalRestart());
         }
         // upsert 阶段先删除同 documentId 的旧 chunk，再写入本次生成的新 chunk
         sink.upsert(documents);
+        log.info("RAG ETL upsert 完成：documentId = {}，chunks = {}，durationMs = {}",
+                request.documentId(), documents.size(), stageTimer.intervalRestart());
+        log.info("RAG ETL 执行完成：documentId = {}，chunks = {}，durationMs = {}",
+                request.documentId(), documents.size(), totalTimer.intervalMs());
         return new MetaEtlPipelineResult(documents.size());
     }
 }

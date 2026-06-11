@@ -14,6 +14,7 @@ import com.metax.rag.retrieval.filter.RetrievalFilterExpressionFactory;
 import com.metax.rag.retrieval.model.RetrievalChatResponse;
 import com.metax.rag.retrieval.model.RetrievalOptions;
 import com.metax.retrieval.chat.request.RetrievalChatRequest;
+import cn.hutool.core.date.TimeInterval;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
@@ -113,6 +114,7 @@ public class KnowledgeChatService {
                                                     MetaChatHistoryType historyType,
                                                     List<String> fileIds,
                                                     ChatContextScope contextScope) {
+        TimeInterval timer = new TimeInterval();
         // 所有知识库问答先统一会话 ID，保证 ChatMemory、完整历史和流式 meta 使用同一标识
         String resolvedChatId = chatScopeResolver.resolveChatId(chatId);
         RetrievalOptions resolvedOptions = Objects.requireNonNull(options, "RetrievalOptions must not be null");
@@ -144,6 +146,10 @@ public class KnowledgeChatService {
 
         // 助手完整回答和知识库 references 一起归档，前端历史页不依赖 ChatMemory
         chatHistoryRecorder.saveAssistantMessage(chat, historyType, response.answer(), response.references());
+        log.info("RAG 非流式问答完成：chatId = {}，tenantId = {}，kbId = {}，contextScope = {}，fileCount = {}，referenceCount = {}，durationMs = {}",
+                resolvedChatId, resolvedOptions.getTenantId(), resolvedOptions.getKbId(), resolvedContextScope,
+                files.size(), response.references() == null ? 0 : response.references().size(),
+                timer.intervalMs());
         return response;
     }
 
@@ -167,6 +173,7 @@ public class KnowledgeChatService {
                                                                   MetaChatHistoryType historyType,
                                                                   List<String> fileIds,
                                                                   ChatContextScope contextScope) {
+        TimeInterval timer = new TimeInterval();
         // 流式链路同样先固定 chatId，确保 meta、ChatMemory 和历史归档一致
         String resolvedChatId = chatScopeResolver.resolveChatId(chatId);
         RetrievalOptions resolvedOptions = Objects.requireNonNull(options, "RetrievalOptions must not be null");
@@ -200,6 +207,9 @@ public class KnowledgeChatService {
                     resolvedChatId, msg, files);
         };
         requestSpec.user(msg);
+        log.info("RAG 流式问答初始化完成：chatId = {}，tenantId = {}，kbId = {}，contextScope = {}，fileCount = {}，includeReferences = {}，durationMs = {}",
+                resolvedChatId, resolvedOptions.getTenantId(), resolvedOptions.getKbId(), resolvedContextScope,
+                files.size(), includeReferences, timer.intervalMs());
 
         // includeReferences 控制 done 事件是否读取检索 metadata 并归档 references
         return chatStreamEventAssembler.chatClientResponseStream(requestSpec, chat, historyType, includeReferences);

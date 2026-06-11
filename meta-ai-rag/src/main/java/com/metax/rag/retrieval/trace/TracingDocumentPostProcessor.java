@@ -1,5 +1,6 @@
 package com.metax.rag.retrieval.trace;
 
+import cn.hutool.core.date.TimeInterval;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.rag.Query;
 import org.springframework.ai.rag.postretrieval.document.DocumentPostProcessor;
@@ -57,7 +58,7 @@ public class TracingDocumentPostProcessor implements DocumentPostProcessor {
     @Override
     @NonNull
     public List<Document> process(@NonNull Query query, @NonNull List<Document> documents) {
-        long start = System.nanoTime();
+        TimeInterval timer = new TimeInterval();
         // 阶段 1：执行真正的检索后处理
         // documents 是 VectorStoreDocumentRetriever 刚召回的候选 Document
         // delegate 决定是否真正执行去重、rerank 预留和上下文截断
@@ -73,16 +74,12 @@ public class TracingDocumentPostProcessor implements DocumentPostProcessor {
                     .resolvedSimilarityThreshold(similarityThreshold)
                     .retrievedCount(documents.size())
                     .usedCount(processed.size())
-                    .timing("postProcess", elapsedMillis(start));
+                    .timing("postProcess", timer.intervalMs());
             if (filterExpression != null) {
                 // filter 只记录表达式摘要，方便排查是否命中了正确租户、知识库和文档范围
                 traceBuilder.filter(filterExpression.toString());
             }
         }
         return processed;
-    }
-
-    private long elapsedMillis(long start) {
-        return (System.nanoTime() - start) / 1_000_000;
     }
 }

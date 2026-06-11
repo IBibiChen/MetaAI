@@ -5,6 +5,8 @@ import com.metax.rag.retrieval.filter.RetrievalFilterExpressionFactory;
 import com.metax.rag.retrieval.model.RetrievalChunkReference;
 import com.metax.rag.retrieval.model.RetrievalOptions;
 import com.metax.rag.retrieval.model.RetrievalSearchResponse;
+import cn.hutool.core.date.TimeInterval;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
@@ -26,6 +28,7 @@ import java.util.List;
  * @version v1.0
  * @since 2026/6/3
  */
+@Slf4j
 @Service
 public class RetrievalSearchService {
 
@@ -47,6 +50,7 @@ public class RetrievalSearchService {
      * @return 检索响应
      */
     public RetrievalSearchResponse search(VectorStore vectorStore, RetrievalOptions options) {
+        TimeInterval timer = new TimeInterval();
         // 请求参数优先，未传时回落到 RAG 全局检索配置
         int resolvedTopK = resolvedTopK(options);
         double resolvedSimilarityThreshold = resolvedSimilarityThreshold(options);
@@ -66,6 +70,9 @@ public class RetrievalSearchService {
                 .map(document -> new RetrievalChunkReference(document.getText(), document.getScore(),
                         document.getMetadata()))
                 .toList();
+        log.info("RAG 检索完成：tenantId = {}，kbId = {}，topK = {}，similarityThreshold = {}，hitCount = {}，durationMs = {}",
+                options.getTenantId(), options.getKbId(), resolvedTopK, resolvedSimilarityThreshold, hits.size(),
+                timer.intervalMs());
         return new RetrievalSearchResponse(options.getQuery(), filter(options, filterExpression), resolvedTopK,
                 resolvedSimilarityThreshold, hits.size(), hits);
     }

@@ -1,5 +1,6 @@
 package com.metax.rag.retrieval.trace;
 
+import cn.hutool.core.date.TimeInterval;
 import org.springframework.ai.rag.Query;
 import org.springframework.ai.rag.preretrieval.query.transformation.QueryTransformer;
 import org.springframework.lang.NonNull;
@@ -45,7 +46,7 @@ public class TracingQueryTransformer implements QueryTransformer {
     @Override
     @NonNull
     public Query transform(@NonNull Query query) {
-        long start = System.nanoTime();
+        TimeInterval timer = new TimeInterval();
         // 阶段 1：委托官方 transformer 得到真正用于检索的新 Query
         // 真正的 query 转换仍由 Spring AI 官方 transformer 完成
         Query transformed = delegate.transform(query);
@@ -57,12 +58,8 @@ public class TracingQueryTransformer implements QueryTransformer {
             // details 接口可以用 transformedQuery 判断模型是否把用户问题改偏
             traceBuilder.queryTransformerMode(mode)
                     .transformedQuery(transformed.text())
-                    .timing("queryTransform", elapsedMillis(start));
+                    .timing("queryTransform", timer.intervalMs());
         }
         return transformed;
-    }
-
-    private long elapsedMillis(long start) {
-        return (System.nanoTime() - start) / 1_000_000;
     }
 }

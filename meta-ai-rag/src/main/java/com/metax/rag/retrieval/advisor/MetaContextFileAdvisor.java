@@ -1,6 +1,8 @@
 package com.metax.rag.retrieval.advisor;
 
 import com.metax.rag.model.MetadataKeys;
+import cn.hutool.core.date.TimeInterval;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.api.AdvisorChain;
@@ -28,6 +30,7 @@ import java.util.stream.Collectors;
  * @version v1.0
  * @since 2026/6/8
  */
+@Slf4j
 @Component
 public class MetaContextFileAdvisor implements BaseAdvisor {
 
@@ -75,7 +78,10 @@ public class MetaContextFileAdvisor implements BaseAdvisor {
         }
 
         // 只检索 Service 层传入的 CONTEXT_FILES，避免 Advisor 隐式混入历史文件
+        TimeInterval timer = new TimeInterval();
         List<Document> documents = contextFileService.retrieve(tenantId, userId, chatId, files, query);
+        log.info("会话文件上下文检索完成：tenantId = {}，userId = {}，chatId = {}，fileCount = {}，hitCount = {}，durationMs = {}",
+                tenantId, userId, chatId, files.size(), documents.size(), timer.intervalMs());
         context.put(MetaContextFileKeys.CONTEXT_FILES, files);
         context.put(MetaContextFileKeys.DOCUMENTS, documents);
         return chatClientRequest.mutate()

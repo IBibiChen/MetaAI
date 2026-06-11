@@ -1,7 +1,9 @@
 package com.metax.rag.pipeline;
 
 import com.metax.rag.config.MetaRetrievalProperties;
+import cn.hutool.core.date.TimeInterval;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.vectorstore.filter.Filter;
@@ -24,6 +26,7 @@ import java.util.List;
  * @version v1.0
  * @since 2026/6/10
  */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class MetaVectorStoreWriter {
@@ -46,7 +49,10 @@ public class MetaVectorStoreWriter {
      * @param filterExpression 删除过滤表达式
      */
     public void delete(Filter.Expression filterExpression) {
+        TimeInterval timer = new TimeInterval();
         vectorStore.delete(filterExpression);
+        log.info("VectorStore 删除完成：filter = {}，durationMs = {}",
+                filterExpression, timer.intervalMs());
     }
 
     /**
@@ -63,11 +69,19 @@ public class MetaVectorStoreWriter {
             return;
         }
         int batchSize = writeBatchSize();
+        TimeInterval totalTimer = new TimeInterval();
+        int batchCount = 0;
         for (int start = 0; start < documents.size(); start += batchSize) {
             int end = Math.min(start + batchSize, documents.size());
             // 复制 subList，避免下游 VectorStore 持有原始列表视图造成意外联动
+            TimeInterval batchTimer = new TimeInterval();
             vectorStore.write(List.copyOf(documents.subList(start, end)));
+            batchCount++;
+            log.debug("VectorStore 分批写入完成：batchIndex = {}，batchSize = {}，durationMs = {}",
+                    batchCount, end - start, batchTimer.intervalMs());
         }
+        log.info("VectorStore 写入完成：documents = {}，batchSize = {}，batchCount = {}，durationMs = {}",
+                documents.size(), batchSize, batchCount, totalTimer.intervalMs());
     }
 
     /**

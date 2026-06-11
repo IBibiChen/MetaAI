@@ -5,6 +5,8 @@ import com.metax.rag.indexing.DocumentIndexingRun;
 import com.metax.rag.indexing.DocumentIndexingRunObserver;
 import com.metax.rag.indexing.DocumentIndexingStatus;
 import com.metax.rag.indexing.DocumentIndexingRunRepository;
+import cn.hutool.core.date.TimeInterval;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
@@ -32,6 +34,7 @@ import java.util.List;
  * @version v1.0
  * @since 2026/5/31
  */
+@Slf4j
 @Component
 public class MetaEtlPipeline {
 
@@ -64,14 +67,22 @@ public class MetaEtlPipeline {
      */
     @Async("taskExecutor")
     public void runIndexing(DocumentIndexingRun run, DocumentIndexingContext context) {
+        TimeInterval timer = new TimeInterval();
         saveAndNotify(run.withStatus(DocumentIndexingStatus.RUNNING, 0, "RAG document indexing started"));
+        log.info("RAG 文档索引开始：runId = {}，tenantId = {}，kbId = {}，documentId = {}，documentType = {}",
+                run.runId(), run.tenantId(), run.kbId(), run.documentId(), run.documentType());
         try {
             MetaEtlUpsertPipeline pipeline = pipelineFactory.createIndexingPipeline(context);
             MetaEtlPipelineResult result = pipeline.execute();
             saveAndNotify(run.withStatus(DocumentIndexingStatus.SUCCEEDED, result.chunkCount(),
                     "RAG document indexing succeeded"));
+            log.info("RAG 文档索引完成：runId = {}，documentId = {}，chunkCount = {}，durationMs = {}",
+                    run.runId(), run.documentId(), result.chunkCount(), timer.intervalMs());
         } catch (Exception ex) {
             saveAndNotify(run.withStatus(DocumentIndexingStatus.FAILED, 0, ex.getMessage()));
+            log.warn("RAG 文档索引失败：runId = {}，documentId = {}，durationMs = {}，exception = {}: {}",
+                    run.runId(), run.documentId(), timer.intervalMs(), ex.getClass().getSimpleName(),
+                    ex.getMessage(), ex);
         }
     }
 

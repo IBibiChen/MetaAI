@@ -3,6 +3,7 @@ package com.metax.rag.indexing;
 import com.metax.rag.etl.resource.MetaDocumentResource;
 import com.metax.rag.etl.resource.MetaDocumentResourceFactory;
 import com.metax.rag.pipeline.MetaEtlPipeline;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.function.Consumer;
@@ -34,6 +35,7 @@ import java.util.function.Consumer;
  * @version v1.0
  * @since 2026/5/31
  */
+@Slf4j
 @Service
 public class DocumentIndexingService {
 
@@ -84,6 +86,8 @@ public class DocumentIndexingService {
 
         // 阶段 7：触发后台索引，内部执行 read -> transform -> snapshot -> VectorStore upsert
         etlPipeline.runIndexing(run, context);
+        log.info("RAG 文档索引 run 已创建：runId = {}，tenantId = {}，kbId = {}，documentId = {}，documentType = {}",
+                run.runId(), run.tenantId(), run.kbId(), run.documentId(), run.documentType());
 
         return run;
     }
