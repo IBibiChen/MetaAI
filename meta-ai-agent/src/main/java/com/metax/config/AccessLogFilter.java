@@ -9,13 +9,11 @@ import org.slf4j.MDC;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.web.util.ContentCachingRequestWrapper;
-import org.springframework.web.util.ContentCachingResponseWrapper;
 
 import java.io.IOException;
 import java.nio.charset.Charset;
@@ -29,7 +27,7 @@ import java.util.UUID;
  *
  * <p>
  * 离线单机部署场景的全链路访问日志过滤器
- * 负责生成请求关联 ID、记录请求体原文、状态码、耗时和异常摘要
+ * 负责生成请求关联 ID、记录请求参数、状态码、耗时和异常摘要
  * 执行顺序晚于 CORS Filter，早于 API Key 鉴权 Filter
  *
  * @author IBibiChen
@@ -94,7 +92,7 @@ public class AccessLogFilter extends OncePerRequestFilter {
      *
      * <p>
      * 使用 Spring ContentCachingRequestWrapper 读取下游已经消费的请求体
-     * SSE 响应不包 ContentCachingResponseWrapper，避免流式响应被缓冲
+     * 访问日志默认不缓存响应体，避免分页列表、下载和 SSE 响应造成日志噪声或额外内存占用
      *
      * @param request     HTTP 请求
      * @param response    HTTP 响应
@@ -112,27 +110,16 @@ public class AccessLogFilter extends OncePerRequestFilter {
 
         // 请求体使用 Spring 官方缓存包装器，读取发生在下游消费之后，避免提前破坏 Controller 参数绑定
         ContentCachingRequestWrapper requestWrapper = new ContentCachingRequestWrapper(request, Integer.MAX_VALUE);
-        boolean cacheResponseBody = shouldCacheResponseBody(request);
         Exception failure = null;
 
-        log.info("[访问开始] {} {} | clientIp = {} | contentType = {}",
-                request.getMethod(), resolveRequestPathWithQuery(request), resolveClientIp(request), request.getContentType());
+        log.info("[访问开始] {} {} | clientIp = {}{}",
+                request.getMethod(), resolveRequestPath(request), resolveClientIp(request),
+                resolveContentTypeLogSegment(request.getContentType()));
 
         try {
-            if (cacheResponseBody) {
-                // 非流式响应才包响应体缓存，日志写完后必须复制回原始响应，否则客户端收不到响应体
-                ContentCachingResponseWrapper responseWrapper = new ContentCachingResponseWrapper(response);
-                try {
-                    filterChain.doFilter(requestWrapper, responseWrapper);
-                    logAccessCompleted(requestWrapper, responseWrapper, startTime, null);
-                } finally {
-                    responseWrapper.copyBodyToResponse();
-                }
-            } else {
-                // SSE、下载和不适合缓存的响应直接透传，访问日志只记录请求体、状态码和耗时
-                filterChain.doFilter(requestWrapper, response);
-                logAccessCompleted(requestWrapper, response, startTime, null);
-            }
+            // 响应体直接透传，访问结束日志只保留链路索引信息和请求参数
+            filterChain.doFilter(requestWrapper, response);
+            logAccessCompleted(requestWrapper, response, startTime, null);
         } catch (IOException | ServletException | RuntimeException ex) {
             // 异常链路记录访问审计后继续抛出，保留全局异常处理和容器错误处理语义
             failure = ex;
@@ -160,19 +147,18 @@ public class AccessLogFilter extends OncePerRequestFilter {
                                     long startTime,
                                     Exception ex) {
         long duration = System.currentTimeMillis() - startTime;
-        String requestBody = resolveRequestBody(requestWrapper);
-        String responseBody = resolveResponseBody(response);
+        String requestParamsLogSegment = resolveRequestParamsLogSegment(requestWrapper);
 
         if (ex == null) {
-            log.info("[访问结束] {} {} | status = {} | durationMs = {} | requestBody = {} | responseBody = {}",
-                    requestWrapper.getMethod(), resolveRequestPathWithQuery(requestWrapper), response.getStatus(), duration,
-                    requestBody, responseBody);
+            log.info("[访问结束] {} {} | status = {} | durationMs = {}{}",
+                    requestWrapper.getMethod(), resolveRequestPath(requestWrapper), response.getStatus(), duration,
+                    requestParamsLogSegment);
             return;
         }
 
-        log.warn("[访问异常] {} {} | status = {} | durationMs = {} | exception = {}: {} | requestBody = {}",
-                requestWrapper.getMethod(), resolveRequestPathWithQuery(requestWrapper), response.getStatus(), duration,
-                ex.getClass().getSimpleName(), ex.getMessage(), requestBody);
+        log.warn("[访问异常] {} {} | status = {} | durationMs = {} | exception = {}: {}{}",
+                requestWrapper.getMethod(), resolveRequestPath(requestWrapper), response.getStatus(), duration,
+                ex.getClass().getSimpleName(), ex.getMessage(), requestParamsLogSegment);
     }
 
     /**
@@ -202,18 +188,13 @@ public class AccessLogFilter extends OncePerRequestFilter {
     }
 
     /**
-     * 解析带 query string 的请求路径
+     * 解析请求路径
      *
      * @param request HTTP 请求
-     * @return 带 query string 的请求路径
+     * @return 请求路径
      */
-    private String resolveRequestPathWithQuery(HttpServletRequest request) {
-        String uri = request.getRequestURI();
-        String queryString = request.getQueryString();
-        if (StringUtils.hasText(queryString)) {
-            return uri + "?" + queryString;
-        }
-        return uri;
+    private String resolveRequestPath(HttpServletRequest request) {
+        return request.getRequestURI();
     }
 
     /**
@@ -235,43 +216,58 @@ public class AccessLogFilter extends OncePerRequestFilter {
     }
 
     /**
-     * 判断是否缓存响应体
+     * 解析 Content-Type 日志片段
      *
      * <p>
-     * SSE 接口必须避免响应体缓存，否则会破坏流式刷出语义
-     * /v1/chat 和 /v1/rag 是否流式可能由 JSON body 决定，访问日志统一不缓存这两个响应体
+     * 访问日志只保留媒体类型，boundary、charset 等协议参数会制造噪声且不影响链路排查
      *
-     * @param request HTTP 请求
-     * @return true 表示可以缓存响应体用于访问日志
+     * @param contentType Content-Type Header 值
+     * @return Content-Type 日志片段
      */
-    private boolean shouldCacheResponseBody(HttpServletRequest request) {
-        String accept = request.getHeader(HttpHeaders.ACCEPT);
-        if (accept != null && accept.toLowerCase(Locale.ROOT).contains(MediaType.TEXT_EVENT_STREAM_VALUE)) {
-            return false;
+    private String resolveContentTypeLogSegment(String contentType) {
+        String mediaType = resolveMediaType(contentType);
+        if (!StringUtils.hasText(mediaType)) {
+            return "";
         }
-        if (accept != null && !accept.toLowerCase(Locale.ROOT).contains(MediaType.APPLICATION_JSON_VALUE)
-                && !accept.contains("*/*")) {
-            return false;
-        }
-        String uri = request.getRequestURI();
-        return !("/v1/chat".equals(uri) || "/v1/rag".equals(uri) || uri.contains("/download"));
+        return " | contentType = " + mediaType;
     }
 
     /**
-     * 解析请求体日志内容
+     * 解析请求参数日志片段
+     *
+     * <p>
+     * JSON、表单等请求体参数和 URL 查询参数统一输出为 params，避免暴露 Servlet 底层命名
+     *
+     * @param requestWrapper ContentCaching 请求包装器
+     * @return 请求参数日志片段
+     */
+    private String resolveRequestParamsLogSegment(ContentCachingRequestWrapper requestWrapper) {
+        String bodyParams = resolveBodyParams(requestWrapper);
+        if (StringUtils.hasText(bodyParams)) {
+            return " | params = " + bodyParams;
+        }
+        String urlParams = requestWrapper.getQueryString();
+        if (StringUtils.hasText(urlParams)) {
+            return " | params = " + urlParams;
+        }
+        return "";
+    }
+
+    /**
+     * 解析请求体参数
      *
      * <p>
      * multipart 只记录类型标识，二进制内容只记录 binary 标识，文本请求体按请求字符集原文写入日志
      *
      * @param requestWrapper ContentCaching 请求包装器
-     * @return 请求体日志内容
+     * @return 请求体参数
      */
-    private String resolveRequestBody(ContentCachingRequestWrapper requestWrapper) {
-        String contentType = requestWrapper.getContentType();
-        if (contentType != null && contentType.toLowerCase(Locale.ROOT).startsWith("multipart/")) {
+    private String resolveBodyParams(ContentCachingRequestWrapper requestWrapper) {
+        String mediaType = resolveMediaType(requestWrapper.getContentType());
+        if (mediaType != null && mediaType.startsWith("multipart/")) {
             return "[multipart/form-data]";
         }
-        if (contentType != null && isBinaryContent(contentType)) {
+        if (mediaType != null && isBinaryContent(mediaType)) {
             return "[binary]";
         }
         byte[] body = getCachedRequestBody(requestWrapper);
@@ -282,30 +278,23 @@ public class AccessLogFilter extends OncePerRequestFilter {
     }
 
     /**
-     * 解析响应体日志内容
+     * 解析媒体类型
      *
      * <p>
-     * 未被 ContentCachingResponseWrapper 包装的响应只记录 not-cached 标识，避免误导为响应体为空
+     * Content-Type 可能包含 boundary、charset 等协议参数，访问日志只保留 type/subtype
      *
-     * @param response HTTP 响应
-     * @return 响应体日志内容
+     * @param contentType Content-Type Header 值
+     * @return 小写媒体类型
      */
-    private String resolveResponseBody(HttpServletResponse response) {
-        if (!(response instanceof ContentCachingResponseWrapper wrapper)) {
-            return "[not-cached]";
-        }
-        String contentType = wrapper.getContentType();
-        if (contentType != null && contentType.toLowerCase(Locale.ROOT).contains(MediaType.TEXT_EVENT_STREAM_VALUE)) {
-            return "[text/event-stream]";
-        }
-        if (contentType != null && isBinaryContent(contentType)) {
-            return "[binary]";
-        }
-        byte[] body = wrapper.getContentAsByteArray();
-        if (body.length == 0) {
+    private String resolveMediaType(String contentType) {
+        if (!StringUtils.hasText(contentType)) {
             return null;
         }
-        return new String(body, resolveCharset(wrapper.getCharacterEncoding()));
+        String mediaType = contentType.split(";", 2)[0].trim();
+        if (!StringUtils.hasText(mediaType)) {
+            return null;
+        }
+        return mediaType.toLowerCase(Locale.ROOT);
     }
 
     /**
