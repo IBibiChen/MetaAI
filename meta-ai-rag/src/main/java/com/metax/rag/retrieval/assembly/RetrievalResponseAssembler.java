@@ -1,5 +1,6 @@
 package com.metax.rag.retrieval.assembly;
 
+import com.metax.rag.config.MetaRetrievalProperties;
 import com.metax.rag.model.MetadataKeys;
 import com.metax.rag.retrieval.advisor.MetaContextFile;
 import com.metax.rag.retrieval.advisor.MetaContextFileKeys;
@@ -8,12 +9,15 @@ import com.metax.rag.retrieval.model.RetrievalChatResponse;
 import com.metax.rag.retrieval.model.RetrievalChunkReference;
 import com.metax.rag.retrieval.model.RetrievalDocumentReference;
 import com.metax.rag.retrieval.trace.RetrievalTrace;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.rag.advisor.RetrievalAugmentationAdvisor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -55,7 +59,23 @@ import java.util.Objects;
  * @since 2026/5/31
  */
 @Component
+@Slf4j
 public class RetrievalResponseAssembler {
+
+    private final MetaRetrievalProperties.Reference referenceProperties;
+
+    public RetrievalResponseAssembler() {
+        this(new MetaRetrievalProperties.Reference());
+    }
+
+    @Autowired
+    public RetrievalResponseAssembler(MetaRetrievalProperties properties) {
+        this(properties.getReference());
+    }
+
+    private RetrievalResponseAssembler(MetaRetrievalProperties.Reference referenceProperties) {
+        this.referenceProperties = referenceProperties;
+    }
 
     /**
      * 组装 RAG 详情响应
@@ -169,43 +189,97 @@ public class RetrievalResponseAssembler {
      * 普通 /v1/rag 只面向前端聊天窗口展示文件来源，不暴露 chunk 文本、score 和完整 metadata
      * 多个 chunk 命中同一个文件时按 documentId 去重，保留首次出现顺序
      * 只处理 scope = knowledge 的知识库文档，会话文件上下文由 files 字段单独承载
+     * references 有单独准入阈值，不再等同于所有进入 prompt 的上下文文件
      *
      * @param response ChatClientResponse
      * @return 轻量文件引用列表
      */
     private List<RetrievalDocumentReference> documentReferences(ChatClientResponse response) {
-        Map<String, RetrievalDocumentReference> documentReferences = new LinkedHashMap<>();
-        for (Document document : documents(response)) {
-            RetrievalDocumentReference documentReference = documentReference(document.getMetadata());
-            if (documentReference != null) {
-                documentReferences.putIfAbsent(documentReference.documentId(), documentReference);
+        // 只读取最终进入 prompt 的上下文 Document，不读取 VectorStore 原始候选全集
+        // 普通 references 是用户可见来源，需要在上下文基础上再做引用准入
+        List<Document> contextDocuments = documents(response);
+        Map<String, ReferenceCandidate> candidates = new LinkedHashMap<>();
+        for (Document document : contextDocuments) {
+            // 单个 chunk 先转为文件级候选，非知识库 scope 或缺少关键 metadata 会被跳过
+            ReferenceCandidate candidate = referenceCandidate(document);
+            if (candidate != null) {
+                // 同一 documentId 的多个 chunk 合并成一个引用候选
+                // bestScore 保留最高分，chunkCount 记录该文件被上下文命中的次数
+                candidates.compute(candidate.reference().documentId(), (documentId, existing) ->
+                        existing == null ? candidate : existing.merge(candidate));
             }
         }
-        return List.copyOf(documentReferences.values());
+        // 引用展示比 prompt 上下文更严格
+        // 先按配置准入过滤，再按文件最高分排序，最后限制前端展示数量
+        List<RetrievalDocumentReference> references = candidates.values().stream()
+                .filter(this::allowedReference)
+                .sorted(Comparator.comparingDouble(ReferenceCandidate::bestScore).reversed())
+                .limit(Math.max(0, referenceProperties.getMaxReferences()))
+                .map(ReferenceCandidate::reference)
+                .toList();
+        // 只记录数量变化，不打印 chunk 正文或完整 metadata，避免日志污染
+        int filteredCount = candidates.size() - references.size();
+        log.debug("RAG 引用组装完成：contextDocumentCount = {}，candidateReferenceCount = {}，"
+                        + "referenceCount = {}，filteredReferenceCount = {}，minReferenceScore = {}",
+                contextDocuments.size(), candidates.size(), references.size(), filteredCount,
+                referenceProperties.getMinReferenceScore());
+        return references;
     }
 
     /**
-     * 从 Document metadata 组装单个轻量文件引用
+     * 从 Document 组装单个引用候选
      *
      * <p>
      * documentName 用于前端展示，documentId 用于前端调用业务下载接口
      * 缺少任一关键字段时跳过该引用，避免前端拿到不可展示或不可下载的来源
      * scope 不是 knowledge 时跳过，避免把会话级 fileId 伪装成知识库 documentId
+     * 缺少 score 时按 0 处理，普通 references 应比 prompt 上下文更严格
      *
-     * @param metadata Document metadata
-     * @return 轻量文件引用
+     * @param document 上下文文档
+     * @return 引用候选
      */
-    private RetrievalDocumentReference documentReference(Map<String, Object> metadata) {
+    private ReferenceCandidate referenceCandidate(Document document) {
+        Map<String, Object> metadata = document.getMetadata();
+        // references 只展示知识库来源，会话文件上下文由 files 字段单独返回
         String scope = metadataValue(metadata, MetadataKeys.SCOPE);
         if (!MetadataKeys.SCOPE_KNOWLEDGE.equals(scope)) {
             return null;
         }
+        // documentName 用于前端展示，documentId 用于业务下载和文件级去重
+        // 缺任一字段都不能形成可靠引用
         String documentName = metadataValue(metadata, MetadataKeys.DOCUMENT_NAME);
         String documentId = metadataValue(metadata, MetadataKeys.DOCUMENT_ID);
         if (!StringUtils.hasText(documentName) || !StringUtils.hasText(documentId)) {
             return null;
         }
-        return new RetrievalDocumentReference(documentId, documentName);
+        // 单个 chunk 先作为命中次数为 1 的文件级引用候选
+        // 缺失 score 时 scoreOrZero 返回 0，普通 references 默认不会展示低可信候选
+        return new ReferenceCandidate(new RetrievalDocumentReference(documentId, documentName),
+                scoreOrZero(document), 1);
+    }
+
+    /**
+     * 判断引用候选是否允许展示
+     *
+     * <p>
+     * 普通 references 是用户可见来源，应使用比上下文更严格的文件级准入
+     *
+     * @param candidate 引用候选
+     * @return true 表示允许展示
+     */
+    private boolean allowedReference(ReferenceCandidate candidate) {
+        return candidate.bestScore() >= referenceProperties.getMinReferenceScore()
+                && candidate.chunkCount() >= referenceProperties.getMinChunksPerReference();
+    }
+
+    /**
+     * 将缺失 score 的 Document 作为 0 分处理
+     *
+     * @param document 文档
+     * @return 可排序分数
+     */
+    private double scoreOrZero(Document document) {
+        return document.getScore() == null ? 0.0 : document.getScore();
     }
 
     /**
@@ -276,5 +350,37 @@ public class RetrievalResponseAssembler {
                 .filter(Document.class::isInstance)
                 .map(Document.class::cast)
                 .toList();
+    }
+
+    /**
+     * 文件级引用候选
+     *
+     * <p>
+     * reference 是最终可返回给前端的轻量引用
+     * bestScore 用于引用准入和排序
+     * chunkCount 用于判断同一文件是否有足够 chunk 命中
+     *
+     * @param reference  轻量文件引用
+     * @param bestScore  文件最高可信分
+     * @param chunkCount 文件命中 chunk 数
+     */
+    private record ReferenceCandidate(
+            RetrievalDocumentReference reference,
+            double bestScore,
+            int chunkCount
+    ) {
+
+        /**
+         * 合并同一文件下的引用候选
+         *
+         * @param other 同一 documentId 的其他候选
+         * @return 合并后的文件级引用候选
+         */
+        private ReferenceCandidate merge(ReferenceCandidate other) {
+            // 引用展示只需要一个文件入口，因此保留首次出现的 reference
+            // 分数取最高值，命中数累加，用于后续引用准入和排序
+            return new ReferenceCandidate(reference, Math.max(bestScore, other.bestScore),
+                    chunkCount + other.chunkCount);
+        }
     }
 }

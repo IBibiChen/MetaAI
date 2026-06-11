@@ -56,6 +56,11 @@ public class MetaRetrievalProperties {
     private final Search search = new Search();
 
     /**
+     * 前端引用展示配置
+     */
+    private final Reference reference = new Reference();
+
+    /**
      * 异步文档索引执行状态配置
      */
     private final Indexing indexing = new Indexing();
@@ -260,6 +265,23 @@ public class MetaRetrievalProperties {
         private boolean rerankEnabled = false;
 
         /**
+         * 最终进入上下文的最低可信分
+         *
+         * <p>
+         * 分数低于该值的 chunk 不进入 prompt
+         * 向量库未返回 score 时保守放行，避免不同 VectorStore 实现导致上下文被误清空
+         */
+        private double minContextScore = 0.0;
+
+        /**
+         * 单个文档最多进入上下文的 chunk 数
+         *
+         * <p>
+         * 避免单个文档或多个弱相关文档占满上下文名额
+         */
+        private int maxChunksPerDocument = 2;
+
+        /**
          * 最终进入上下文的最大文档数
          */
         private int maxContextDocuments = 5;
@@ -268,6 +290,33 @@ public class MetaRetrievalProperties {
          * 最终进入上下文的最大字符数
          */
         private int maxContextChars = 12000;
+    }
+
+    @Getter
+    @Setter
+    public static class Reference {
+
+        /**
+         * 普通响应展示引用的最低可信分
+         *
+         * <p>
+         * references 面向用户展示，应比 prompt 上下文更严格
+         * details 接口不受该阈值影响，仍然返回完整 chunk 便于排查
+         */
+        private double minReferenceScore = 0.7;
+
+        /**
+         * 普通响应最多展示的引用文件数
+         */
+        private int maxReferences = 3;
+
+        /**
+         * 单个文件至少命中的 chunk 数
+         *
+         * <p>
+         * 默认 1 表示命中一个高可信 chunk 即可展示为引用
+         */
+        private int minChunksPerReference = 1;
     }
 
     @Getter

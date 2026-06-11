@@ -1216,7 +1216,9 @@ async function loadScopeDocuments() {
 }
 
 function scopeDocumentLabel(document: StorageDocument) {
-  const type = document.documentType ? ` · ${formatDocumentType(document.documentType)}` : ''
+  const type = shouldAppendDocumentType(document.originalFilename, document.documentType)
+      ? ` · ${formatDocumentType(document.documentType || '')}`
+      : ''
   return `${document.originalFilename}${type}`
 }
 
@@ -1547,25 +1549,25 @@ function chatFileStatus(status: MetaChatFileParseStatus): ChatFileItemStatus {
  * @return 鼠标悬停提示
  */
 function fileDisplayTitle(file: ChatFileItem) {
-  const type = shouldShowDocumentType(file) ? ` · ${file.documentType}` : ''
+  const type = shouldAppendDocumentType(file.fileName, file.documentType) ? ` · ${file.documentType}` : ''
   return `${file.fileName}${type} · ${fileStatusText(file)}`
 }
 
 /**
- * 判断悬浮提示是否需要补充文档类型
+ * 判断文件名后是否需要补充文档类型
  *
  * <p>
  * 文件名已经包含同名扩展名时不重复展示 documentType，避免出现 file.docx · docx
  *
- * @param file 文件展示项
+ * @param filename 文件名
+ * @param documentType 文档类型
  * @return true 表示需要追加文档类型
  */
-function shouldShowDocumentType(file: ChatFileItem) {
-  const documentType = file.documentType?.trim()
-  if (!documentType) return false
-  const normalizedType = documentType.replace(/^\./, '').toLowerCase()
+function shouldAppendDocumentType(filename: string, documentType?: string | null) {
+  const normalizedType = documentType?.trim().replace(/^\./, '').toLowerCase()
   if (!normalizedType) return false
-  return !file.fileName.toLowerCase().endsWith(`.${normalizedType}`)
+  // originalFilename 和 fileName 通常已经带完整后缀，这种情况下再拼类型只会制造重复噪音
+  return !filename.toLowerCase().endsWith(`.${normalizedType}`)
 }
 
 /**

@@ -59,4 +59,57 @@ class DefaultDocumentPostProcessorTest {
 
         assertThat(processed).containsExactlyElementsOf(documents);
     }
+
+    /**
+     * 检索后处理应过滤低分 chunk 并按文件最高分聚合排序
+     */
+    @Test
+    void shouldFilterLowScoreAndGroupByDocument() {
+        MetaRetrievalProperties.PostProcessor properties = new MetaRetrievalProperties.PostProcessor();
+        properties.setMinContextScore(0.68);
+        properties.setMaxChunksPerDocument(1);
+        properties.setMaxContextDocuments(3);
+        DefaultDocumentPostProcessor processor = new DefaultDocumentPostProcessor(properties);
+
+        List<Document> documents = List.of(
+                document("doc-a-low", "doc-a", "doc-a:0", 0.60),
+                document("doc-a-high", "doc-a", "doc-a:1", 0.82),
+                document("doc-b-best", "doc-b", "doc-b:0", 0.91),
+                document("doc-b-second", "doc-b", "doc-b:1", 0.89),
+                document("doc-c", "doc-c", "doc-c:0", 0.70));
+
+        List<Document> processed = processor.process(new Query("query"), documents);
+
+        assertThat(processed)
+                .extracting(Document::getText)
+                .containsExactly("doc-b-best", "doc-a-high", "doc-c");
+    }
+
+    /**
+     * 缺少 score 的候选应保守保留，兼容不返回分数的 VectorStore 实现
+     */
+    @Test
+    void shouldKeepDocumentWithoutScoreWhenFilteringByScore() {
+        MetaRetrievalProperties.PostProcessor properties = new MetaRetrievalProperties.PostProcessor();
+        properties.setMinContextScore(0.68);
+        properties.setMaxContextDocuments(2);
+        DefaultDocumentPostProcessor processor = new DefaultDocumentPostProcessor(properties);
+
+        Document document = Document.builder()
+                .text("no-score")
+                .metadata(Map.of(MetadataKeys.DOCUMENT_ID, "doc-a", MetadataKeys.CHUNK_ID, "doc-a:0"))
+                .build();
+
+        List<Document> processed = processor.process(new Query("query"), List.of(document));
+
+        assertThat(processed).containsExactly(document);
+    }
+
+    private Document document(String text, String documentId, String chunkId, double score) {
+        return Document.builder()
+                .text(text)
+                .metadata(Map.of(MetadataKeys.DOCUMENT_ID, documentId, MetadataKeys.CHUNK_ID, chunkId))
+                .score(score)
+                .build();
+    }
 }

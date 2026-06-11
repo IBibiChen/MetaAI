@@ -36,7 +36,7 @@ class RetrievalResponseAssemblerTest {
     void chatShouldReturnDeduplicatedDocumentReferences() {
         ChatClientResponse response = response(document("chunk-1", "doc1", "demo.docx"),
                 document("chunk-2", "doc1", "demo.docx"),
-                document("chunk-3", "doc2", "demo.docx"));
+                document("chunk-3", "doc2", "other.docx"));
 
         RetrievalChatResponse chatResponse = assembler.chat(response, "c1");
 
@@ -44,7 +44,7 @@ class RetrievalResponseAssemblerTest {
         assertThat(chatResponse.chatId()).isEqualTo("c1");
         assertThat(chatResponse.references()).containsExactly(
                 new RetrievalDocumentReference("doc1", "demo.docx"),
-                new RetrievalDocumentReference("doc2", "demo.docx"));
+                new RetrievalDocumentReference("doc2", "other.docx"));
     }
 
     @Test
@@ -93,6 +93,32 @@ class RetrievalResponseAssemblerTest {
         assertThat(detailsResponse.trace()).isNotNull();
     }
 
+    /**
+     * 普通 references 应过滤低可信文件，避免弱相关文档出现在用户可见引用区
+     */
+    @Test
+    void chatShouldSkipLowScoreDocumentReferences() {
+        ChatClientResponse response = response(document("high", "doc1", "demo.docx", 0.91),
+                document("low", "doc2", "noise.docx", 0.62));
+
+        RetrievalChatResponse chatResponse = assembler.chat(response, "c1");
+
+        assertThat(chatResponse.references()).containsExactly(new RetrievalDocumentReference("doc1", "demo.docx"));
+    }
+
+    /**
+     * details 接口不应受普通引用阈值影响，必须保留完整 chunk 便于排查召回质量
+     */
+    @Test
+    void detailsShouldKeepLowScoreChunkReferences() {
+        ChatClientResponse response = response(document("low", "doc2", "noise.docx", 0.62));
+
+        RetrievalChatDetailsResponse detailsResponse = assembler.details(response, "c1");
+
+        assertThat(detailsResponse.references()).hasSize(1);
+        assertThat(detailsResponse.references().get(0).metadata()).containsEntry(MetadataKeys.DOCUMENT_ID, "doc2");
+    }
+
     @Test
     void chatWithoutReferencesShouldReturnEmptyReferences() {
         ChatClientResponse response = response(document("chunk-1", "doc1", "demo.docx"));
@@ -137,6 +163,10 @@ class RetrievalResponseAssemblerTest {
     }
 
     private Document document(String text, String documentId, String filename) {
+        return document(text, documentId, filename, 0.9);
+    }
+
+    private Document document(String text, String documentId, String filename, double score) {
         return Document.builder()
                 .text(text)
                 .metadata(Map.of(MetadataKeys.SCOPE, MetadataKeys.SCOPE_KNOWLEDGE,
@@ -145,7 +175,7 @@ class RetrievalResponseAssemblerTest {
                         MetadataKeys.DOCUMENT_ID, documentId,
                         MetadataKeys.DOCUMENT_NAME, filename,
                         MetadataKeys.SOURCE, "storage/t1/kb1/%s".formatted(filename)))
-                .score(0.9)
+                .score(score)
                 .build();
     }
 }
