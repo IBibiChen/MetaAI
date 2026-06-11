@@ -103,6 +103,22 @@
             </template>
             新建对话
           </n-button>
+          <n-switch
+              v-model:value="segmentedStreamMode"
+              class="stream-mode-switch"
+              size="small"
+              :disabled="sending"
+              :round="false"
+              :rail-style="streamSwitchRailStyle"
+              :style="streamSwitchCssVars"
+          >
+            <template #checked>
+              整段出
+            </template>
+            <template #unchecked>
+              打字机
+            </template>
+          </n-switch>
           <n-button size="small" tertiary @click="openRetrievalScope">
             <template #icon>
               <n-icon>
@@ -353,7 +369,7 @@
           附件
         </n-button>
         <n-button
-            v-if="sending"
+            v-if="sending && streamEnabled"
             class="composer-button streaming-stop-button"
             type="warning"
             secondary
@@ -500,6 +516,8 @@ import {
   fetchChatHistoryByChatId,
   fetchChats,
   renameChat,
+  sendPlainChatJson,
+  sendRagChatJson,
   streamPlainChatJson,
   streamRagChatJson,
   updateChatFlags,
@@ -584,6 +602,7 @@ const chatListLoading = ref(false)
 const advancedVisible = ref(false)
 const scopeDocumentsLoading = ref(false)
 const scopeDocuments = ref<StorageDocument[]>([])
+const streamEnabled = ref(true)
 const chatMode = ref<'plain' | 'rag'>('rag')
 const renameModalVisible = ref(false)
 const renameSubmitting = ref(false)
@@ -711,6 +730,44 @@ const selectedReadyFileCount = computed(() => selectedReadyChatFiles().length)
 const showRagContextScope = computed(() => chatMode.value === 'rag' && selectedReadyFileCount.value > 0)
 const canSend = computed(() => Boolean(draft.value.trim()) && !sending.value && !fileContextBusy.value)
 const sendButtonText = computed(() => fileContextBusy.value ? '处理中' : '发送')
+const segmentedStreamMode = computed({
+  get: () => !streamEnabled.value,
+  set: (value: boolean) => {
+    streamEnabled.value = !value
+  },
+})
+const streamSwitchCssVars = {
+  '--n-width': '72px',
+  '--n-rail-width': '72px',
+  '--n-rail-height': '28px',
+  '--n-button-width': '22px',
+  '--n-button-width-pressed': '26px',
+  '--n-button-height': '22px',
+  '--n-height': '28px',
+  '--n-offset': '3px',
+  '--n-button-border-radius': '6px',
+  '--n-rail-border-radius': '7px',
+}
+
+/**
+ * 流式开关轨道样式
+ *
+ * <p>
+ * Naive UI railStyle 只负责轨道颜色，内部文案保持等长以避免视觉偏移
+ *
+ * @param checked 是否选中右侧整段出模式
+ * @return 开关轨道样式
+ */
+function streamSwitchRailStyle({checked}: { checked: boolean }) {
+  const streamMode = !checked
+  return {
+    background: streamMode ? 'rgba(20, 184, 166, 0.34)' : 'rgba(59, 130, 246, 0.30)',
+    boxShadow: streamMode
+        ? 'inset 0 0 0 1px rgba(45, 212, 191, 0.34)'
+        : 'inset 0 0 0 1px rgba(96, 165, 250, 0.34)',
+  }
+}
+
 let stopActiveTyping: (() => void) | null = null
 let activeTypingRenderer: TypingRenderer | null = null
 let activeStream: ChatStreamHandle | null = null
@@ -777,8 +834,8 @@ watch(showRagContextScope, async (visible) => {
  * 发送消息
  *
  * <p>
- * 普通聊天调用 /v1/chat 并通过 stream=true 开启流式
- * RAG 聊天调用 /v1/rag 并通过 stream=true 开启流式，同时展示文件引用
+ * 普通聊天和知识问答都由 streamEnabled 统一控制流式或非流式
+ * 流式请求使用 SSE 增量返回，非流式请求等待一次性响应
  */
 async function sendMessage() {
   const content = draft.value.trim()
@@ -856,13 +913,97 @@ async function sendMessageContent(content: string) {
   }
 
   const selectedFileIds = selectedFiles.map((file) => file.fileId)
-  if (chatMode.value === 'plain') {
-    activeStream = streamPlainChatJson(chatOptions(content, selectedFileIds.length), selectedFileIds, handlers)
+  const options = chatOptions(content, selectedFileIds.length)
+  if (streamEnabled.value) {
+    sendStreamingMessage(options, selectedFileIds, handlers)
   } else {
-    activeStream = streamRagChatJson(chatOptions(content, selectedFileIds.length), selectedFileIds, handlers)
+    await sendNonStreamingMessage(options, selectedFileIds, assistantMessage, typingRenderer, failSend)
   }
   selectedChatFileIds.value = []
   resetRagContextScope()
+}
+
+/**
+ * 发送流式消息
+ *
+ * <p>
+ * 流式模式保留当前 SSE 行为，普通聊天和知识问答只切换接口路径
+ *
+ * @param options 请求参数
+ * @param selectedFileIds 本轮显式选择的会话文件 ID
+ * @param handlers SSE 事件处理器
+ */
+function sendStreamingMessage(options: ChatOptions, selectedFileIds: string[], handlers: Parameters<typeof streamPlainChatJson>[2]) {
+  if (chatMode.value === 'plain') {
+    activeStream = streamPlainChatJson(options, selectedFileIds, handlers)
+  } else {
+    activeStream = streamRagChatJson(options, selectedFileIds, handlers)
+  }
+}
+
+/**
+ * 发送非流式消息
+ *
+ * <p>
+ * 非流式模式不创建 SSE 连接，后端返回完整 answer 后仍交给 typing renderer 统一收尾
+ *
+ * @param options 请求参数
+ * @param selectedFileIds 本轮显式选择的会话文件 ID
+ * @param assistantMessage 助手消息对象
+ * @param typingRenderer 打字渲染器
+ * @param failSend 失败处理函数
+ */
+async function sendNonStreamingMessage(options: ChatOptions,
+                                       selectedFileIds: string[],
+                                       assistantMessage: ChatMessage,
+                                       typingRenderer: TypingRenderer,
+                                       failSend: (errorMessage: string) => void) {
+  try {
+    const response = chatMode.value === 'plain'
+        ? await sendPlainNonStreamingMessage(options, selectedFileIds, assistantMessage)
+        : await sendRagNonStreamingMessage(options, selectedFileIds, assistantMessage)
+    if (streamStoppedByUser) return
+    if (response.chatId) {
+      workspace.setChatId(response.chatId)
+    }
+    typingRenderer.complete(response.answer)
+  } catch (error) {
+    typingRenderer.stop()
+    failSend(error instanceof Error ? error.message : '发送失败')
+  }
+}
+
+/**
+ * 发送普通非流式聊天
+ *
+ * @param options 请求参数
+ * @param selectedFileIds 本轮显式选择的会话文件 ID
+ * @param assistantMessage 助手消息对象
+ * @return 普通聊天响应
+ */
+async function sendPlainNonStreamingMessage(options: ChatOptions,
+                                            selectedFileIds: string[],
+                                            assistantMessage: ChatMessage) {
+  const response = await sendPlainChatJson(options, selectedFileIds)
+  assistantMessage.files = response.files
+  return response
+}
+
+/**
+ * 发送 RAG 非流式聊天
+ *
+ * @param options 请求参数
+ * @param selectedFileIds 本轮显式选择的会话文件 ID
+ * @param assistantMessage 助手消息对象
+ * @return 知识问答响应
+ */
+async function sendRagNonStreamingMessage(options: ChatOptions,
+                                          selectedFileIds: string[],
+                                          assistantMessage: ChatMessage) {
+  const response = await sendRagChatJson(options, selectedFileIds)
+  assistantMessage.references = response.references
+  assistantMessage.files = response.files
+  return response
 }
 
 function chatOptions(content: string, selectedFileCount: number): ChatOptions {
@@ -2326,7 +2467,34 @@ async function downloadReference(reference: RetrievalDocumentReference) {
 
 .chat-actions {
   display: flex;
+  align-items: center;
   gap: 8px;
+}
+
+.stream-mode-switch {
+  flex: none;
+}
+
+.stream-mode-switch :deep(.n-switch__rail) {
+  border-radius: 7px;
+}
+
+.stream-mode-switch :deep(.n-switch__checked),
+.stream-mode-switch :deep(.n-switch__unchecked) {
+  color: #dce5f0;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  text-shadow: none;
+}
+
+.stream-mode-switch :deep(.n-switch__unchecked) {
+  color: #dce5f0;
+}
+
+.stream-mode-switch :deep(.n-switch__button) {
+  border-radius: 6px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.24);
 }
 
 .mobile-new-session {
