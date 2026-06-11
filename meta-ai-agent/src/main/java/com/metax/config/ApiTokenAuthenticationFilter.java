@@ -7,6 +7,8 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.server.PathContainer;
 import org.springframework.http.HttpStatus;
@@ -27,13 +29,15 @@ import java.util.List;
  *
  * <p>
  * 开发期轻量 API Key 鉴权过滤器
- * API Key 通过 metax.ai.security.api-key 配置，默认值只用于本地开发
+ * API Key 通过 metax.ai.security.api-token 配置，默认值只用于本地开发
+ * 执行顺序晚于访问日志 Filter，确保未授权请求也能写入访问审计日志
  *
  * @author IBibiChen
  * @version v1.0
  * @since 2026/6/9
  */
 @Component
+@Order(Ordered.HIGHEST_PRECEDENCE + 20)
 public class ApiTokenAuthenticationFilter extends OncePerRequestFilter {
 
     /**
@@ -62,6 +66,12 @@ public class ApiTokenAuthenticationFilter extends OncePerRequestFilter {
      */
     private final String apiKey;
 
+    /**
+     * JSON 序列化组件
+     *
+     * <p>
+     * 用于直接在 Filter 短路链路中写出统一未授权响应
+     */
     private final ObjectMapper objectMapper;
 
     /**
@@ -70,7 +80,7 @@ public class ApiTokenAuthenticationFilter extends OncePerRequestFilter {
      * @param apiKey       开发期 API Key
      * @param objectMapper JSON 序列化组件
      */
-    public ApiTokenAuthenticationFilter(@Value("${metax.ai.security.api-key:sk-metax-123456}") String apiKey,
+    public ApiTokenAuthenticationFilter(@Value("${metax.ai.security.api-token:sk-metax-123456}") String apiKey,
                                         ObjectMapper objectMapper) {
         this.apiKey = apiKey;
         this.objectMapper = objectMapper;
@@ -97,9 +107,11 @@ public class ApiTokenAuthenticationFilter extends OncePerRequestFilter {
         // 前端 POST JSON 和文件上传统一使用 Bearer API Key，GET 协议保持原生 EventSource 能力
         String actualApiKey = resolveApiKey(request);
         if (!apiKey.equals(actualApiKey)) {
+            // 未授权请求在 Filter 层直接短路，避免进入 Controller 和后续业务链路
             writeUnauthorized(response);
             return;
         }
+        // 凭证匹配后继续执行 Controller 或后续 Filter
         filterChain.doFilter(request, response);
     }
 

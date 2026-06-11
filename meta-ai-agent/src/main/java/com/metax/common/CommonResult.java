@@ -1,5 +1,6 @@
 package com.metax.common;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -45,7 +46,8 @@ public class CommonResult<T> {
     /**
      * 响应时间戳
      */
-    @Schema(description = "响应时间戳", example = "2026-06-03T11:30:00")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss.SSSSSSSSS", timezone = "GMT+8")
+    @Schema(description = "响应时间戳", example = "2026-06-11 16:21:19.176001900")
     private LocalDateTime timestamp;
 
     /**
