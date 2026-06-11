@@ -65,4 +65,16 @@ public interface StorageDocumentService extends IService<StorageDocumentDO> {
      * @return 更新后的文档元数据
      */
     StorageDocumentDO index(String tenantId, String kbId, String documentId);
+
+    /**
+     * 删除对象存储文档
+     *
+     * <p>
+     * 删除会同步移除知识库向量索引，并软删除元数据
+     *
+     * @param tenantId   租户 ID
+     * @param kbId       知识库 ID
+     * @param documentId 文档 ID
+     */
+    void delete(String tenantId, String kbId, String documentId);
 }

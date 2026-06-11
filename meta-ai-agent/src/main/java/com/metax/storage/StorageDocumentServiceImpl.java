@@ -10,6 +10,8 @@ import com.metax.rag.indexing.DocumentIndexingRequest;
 import com.metax.rag.indexing.DocumentIndexingRun;
 import com.metax.rag.indexing.DocumentIndexingService;
 import com.metax.rag.model.DocumentVisibility;
+import com.metax.rag.model.MetadataKeys;
+import com.metax.rag.pipeline.MetaVectorStoreWriter;
 import com.metax.rag.storage.ObjectStorageClient;
 import com.metax.rag.storage.StoredObject;
 import com.metax.storage.request.StorageDocumentPageRequest;
@@ -17,6 +19,8 @@ import com.metax.storage.request.StorageDocumentUploadRequest;
 import com.metax.storage.response.StorageDocumentDownloadResponse;
 import com.metax.storage.response.StorageDocumentUploadResponse;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.vectorstore.filter.Filter;
+import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.Assert;
@@ -92,6 +96,14 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
     private final DocumentIndexingService documentIndexingService;
 
     /**
+     * 向量库写入器
+     *
+     * <p>
+     * 删除知识库文件时必须同步删除对应 chunk，避免已删除文档继续被 RAG 召回
+     */
+    private final MetaVectorStoreWriter vectorStoreWriter;
+
+    /**
      * Meta Retrieval 配置属性
      *
      * <p>
@@ -109,10 +121,12 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
 
     public StorageDocumentServiceImpl(ObjectStorageClient objectStorageClient,
                                       DocumentIndexingService documentIndexingService,
+                                      MetaVectorStoreWriter vectorStoreWriter,
                                       MetaRetrievalProperties retrievalProperties,
                                       MetaDocumentTypeResolver documentTypeResolver) {
         this.objectStorageClient = objectStorageClient;
         this.documentIndexingService = documentIndexingService;
+        this.vectorStoreWriter = vectorStoreWriter;
         this.retrievalProperties = retrievalProperties;
         this.documentTypeResolver = documentTypeResolver;
     }
@@ -271,6 +285,42 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
     }
 
     /**
+     * 删除对象存储文档
+     *
+     * <p>
+     * 删除必须先移除向量库 chunk，再软删除元数据，避免列表不可见但 RAG 仍能召回旧内容
+     *
+     * @param tenantId   租户 ID
+     * @param kbId       知识库 ID
+     * @param documentId 文档 ID
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void delete(String tenantId, String kbId, String documentId) {
+        StorageDocumentDO entity = getByDocumentId(tenantId, kbId, documentId);
+        if (StorageDocumentIndexStatus.INDEXING.name().equals(entity.getIndexStatus())) {
+            throw new IllegalStateException("文档正在索引中，稍后再删除");
+        }
+
+        // 向量索引是 RAG 是否还能召回该文档的关键状态，必须在元数据隐藏前先清理成功
+        vectorStoreWriter.delete(documentDeleteFilter(entity));
+
+        Instant now = Instant.now();
+        entity.setDeleted(Boolean.TRUE);
+        entity.setEnabled(Boolean.FALSE);
+        entity.setUpdatedAt(now);
+        updateById(entity);
+
+        // 对象存储清理不影响检索一致性，失败时只记录日志，避免用户看到删除失败但文档已不可召回
+        try {
+            objectStorageClient.deleteObject(entity.getBucket(), entity.getObjectKey());
+        } catch (RuntimeException ex) {
+            log.warn("对象存储文档原文件删除失败：documentId = {}，bucket = {}，objectKey = {}",
+                    entity.getDocumentId(), entity.getBucket(), entity.getObjectKey(), ex);
+        }
+    }
+
+    /**
      * 提交已保存文档的索引执行
      *
      * <p>
@@ -340,6 +390,26 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
             // 这里只同步状态，不修改 chunkCount，chunkCount 由 StorageDocumentIndexingRunObserver 统一处理
             updateById(entity);
         }
+    }
+
+    /**
+     * 构造知识库文档向量删除过滤表达式
+     *
+     * <p>
+     * 删除范围必须包含 scope、tenantId、kbId 和 documentId，避免误删会话附件或其他知识库 chunk
+     *
+     * @param entity 文档元数据
+     * @return 向量库删除过滤表达式
+     */
+    private Filter.Expression documentDeleteFilter(StorageDocumentDO entity) {
+        FilterExpressionBuilder builder = new FilterExpressionBuilder();
+        return builder.and(
+                builder.and(
+                        builder.eq(MetadataKeys.SCOPE, MetadataKeys.SCOPE_KNOWLEDGE),
+                        builder.and(builder.eq(MetadataKeys.TENANT_ID, entity.getTenantId()),
+                                builder.eq(MetadataKeys.KB_ID, entity.getKbId()))),
+                builder.eq(MetadataKeys.DOCUMENT_ID, entity.getDocumentId())
+        ).build();
     }
 
     /**

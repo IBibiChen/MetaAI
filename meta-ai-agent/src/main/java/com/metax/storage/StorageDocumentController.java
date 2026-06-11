@@ -25,6 +25,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.util.StringUtils;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -165,5 +166,26 @@ public class StorageDocumentController {
 
         return CommonResult.success(storageDocumentService.index(request.getTenantId(), request.getKbId(),
                 documentId));
+    }
+
+    /**
+     * 删除对象存储文档
+     *
+     * <p>
+     * 删除会同步移除知识库向量索引，并软删除文档元数据
+     *
+     * @param request    范围参数
+     * @param documentId 文档 ID
+     * @return 成功响应
+     */
+    @DeleteMapping(value = "/v1/storage/documents/{documentId}")
+    @Operation(summary = "删除对象存储文档", description = "删除知识库文档向量索引，软删除元数据，并尽力清理对象存储原文件")
+    public CommonResult<Void> delete(
+            @Valid @ParameterObject StorageDocumentScopeRequest request,
+            @Parameter(description = "文档 ID", example = "1938200000000000001", required = true, in = ParameterIn.PATH)
+            @NotBlank(message = "documentId 不能为空") @PathVariable String documentId) {
+
+        storageDocumentService.delete(request.getTenantId(), request.getKbId(), documentId);
+        return CommonResult.success();
     }
 }

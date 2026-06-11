@@ -108,6 +108,25 @@ export async function indexDocument(tenantId: string, kbId: string, documentId: 
 }
 
 /**
+ * 删除知识库文件
+ *
+ * <p>
+ * 后端会同步删除向量索引并软删除文件元数据
+ */
+export async function deleteDocument(tenantId: string, kbId: string, documentId: string) {
+    const response = await request.delete<CommonResult<void>>(
+        `/v1/storage/documents/${encodeURIComponent(documentId)}`,
+        {
+            params: {
+                tenantId,
+                kbId,
+            },
+        },
+    )
+    return unwrapResult(response.data)
+}
+
+/**
  * 下载知识库文件
  *
  * <p>

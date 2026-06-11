@@ -5,6 +5,7 @@ import com.metax.rag.etl.resource.MetaDocumentTypeResolver;
 import com.metax.rag.indexing.DocumentIndexingRequest;
 import com.metax.rag.indexing.DocumentIndexingRun;
 import com.metax.rag.indexing.DocumentIndexingService;
+import com.metax.rag.pipeline.MetaVectorStoreWriter;
 import com.metax.rag.storage.ObjectStorageClient;
 import com.metax.rag.storage.StoredObject;
 import com.metax.storage.request.StorageDocumentUploadRequest;
@@ -26,6 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -48,13 +50,16 @@ class StorageDocumentServiceTest {
     @Mock
     private DocumentIndexingService documentIndexingService;
 
+    @Mock
+    private MetaVectorStoreWriter vectorStoreWriter;
+
     private FakeStorageDocumentService service;
 
     @BeforeEach
     void setUp() {
         MetaRetrievalProperties properties = new MetaRetrievalProperties();
-        service = new FakeStorageDocumentService(objectStorageClient, documentIndexingService, properties,
-                new MetaDocumentTypeResolver());
+        service = new FakeStorageDocumentService(objectStorageClient, documentIndexingService, vectorStoreWriter,
+                properties, new MetaDocumentTypeResolver());
     }
 
     @Test
@@ -138,6 +143,33 @@ class StorageDocumentServiceTest {
                 .hasMessage("storage document not found: doc-1");
     }
 
+    @Test
+    void deleteShouldRemoveVectorStoreMetadataAndObject() {
+        StorageDocumentDO entity = document("doc-1");
+        entity.setIndexStatus(StorageDocumentIndexStatus.INDEXED.name());
+        service.savedEntity = entity;
+
+        service.delete("t1", "kb1", "doc-1");
+
+        verify(vectorStoreWriter).delete(any());
+        verify(objectStorageClient).deleteObject("meta-ai-knowledge", "storage/t1/kb1/demo.txt");
+        assertThat(service.savedEntity.getDeleted()).isTrue();
+        assertThat(service.savedEntity.getEnabled()).isFalse();
+    }
+
+    @Test
+    void deleteShouldRejectIndexingDocument() {
+        StorageDocumentDO entity = document("doc-1");
+        entity.setIndexStatus(StorageDocumentIndexStatus.INDEXING.name());
+        service.savedEntity = entity;
+
+        assertThatThrownBy(() -> service.delete("t1", "kb1", "doc-1"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("文档正在索引中，稍后再删除");
+        verify(vectorStoreWriter, never()).delete(any());
+        verify(objectStorageClient, never()).deleteObject(any(), any());
+    }
+
     private StorageDocumentDO document(String documentId) {
         StorageDocumentDO entity = new StorageDocumentDO();
         entity.setTenantId("t1");
@@ -148,6 +180,7 @@ class StorageDocumentServiceTest {
         entity.setObjectKey("storage/t1/kb1/demo.txt");
         entity.setContentType("text/plain");
         entity.setFileSize(5L);
+        entity.setEnabled(Boolean.TRUE);
         entity.setDeleted(Boolean.FALSE);
         return entity;
     }
@@ -177,9 +210,11 @@ class StorageDocumentServiceTest {
 
         private FakeStorageDocumentService(ObjectStorageClient objectStorageClient,
                                            DocumentIndexingService documentIndexingService,
+                                           MetaVectorStoreWriter vectorStoreWriter,
                                            MetaRetrievalProperties retrievalProperties,
                                            MetaDocumentTypeResolver documentTypeResolver) {
-            super(objectStorageClient, documentIndexingService, retrievalProperties, documentTypeResolver);
+            super(objectStorageClient, documentIndexingService, vectorStoreWriter, retrievalProperties,
+                    documentTypeResolver);
         }
 
         @Override

@@ -9,7 +9,9 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.io.ByteArrayInputStream;
 
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -94,5 +96,21 @@ class StorageDocumentControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith("text/plain"))
                 .andExpect(header().string("Content-Length", "5"));
+    }
+
+    /**
+     * 删除文档应透传租户、知识库和文档 ID
+     *
+     * @throws Exception MVC 调用异常
+     */
+    @Test
+    void shouldDeleteDocumentWithScope() throws Exception {
+        mockMvc.perform(delete("/v1/storage/documents/doc-1")
+                        .param("tenantId", "t1")
+                        .param("kbId", "kb1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(200));
+
+        verify(storageDocumentService).delete("t1", "kb1", "doc-1");
     }
 }

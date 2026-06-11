@@ -171,6 +171,25 @@
         </div>
       </template>
     </n-modal>
+
+    <n-modal
+        v-model:show="deleteDialogVisible"
+        preset="dialog"
+        type="warning"
+        title="删除文件"
+        positive-text="删除"
+        negative-text="取消"
+        :positive-button-props="{ type: 'error', loading: deleting, disabled: deleting }"
+        :negative-button-props="{ disabled: deleting }"
+        @positive-click="submitDelete"
+        @negative-click="deleteDialogVisible = false"
+        @after-leave="resetDeleteDialog"
+    >
+      <div class="delete-dialog-content">
+        <p>删除后文件会从列表和检索索引中移除</p>
+        <strong>{{ deletingDocument?.originalFilename }}</strong>
+      </div>
+    </n-modal>
   </div>
 </template>
 
@@ -186,6 +205,7 @@ import {
 import {FileUp} from 'lucide-vue-next'
 
 import {
+  deleteDocument,
   downloadDocument,
   fetchStorageDocuments,
   indexDocument,
@@ -202,6 +222,9 @@ const total = ref(0)
 const uploadPanelVisible = ref(false)
 const uploadDialogVisible = ref(false)
 const uploading = ref(false)
+const deleteDialogVisible = ref(false)
+const deleting = ref(false)
+const deletingDocument = ref<StorageDocument | null>(null)
 const uploadFileInput = ref<HTMLInputElement | null>(null)
 const selectedUploadFile = ref<File | null>(null)
 const uploadAccept = '.doc,.docx,.pdf,.txt,.md,.json,.csv,.xlsx,.xls'
@@ -351,7 +374,7 @@ const columns: DataTableColumns<StorageDocument> = [
         h(NSpace, {size: 8, wrap: false, justify: 'center'}, () => [
           actionButton('下载', 'download', () => handleDownload(row)),
           actionButton('索引', 'index', () => handleIndex(row)),
-          actionButton('删除', 'delete', undefined, true),
+          actionButton('删除', 'delete', () => openDeleteDialog(row), deletingDocument.value?.documentId === row.documentId && deleting.value),
         ]),
   },
 ]
@@ -517,6 +540,53 @@ async function handleIndex(row: StorageDocument) {
   } catch (error) {
     message.error(error instanceof Error ? error.message : '索引提交失败')
   }
+}
+
+/**
+ * 打开删除确认弹窗
+ *
+ * <p>
+ * 删除会影响元数据、向量索引和对象存储原文件，必须由用户二次确认
+ */
+function openDeleteDialog(row: StorageDocument) {
+  deletingDocument.value = row
+  deleteDialogVisible.value = true
+}
+
+/**
+ * 提交删除知识库文件
+ *
+ * <p>
+ * 后端删除成功后当前页可能变空，需要回退到上一页再重新加载
+ */
+async function submitDelete() {
+  const document = deletingDocument.value
+  if (!document) return false
+
+  deleting.value = true
+  try {
+    await deleteDocument(workspace.tenantId, workspace.kbId, document.documentId)
+    message.success('删除成功')
+    deleteDialogVisible.value = false
+    if (documents.value.length === 1 && query.current > 1) {
+      query.current -= 1
+    }
+    await loadDocuments()
+    return true
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '删除失败')
+    return false
+  } finally {
+    deleting.value = false
+  }
+}
+
+/**
+ * 重置删除确认弹窗状态
+ */
+function resetDeleteDialog() {
+  if (deleting.value) return
+  deletingDocument.value = null
 }
 
 /**
@@ -773,6 +843,23 @@ function formatDate(value: string) {
 
 .upload-dialog-actions :deep(.n-button) {
   min-width: 84px;
+}
+
+.delete-dialog-content {
+  display: grid;
+  gap: 8px;
+}
+
+.delete-dialog-content p {
+  margin: 0;
+  color: #a9bad0;
+}
+
+.delete-dialog-content strong {
+  overflow: hidden;
+  color: #f4f7fb;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @media (max-width: 720px) {
