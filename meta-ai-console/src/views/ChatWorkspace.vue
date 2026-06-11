@@ -310,10 +310,20 @@
           </div>
           <div v-if="showRagContextScope" class="context-scope-row">
             <span class="context-scope-label">回答范围</span>
-            <n-radio-group v-model:value="ragContextScope" class="context-scope-toggle" size="small">
-              <n-radio-button value="FILES_ONLY">附件</n-radio-button>
-              <n-radio-button value="FILES_AND_KNOWLEDGE">附件 + 知识库</n-radio-button>
-            </n-radio-group>
+            <div ref="contextScopeToggleRef" class="context-scope-toggle">
+              <span class="context-scope-pill" :style="contextScopePillStyle" aria-hidden="true"></span>
+              <button
+                  v-for="(option, index) in contextScopeOptions"
+                  :key="option.value"
+                  :ref="(el) => setContextScopeButtonRef(el, index)"
+                  type="button"
+                  :class="['context-scope-option', { active: ragContextScope === option.value }]"
+                  :aria-pressed="ragContextScope === option.value"
+                  @click="selectRagContextScope(option.value)"
+              >
+                {{ option.label }}
+              </button>
+            </div>
           </div>
         </div>
         <n-input
@@ -460,6 +470,7 @@
 import DOMPurify from 'dompurify'
 import MarkdownIt from 'markdown-it'
 import {computed, nextTick, onMounted, onUnmounted, reactive, ref, watch} from 'vue'
+import type {ComponentPublicInstance} from 'vue'
 import {useMessage} from 'naive-ui'
 import {
   Bot,
@@ -547,6 +558,12 @@ const chatFiles = ref<MetaChatFileItem[]>([])
 const pendingChatFilePlaceholders = ref<ChatFileItem[]>([])
 const selectedChatFileIds = ref<string[]>([])
 const ragContextScope = ref<ChatContextScope>('FILES_ONLY')
+const contextScopeToggleRef = ref<HTMLElement | null>(null)
+const contextScopeButtonRefs = ref<(HTMLButtonElement | null)[]>([])
+const contextScopePillStyle = reactive({
+  left: '2px',
+  width: '0px',
+})
 const activeMetaChatId = ref<string | null>(null)
 const draft = ref('')
 const sending = ref(false)
@@ -659,6 +676,10 @@ const ragForm = reactive({
   documentId: null as string | null,
   documentType: null as string | null,
 })
+const contextScopeOptions: Array<{ value: ChatContextScope, label: string }> = [
+  {value: 'FILES_ONLY', label: '附件'},
+  {value: 'FILES_AND_KNOWLEDGE', label: '附件 + 知识库'},
+]
 
 const activeChat = computed(() => chats.value.find((item) => item.id === activeMetaChatId.value) || null)
 const visibleChatFiles = computed<ChatFileItem[]>(() => [
@@ -701,17 +722,20 @@ let thumbDragStartTop = 0
 onMounted(async () => {
   await nextTick()
   setupMessageScrollbar()
+  window.addEventListener('resize', updateContextScopePill)
   await loadChats()
   if (activeMetaChatId.value && messages.value.length === 0) {
     await loadHistory()
     await loadChatFiles()
   }
+  await updateContextScopePill()
 })
 
 onUnmounted(() => {
   stopStreaming()
   stopChatFilePolling()
   teardownMessageScrollbar()
+  window.removeEventListener('resize', updateContextScopePill)
 })
 
 watch(() => workspace.contextVersion, async () => {
@@ -733,6 +757,10 @@ watch(messages, async () => {
   await nextTick()
   updateMessageScrollbar()
 }, {deep: true})
+
+watch([ragContextScope, showRagContextScope], async () => {
+  await updateContextScopePill()
+})
 
 /**
  * 发送消息
@@ -857,6 +885,53 @@ function resolveRequestContextScope(selectedFileCount: number): ChatContextScope
 }
 
 /**
+ * 选择 RAG 附件回答范围
+ *
+ * <p>
+ * 这里只更新前端显式选择，真正请求参数仍由 resolveRequestContextScope 统一解析
+ *
+ * @param value 回答范围
+ */
+function selectRagContextScope(value: ChatContextScope) {
+  ragContextScope.value = value
+}
+
+/**
+ * 保存回答范围按钮 DOM 引用
+ *
+ * <p>
+ * 滑动 pill 需要读取当前选中按钮的位置和宽度
+ *
+ * @param element 按钮元素或组件卸载时的 null
+ * @param index 选项下标
+ */
+function setContextScopeButtonRef(element: Element | ComponentPublicInstance | null, index: number) {
+  contextScopeButtonRefs.value[index] = element instanceof HTMLButtonElement ? element : null
+}
+
+/**
+ * 更新回答范围选中 pill 位置
+ *
+ * <p>
+ * 控件只在有可用附件时渲染，计算前必须等待 DOM 更新
+ */
+async function updateContextScopePill() {
+  await nextTick()
+  const container = contextScopeToggleRef.value
+  const index = contextScopeOptions.findIndex((option) => option.value === ragContextScope.value)
+  const button = contextScopeButtonRefs.value[index]
+  if (!container || !button) {
+    contextScopePillStyle.left = '2px'
+    contextScopePillStyle.width = '0px'
+    return
+  }
+  const containerRect = container.getBoundingClientRect()
+  const buttonRect = button.getBoundingClientRect()
+  contextScopePillStyle.left = `${buttonRect.left - containerRect.left}px`
+  contextScopePillStyle.width = `${buttonRect.width}px`
+}
+
+/**
  * 重置 RAG 附件范围选择
  *
  * <p>
@@ -864,6 +939,7 @@ function resolveRequestContextScope(selectedFileCount: number): ChatContextScope
  */
 function resetRagContextScope() {
   ragContextScope.value = 'FILES_ONLY'
+  void updateContextScopePill()
 }
 
 /**
@@ -2754,108 +2830,97 @@ async function downloadReference(reference: RetrievalDocumentReference) {
 
 .composer-context-row {
   grid-column: 1 / -1;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px 14px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 86px 92px;
+  align-items: center;
+  gap: 10px 12px;
 }
 
 .context-scope-row {
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
-  margin-left: auto;
-  padding-top: 1px;
+  grid-column: 2 / 4;
+  justify-self: stretch;
+  box-sizing: border-box;
+  gap: 4px;
+  width: 100%;
+  height: 30px;
+  border: 1px solid rgba(126, 168, 255, 0.18);
+  border-radius: 7px;
+  padding: 2px 4px;
+  background: rgba(21, 27, 42, 0.88);
 }
 
 .context-scope-label {
   display: inline-flex;
   flex: none;
   align-items: center;
-  justify-content: center;
-  width: 78px;
-  height: 30px;
-  border: 1px solid rgba(65, 214, 183, 0.3);
-  border-right: 0;
-  border-radius: 6px 0 0 6px;
+  height: 24px;
+  border-right: 1px solid rgba(126, 168, 255, 0.16);
+  padding: 0 5px;
   color: #e7fff8;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 800;
-  line-height: 30px;
+  line-height: 24px;
   text-shadow: 0 0 14px rgba(65, 214, 183, 0.12);
-  background: rgba(65, 214, 183, 0.1);
 }
 
 .context-scope-toggle {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  height: 30px;
-  min-height: 30px;
-  border: 1px solid rgba(65, 214, 183, 0.3);
-  border-radius: 0 6px 6px 0;
-  overflow: hidden;
-  background: rgba(15, 23, 42, 0.42);
+  height: 26px;
+  min-height: 26px;
+  border: 0;
+  border-radius: 0;
+  padding: 2px;
+  overflow: visible;
+  background: transparent;
 }
 
-.context-scope-toggle :deep(.n-radio-button) {
-  --n-button-border-color: transparent !important;
-  --n-button-border-color-active: transparent !important;
-  --n-button-border-color-hover: transparent !important;
-  --n-button-box-shadow-focus: 0 0 0 2px rgba(45, 212, 191, 0.12) !important;
-  --n-button-color: transparent !important;
-  --n-button-color-active: rgba(65, 214, 183, 0.18) !important;
-  --n-button-color-hover: rgba(65, 214, 183, 0.08) !important;
-  --n-button-text-color: #a9bac8 !important;
-  --n-button-text-color-active: #d7fff7 !important;
-  display: inline-flex !important;
-  flex: 0 0 94px;
+.context-scope-pill {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 2px;
+  z-index: 0;
+  border: 1px solid rgba(20, 184, 166, 0.7);
+  border-radius: 6px;
+  background: rgba(20, 184, 166, 0.18);
+  box-shadow: 0 0 8px rgba(20, 184, 166, 0.15);
+  pointer-events: none;
+  transition: left 0.2s ease-out, width 0.2s ease-out;
+}
+
+.context-scope-option {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 94px;
-  min-width: 94px;
-  height: 30px;
-  border: 0 !important;
-  border-left: 0 !important;
-  border-radius: 0 !important;
-  padding: 0 7px;
-  font-size: 12px;
+  height: 22px;
+  border: 0;
+  border-radius: 6px;
+  padding: 0 5px;
+  font-size: 11px;
   font-weight: 700;
-  line-height: 30px !important;
-  color: #a9bac8;
+  line-height: 22px;
+  color: rgba(255, 255, 255, 0.45);
   background: transparent;
-  box-shadow: none !important;
-}
-
-.context-scope-toggle :deep(.n-radio-button + .n-radio-button) {
-  margin-left: 0 !important;
-  border-left: 0 !important;
-}
-
-.context-scope-toggle :deep(.n-radio-button::before),
-.context-scope-toggle :deep(.n-radio-button::after),
-.context-scope-toggle :deep(.n-radio-button__state-border) {
-  display: none !important;
-  width: 0 !important;
-  border: 0 !important;
-  opacity: 0 !important;
-}
-
-.context-scope-toggle :deep(.n-radio-button__label) {
-  display: block;
-  width: 100%;
-  padding: 0;
-  overflow: hidden;
-  text-align: center;
-  text-overflow: ellipsis;
+  cursor: pointer;
+  user-select: none;
   white-space: nowrap;
-  line-height: 30px;
+  transition: color 0.15s ease;
 }
 
-.context-scope-toggle :deep(.n-radio-button.n-radio-button--checked) {
-  color: #d7fff7;
-  background: rgba(65, 214, 183, 0.24);
-  box-shadow: none !important;
+.context-scope-option.active {
+  color: rgb(94, 234, 212);
+}
+
+.context-scope-option:focus-visible {
+  outline: 2px solid rgba(45, 212, 191, 0.48);
+  outline-offset: 2px;
 }
 
 .composer {
@@ -2873,6 +2938,7 @@ async function downloadReference(reference: RetrievalDocumentReference) {
 
 .chat-file-strip {
   display: flex;
+  grid-column: 1;
   flex: 1 1 520px;
   flex-wrap: wrap;
   min-width: 0;
