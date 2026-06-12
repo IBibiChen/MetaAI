@@ -114,6 +114,41 @@ export const useWorkspaceStore = defineStore('workspace', {
             this.persist()
         },
         /**
+         * 应用 iframe 嵌入上下文
+         *
+         * <p>
+         * 业务系统通过 URL 传入租户、用户和知识库上下文
+         * 上下文变化时创建新的聊天会话，避免沿用其他用户的 chatId
+         *
+         * @param context 嵌入页传入的业务上下文
+         */
+        applyEmbeddedContext(context: {
+            tenantId?: string
+            userId?: string
+            kbId?: string
+            deptIds?: string
+        }) {
+            const nextTenantId = context.tenantId || this.tenantId
+            const nextUserId = context.userId || this.userId
+            const nextKbId = context.kbId || this.kbId
+            const nextDeptIds = context.deptIds ?? this.deptIds
+            const changed = nextTenantId !== this.tenantId
+                || nextUserId !== this.userId
+                || nextKbId !== this.kbId
+                || nextDeptIds !== this.deptIds
+
+            this.tenantId = nextTenantId
+            this.userId = nextUserId
+            this.kbId = nextKbId
+            this.deptIds = nextDeptIds
+
+            if (changed) {
+                this.chatId = createChatId(this.tenantId, this.userId)
+                this.contextVersion += 1
+            }
+            this.persist()
+        },
+        /**
          * 选择已有聊天会话
          *
          * <p>

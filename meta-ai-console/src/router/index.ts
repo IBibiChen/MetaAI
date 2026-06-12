@@ -13,6 +13,14 @@ const router = createRouter({
             component: () => import('@/views/ChatWorkspace.vue'),
         },
         {
+            path: '/embed/chat',
+            name: 'embedded-chat',
+            component: () => import('@/views/EmbeddedChatWorkspace.vue'),
+            meta: {
+                embedded: true,
+            },
+        },
+        {
             path: '/documents',
             name: 'documents',
             component: () => import('@/views/KnowledgeDocuments.vue'),

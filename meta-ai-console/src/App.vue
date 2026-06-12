@@ -1,8 +1,9 @@
 <template>
-  <n-config-provider :theme="darkTheme" :theme-overrides="themeOverrides" :locale="zhCN" :date-locale="dateZhCN">
+  <n-config-provider :theme="appTheme" :theme-overrides="themeOverrides" :locale="zhCN" :date-locale="dateZhCN">
     <n-message-provider container-class="center-message-container">
       <n-dialog-provider>
-        <n-layout class="app-shell" has-sider>
+        <router-view v-if="embeddedRoute"/>
+        <n-layout v-else class="app-shell" has-sider>
           <n-layout-sider
               bordered
               collapse-mode="width"
@@ -92,6 +93,8 @@ const route = useRoute()
 const router = useRouter()
 const workspace = useWorkspaceStore()
 workspace.persist()
+const embeddedRoute = computed(() => route.meta.embedded === true)
+const appTheme = computed(() => embeddedRoute.value ? null : darkTheme)
 
 function renderIcon(icon: typeof Bot) {
   return () => h(NIcon, null, {default: () => h(icon)})
@@ -117,7 +120,7 @@ function handleNavigate(key: string) {
   router.push(key === 'documents' ? '/documents' : '/chat')
 }
 
-const themeOverrides: GlobalThemeOverrides = {
+const consoleThemeOverrides: GlobalThemeOverrides = {
   common: {
     primaryColor: '#41d6b7',
     primaryColorHover: '#63e6ca',
@@ -128,6 +131,20 @@ const themeOverrides: GlobalThemeOverrides = {
     modalColor: '#151a21',
   },
 }
+
+const embeddedThemeOverrides: GlobalThemeOverrides = {
+  common: {
+    primaryColor: '#2f7df6',
+    primaryColorHover: '#4f94ff',
+    primaryColorPressed: '#1f63d9',
+    borderRadius: '6px',
+    bodyColor: '#f5f8fd',
+    cardColor: '#ffffff',
+    modalColor: '#ffffff',
+  },
+}
+
+const themeOverrides = computed(() => embeddedRoute.value ? embeddedThemeOverrides : consoleThemeOverrides)
 </script>
 
 <style>
