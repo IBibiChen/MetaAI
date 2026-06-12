@@ -15,6 +15,7 @@
         <module>meta-ai-agent</module>
         <module>meta-ai-common</module>
         <module>meta-ai-rag</module>
+        <module>meta-ai-external-adapter</module>
     </modules>
 
     <properties>
