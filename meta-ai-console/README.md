@@ -78,6 +78,30 @@ server: {
 }
 ```
 
+## 实时语音输入
+
+聊天输入区的麦克风按钮通过 FunASR Runtime WebSocket service 进行实时语音转文字
+
+本地默认连接：
+
+```text
+ws://localhost:10096
+```
+
+如需覆盖地址，在前端环境变量中配置：
+
+```env
+VITE_FUNASR_WS_URL=ws://localhost:10096
+```
+
+FunASR 服务镜像和离线部署文档位于：
+
+```text
+docker/FunASR
+```
+
+语音输入只把最终转写文本写入输入框，不会直接写入后端聊天历史。用户仍需点击发送按钮，复用现有普通聊天或 RAG 聊天流程
+
 ## 工作区上下文
 
 顶部输入框维护这几个字段：

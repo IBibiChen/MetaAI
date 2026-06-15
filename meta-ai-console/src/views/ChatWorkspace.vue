@@ -355,6 +355,23 @@
             @keydown.enter="handleEnter"
         />
         <n-button
+            :class="['composer-button', 'voice-button', { recording: voiceRecording }]"
+            secondary
+            circle
+            :loading="voiceConnecting"
+            :disabled="sending || fileContextBusy"
+            :title="voiceButtonTitle"
+            :aria-label="voiceButtonTitle"
+            @click="toggleVoiceInput"
+        >
+          <template #icon>
+            <n-icon>
+              <MicOff v-if="voiceRecording"/>
+              <Mic v-else/>
+            </n-icon>
+          </template>
+        </n-button>
+        <n-button
             class="composer-button attachment-button"
             secondary
             :loading="chatFileUploading"
@@ -499,6 +516,8 @@ import {
   Eraser,
   FileUp,
   ListFilter,
+  Mic,
+  MicOff,
   Pencil,
   Pin,
   RefreshCw,
@@ -590,6 +609,8 @@ const contextScopePillAnimated = ref(false)
 const activeMetaChatId = ref<string | null>(null)
 const draft = ref('')
 const sending = ref(false)
+const voiceRecording = ref(false)
+const voiceConnecting = ref(false)
 const uploadingChatFileScopeKey = ref<string | null>(null)
 const historyLoading = ref(false)
 const messageTransitioning = ref(false)
@@ -662,6 +683,9 @@ const MESSAGE_SCROLLBAR_MIN_THUMB_HEIGHT = 38
 const MESSAGE_SCROLLBAR_HIDE_DELAY_MS = 1200
 const MESSAGE_ARROW_REPEAT_DELAY_MS = 240
 const MESSAGE_ARROW_REPEAT_INTERVAL_MS = 80
+const FUNASR_WS_URL = import.meta.env.VITE_FUNASR_WS_URL || 'ws://localhost:10096'
+const FUNASR_TARGET_SAMPLE_RATE = 16000
+const FUNASR_CHUNK_SAMPLE_SIZE = 960
 
 const markdown = new MarkdownIt({
   breaks: true,
@@ -728,8 +752,15 @@ const fileContextBusy = computed(() => chatFileUploading.value || visibleChatFil
     file.status === 'uploading' || file.status === 'parsing'))
 const selectedReadyFileCount = computed(() => selectedReadyChatFiles().length)
 const showRagContextScope = computed(() => chatMode.value === 'rag' && selectedReadyFileCount.value > 0)
-const canSend = computed(() => Boolean(draft.value.trim()) && !sending.value && !fileContextBusy.value)
+const canSend = computed(() => Boolean(draft.value.trim()) && !sending.value && !fileContextBusy.value
+    && !voiceRecording.value && !voiceConnecting.value)
 const sendButtonText = computed(() => fileContextBusy.value ? '处理中' : '发送')
+const voiceButtonTitle = computed(() => {
+  if (voiceConnecting.value) {
+    return '连接语音识别'
+  }
+  return voiceRecording.value ? '停止语音输入' : '语音输入'
+})
 const segmentedStreamMode = computed({
   get: () => !streamEnabled.value,
   set: (value: boolean) => {
@@ -777,6 +808,17 @@ let messageScrollbarHideTimer: number | null = null
 let arrowScrollDelayTimer: number | null = null
 let arrowScrollIntervalTimer: number | null = null
 let chatFilePollingTimer: number | null = null
+let voiceSocket: WebSocket | null = null
+let voiceMediaStream: MediaStream | null = null
+let voiceAudioContext: AudioContext | null = null
+let voiceSourceNode: MediaStreamAudioSourceNode | null = null
+let voiceProcessorNode: ScriptProcessorNode | null = null
+let voiceSilentGainNode: GainNode | null = null
+let voicePendingSamples = new Int16Array()
+let voiceBaseDraft = ''
+let voiceConfirmedText = ''
+let voiceOnlineText = ''
+let voiceCloseTimer: number | null = null
 let draggingThumb = false
 let thumbDragStartY = 0
 let thumbDragStartTop = 0
@@ -795,6 +837,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   stopStreaming()
+  cleanupVoiceInput(true)
   stopChatFilePolling()
   teardownMessageScrollbar()
   window.removeEventListener('resize', handleContextScopeResize)
@@ -838,6 +881,9 @@ watch(showRagContextScope, async (visible) => {
  * 流式请求使用 SSE 增量返回，非流式请求等待一次性响应
  */
 async function sendMessage() {
+  if (voiceRecording.value || voiceConnecting.value) {
+    stopVoiceInput()
+  }
   const content = draft.value.trim()
   if (fileContextBusy.value) {
     message.warning('文件处理完成后再发送')
@@ -921,6 +967,325 @@ async function sendMessageContent(content: string) {
   }
   selectedChatFileIds.value = []
   resetRagContextScope()
+}
+
+/**
+ * 切换语音输入状态
+ *
+ * <p>
+ * 语音输入只负责把 FunASR 转写文本写入 draft，真正发送仍复用现有聊天流程
+ */
+async function toggleVoiceInput() {
+  if (voiceRecording.value || voiceConnecting.value) {
+    stopVoiceInput()
+    return
+  }
+  await startVoiceInput()
+}
+
+/**
+ * 启动 FunASR 实时语音输入
+ *
+ * <p>
+ * 浏览器端使用 16 kHz、16 bit、单声道 PCM 分片对接 FunASR WebSocket 2pass 协议
+ */
+async function startVoiceInput() {
+  if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+    message.error('当前页面不是安全上下文，浏览器不会开放麦克风权限')
+    return
+  }
+  if (!navigator.mediaDevices?.getUserMedia) {
+    message.error('当前浏览器不支持麦克风录音')
+    return
+  }
+  voiceConnecting.value = true
+  resetVoiceTranscript()
+  try {
+    voiceBaseDraft = draft.value
+    clearVoiceCloseTimer()
+    if (voiceSocket) {
+      voiceSocket.close()
+      voiceSocket = null
+    }
+    voiceMediaStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        channelCount: 1,
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+    })
+    voiceSocket = await openVoiceSocket()
+    await startVoiceAudioPipeline(voiceMediaStream)
+    voiceRecording.value = true
+  } catch (error) {
+    cleanupVoiceInput(true)
+    message.error(error instanceof Error ? error.message : '语音输入启动失败')
+  } finally {
+    voiceConnecting.value = false
+  }
+}
+
+/**
+ * 打开 FunASR WebSocket 连接
+ *
+ * <p>
+ * 连接建立后必须先发送协议初始化 JSON，再发送 PCM 二进制音频分片
+ *
+ * @return 已建立的 WebSocket 连接
+ */
+function openVoiceSocket() {
+  return new Promise<WebSocket>((resolve, reject) => {
+    const socket = new WebSocket(FUNASR_WS_URL)
+    let opened = false
+    socket.binaryType = 'arraybuffer'
+    socket.onopen = () => {
+      opened = true
+      socket.send(JSON.stringify({
+        mode: '2pass',
+        wav_name: `meta-ai-console-${Date.now()}`,
+        is_speaking: true,
+        wav_format: 'pcm',
+        chunk_size: [5, 10, 5],
+        chunk_interval: 10,
+        audio_fs: FUNASR_TARGET_SAMPLE_RATE,
+        itn: true,
+      }))
+      resolve(socket)
+    }
+    socket.onmessage = handleVoiceSocketMessage
+    socket.onerror = () => {
+      if (!opened) {
+        reject(new Error('FunASR WebSocket 连接失败'))
+        return
+      }
+      message.error('FunASR WebSocket 连接异常')
+    }
+    socket.onclose = () => {
+      if (voiceRecording.value || voiceConnecting.value) {
+        cleanupVoiceInput(false)
+        message.warning('语音识别连接已断开')
+      }
+    }
+  })
+}
+
+/**
+ * 启动浏览器音频采集链路
+ *
+ * <p>
+ * ScriptProcessorNode 虽然较旧，但无需额外 worklet 文件，适合当前单页局部接入
+ *
+ * @param stream 麦克风媒体流
+ */
+async function startVoiceAudioPipeline(stream: MediaStream) {
+  voiceAudioContext = new AudioContext()
+  if (voiceAudioContext.state === 'suspended') {
+    await voiceAudioContext.resume()
+  }
+  voiceSourceNode = voiceAudioContext.createMediaStreamSource(stream)
+  voiceProcessorNode = voiceAudioContext.createScriptProcessor(4096, 1, 1)
+  voiceSilentGainNode = voiceAudioContext.createGain()
+  voiceSilentGainNode.gain.value = 0
+  voiceProcessorNode.onaudioprocess = handleVoiceAudioProcess
+  voiceSourceNode.connect(voiceProcessorNode)
+  voiceProcessorNode.connect(voiceSilentGainNode)
+  voiceSilentGainNode.connect(voiceAudioContext.destination)
+}
+
+/**
+ * 处理麦克风音频分片
+ *
+ * <p>
+ * FunASR 实时协议只接受 PCM 流，这里把浏览器 Float32 音频重采样并转成 Int16
+ *
+ * @param event 音频处理事件
+ */
+function handleVoiceAudioProcess(event: AudioProcessingEvent) {
+  if (!voiceRecording.value || !voiceSocket || voiceSocket.readyState !== WebSocket.OPEN) return
+  const input = event.inputBuffer.getChannelData(0)
+  const output = event.outputBuffer.getChannelData(0)
+  output.fill(0)
+  appendVoiceSamples(resampleToPcm16(input, event.inputBuffer.sampleRate))
+}
+
+/**
+ * 追加并发送固定大小的 PCM 分片
+ *
+ * <p>
+ * 官方 HTML5 示例使用 960 个 Int16 采样点作为 `[5, 10, 5]` 配置下的发送粒度
+ *
+ * @param samples 新采集的 16 kHz PCM 采样
+ */
+function appendVoiceSamples(samples: Int16Array) {
+  if (!samples.length || !voiceSocket || voiceSocket.readyState !== WebSocket.OPEN) return
+  const merged = new Int16Array(voicePendingSamples.length + samples.length)
+  merged.set(voicePendingSamples, 0)
+  merged.set(samples, voicePendingSamples.length)
+  let offset = 0
+  while (merged.length - offset >= FUNASR_CHUNK_SAMPLE_SIZE) {
+    const chunk = merged.slice(offset, offset + FUNASR_CHUNK_SAMPLE_SIZE)
+    voiceSocket.send(chunk.buffer)
+    offset += FUNASR_CHUNK_SAMPLE_SIZE
+  }
+  voicePendingSamples = merged.slice(offset)
+}
+
+/**
+ * 重采样并转换为 16 bit PCM
+ *
+ * @param input 浏览器采集的 Float32 音频
+ * @param sourceSampleRate 原始采样率
+ * @return 16 kHz、16 bit、单声道 PCM
+ */
+function resampleToPcm16(input: Float32Array, sourceSampleRate: number) {
+  const ratio = sourceSampleRate / FUNASR_TARGET_SAMPLE_RATE
+  const outputLength = Math.max(0, Math.floor(input.length / ratio))
+  const output = new Int16Array(outputLength)
+  for (let i = 0; i < outputLength; i++) {
+    const start = Math.floor(i * ratio)
+    const end = Math.min(input.length, Math.floor((i + 1) * ratio))
+    let sum = 0
+    const count = Math.max(1, end - start)
+    for (let j = start; j < end; j++) {
+      sum += input[j]
+    }
+    const sample = Math.max(-1, Math.min(1, sum / count))
+    output[i] = sample < 0 ? sample * 0x8000 : sample * 0x7fff
+  }
+  return output
+}
+
+/**
+ * 处理 FunASR 识别结果
+ *
+ * <p>
+ * 2pass-online 作为实时预览，2pass-offline 作为句尾修正结果写入最终文本
+ *
+ * @param event WebSocket 消息
+ */
+function handleVoiceSocketMessage(event: MessageEvent<string>) {
+  if (typeof event.data !== 'string') return
+  try {
+    const payload = JSON.parse(event.data) as { mode?: string, text?: string }
+    if (!payload.text) return
+    if (payload.mode === '2pass-offline' || payload.mode === 'offline') {
+      voiceConfirmedText += payload.text
+      voiceOnlineText = ''
+    } else {
+      voiceOnlineText += payload.text
+    }
+    updateVoiceDraft()
+  } catch {
+    message.warning('语音识别结果解析失败')
+  }
+}
+
+/**
+ * 停止语音输入
+ *
+ * <p>
+ * 停止时先补发剩余 PCM，再发送 FunASR 断句结束标志，保留短暂时间等待 2pass-offline 修正结果
+ *
+ * @param sendEnd 是否向 FunASR 发送结束标志
+ */
+function stopVoiceInput(sendEnd = true) {
+  if (!voiceRecording.value && !voiceConnecting.value) return
+  voiceRecording.value = false
+  voiceConnecting.value = false
+  flushVoiceSamples()
+  if (sendEnd && voiceSocket?.readyState === WebSocket.OPEN) {
+    voiceSocket.send(JSON.stringify({
+      is_speaking: false,
+    }))
+  }
+  cleanupVoiceAudio()
+  const socket = voiceSocket
+  voiceCloseTimer = window.setTimeout(() => {
+    if (socket?.readyState === WebSocket.OPEN || socket?.readyState === WebSocket.CONNECTING) {
+      socket.close()
+    }
+    if (voiceSocket === socket) {
+      voiceSocket = null
+    }
+  }, 3000)
+}
+
+/**
+ * 发送剩余不足一个 chunk 的音频
+ */
+function flushVoiceSamples() {
+  if (voicePendingSamples.length && voiceSocket?.readyState === WebSocket.OPEN) {
+    voiceSocket.send(voicePendingSamples.buffer)
+  }
+  voicePendingSamples = new Int16Array()
+}
+
+/**
+ * 更新输入框中的语音转写草稿
+ */
+function updateVoiceDraft() {
+  const voiceText = `${voiceConfirmedText}${voiceOnlineText}`
+  if (!voiceText) {
+    draft.value = voiceBaseDraft
+    return
+  }
+  const separator = voiceBaseDraft && !/\s$/.test(voiceBaseDraft) ? '\n' : ''
+  draft.value = `${voiceBaseDraft}${separator}${voiceText}`
+}
+
+/**
+ * 重置当前语音识别文本缓存
+ */
+function resetVoiceTranscript() {
+  voicePendingSamples = new Int16Array()
+  voiceConfirmedText = ''
+  voiceOnlineText = ''
+}
+
+/**
+ * 清理语音输入资源
+ *
+ * @param closeSocket 是否立即关闭 WebSocket
+ */
+function cleanupVoiceInput(closeSocket: boolean) {
+  voiceRecording.value = false
+  voiceConnecting.value = false
+  cleanupVoiceAudio()
+  clearVoiceCloseTimer()
+  if (closeSocket && voiceSocket) {
+    voiceSocket.close()
+    voiceSocket = null
+  }
+  resetVoiceTranscript()
+}
+
+/**
+ * 清理浏览器音频采集资源
+ */
+function cleanupVoiceAudio() {
+  voiceProcessorNode?.disconnect()
+  voiceSourceNode?.disconnect()
+  voiceSilentGainNode?.disconnect()
+  voiceProcessorNode = null
+  voiceSourceNode = null
+  voiceSilentGainNode = null
+  voiceMediaStream?.getTracks().forEach((track) => track.stop())
+  voiceMediaStream = null
+  if (voiceAudioContext && voiceAudioContext.state !== 'closed') {
+    void voiceAudioContext.close()
+  }
+  voiceAudioContext = null
+}
+
+/**
+ * 清理延迟关闭 WebSocket 的定时器
+ */
+function clearVoiceCloseTimer() {
+  if (voiceCloseTimer !== null) {
+    window.clearTimeout(voiceCloseTimer)
+    voiceCloseTimer = null
+  }
 }
 
 /**
@@ -3131,7 +3496,7 @@ async function downloadReference(reference: RetrievalDocumentReference) {
 
 .composer {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
   align-items: center;
   gap: 12px;
   padding: 14px;
@@ -3320,6 +3685,39 @@ async function downloadReference(reference: RetrievalDocumentReference) {
   justify-content: center;
 }
 
+.voice-button {
+  width: 42px;
+  min-width: 42px;
+  color: #b8c7d9;
+  --n-border: 1px solid rgba(126, 168, 255, 0.22) !important;
+  --n-border-hover: 1px solid rgba(65, 214, 183, 0.38) !important;
+  --n-border-pressed: 1px solid rgba(65, 214, 183, 0.44) !important;
+  --n-color: rgba(255, 255, 255, 0.055) !important;
+  --n-color-hover: rgba(65, 214, 183, 0.1) !important;
+  --n-color-pressed: rgba(65, 214, 183, 0.13) !important;
+  --n-text-color: #b8c7d9 !important;
+  --n-text-color-hover: #8ff2df !important;
+  --n-text-color-pressed: #b7fff0 !important;
+}
+
+.voice-button.recording {
+  --n-border: 1px solid rgba(255, 117, 117, 0.34) !important;
+  --n-border-hover: 1px solid rgba(255, 145, 145, 0.52) !important;
+  --n-border-pressed: 1px solid rgba(255, 117, 117, 0.5) !important;
+  --n-color: rgba(94, 34, 34, 0.78) !important;
+  --n-color-hover: rgba(112, 39, 39, 0.86) !important;
+  --n-color-pressed: rgba(100, 35, 35, 0.9) !important;
+  --n-text-color: #ffd2d2 !important;
+  --n-text-color-hover: #ffe1e1 !important;
+  --n-text-color-pressed: #ffe7e7 !important;
+  animation: voice-recording-pulse 1.4s ease-in-out infinite;
+}
+
+.voice-button :deep(svg) {
+  width: 18px;
+  height: 18px;
+}
+
 .streaming-stop-button {
   position: relative;
   overflow: hidden;
@@ -3416,12 +3814,24 @@ async function downloadReference(reference: RetrievalDocumentReference) {
   }
 }
 
+@keyframes voice-recording-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 117, 117, 0.1);
+  }
+
+  50% {
+    box-shadow: 0 0 0 4px rgba(255, 117, 117, 0.08);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .message-scrollbar {
     transition: none;
   }
 
   .streaming-stop-button,
+  .voice-button.recording,
   .streaming-stop-button::before,
   .stop-indicator::after {
     animation: none;
