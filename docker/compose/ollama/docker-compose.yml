@@ -7,7 +7,7 @@ services:
     restart: unless-stopped
     ports:
       # 宿主机端口由 .env 统一规划，容器内端口保持应用监听端口
-      - "${META_AI_AGENT_HOST_PORT:-8008}:8008"
+      - "${META_AI_AGENT_HOST_PORT:-18000}:8008"
     volumes:
       # 应用配置由挂载文件统一管理，Compose 不再注入 Spring 配置
       - ./.data/config/application.properties:/app/application.properties
@@ -18,10 +18,7 @@ services:
       TZ: Asia/Shanghai
     depends_on:
       ollama:
-        condition: service_started
-      # 等待模型拉取任务成功结束，避免应用启动后立即找不到本地模型
-      ollama-init:
-        condition: service_completed_successfully
+        condition: service_healthy
       # Redis 是 ChatMemory 和 Redis VectorStore 的基础设施
       # 等待健康检查通过可以避免应用启动早于 Redis 密码初始化
       redis-stack:
@@ -53,7 +50,7 @@ services:
     gpus: all
     ports:
       # 宿主机端口由 .env 统一规划，容器内端口保持 Ollama 默认端口
-      - "${OLLAMA_HOST_PORT:-11434}:11434"
+      - "${OLLAMA_HOST_PORT:-18001}:11434"
     volumes:
       # Ollama 模型缓存目录，容器重建后不需要重新拉模型
       # Ollama 使用自身模型存储格式，不要和 Hugging Face 缓存目录混用
@@ -61,13 +58,46 @@ services:
     environment:
       TZ: Asia/Shanghai
       OLLAMA_HOST: 0.0.0.0:11434
+      # 显式固定 Ollama 模型目录，避免镜像默认路径变化导致模型缓存位置不清晰
+      OLLAMA_MODELS: ${OLLAMA_SERVICE_MODELS:-/root/.ollama/models}
+      # 离线单机部署关闭云能力，避免误触外部服务
+      OLLAMA_NO_CLOUD: ${OLLAMA_SERVICE_NO_CLOUD:-1}
+      # 模型空闲后保留时长，降低频繁卸载导致的冷启动
+      OLLAMA_KEEP_ALIVE: ${OLLAMA_SERVICE_KEEP_ALIVE:-10m}
+      # Ollama 服务端默认上下文长度，需与 application-ollama.properties 中 num-ctx 协调
+      OLLAMA_CONTEXT_LENGTH: ${OLLAMA_SERVICE_CONTEXT_LENGTH:-8192}
+      # Chat 和 Embedding 共用一个 Ollama 服务，默认允许两个模型常驻
+      # 显存紧张时可在 .env 中改回 1
+      OLLAMA_MAX_LOADED_MODELS: ${OLLAMA_SERVICE_MAX_LOADED_MODELS:-2}
+      # 单机默认串行推理，避免并行请求按上下文长度放大显存占用
+      OLLAMA_NUM_PARALLEL: ${OLLAMA_SERVICE_NUM_PARALLEL:-1}
+      # 限制等待队列，避免高峰请求堆积拖垮本机服务
+      OLLAMA_MAX_QUEUE: ${OLLAMA_SERVICE_MAX_QUEUE:-64}
+      # 开启 Flash Attention，降低长上下文场景显存压力
+      OLLAMA_FLASH_ATTENTION: ${OLLAMA_SERVICE_FLASH_ATTENTION:-1}
+      # KV cache 使用 q8_0 量化，优先节省显存
+      OLLAMA_KV_CACHE_TYPE: ${OLLAMA_SERVICE_KV_CACHE_TYPE:-q8_0}
+    healthcheck:
+      # 使用容器内 ollama CLI 检查本地 API 是否可用
+      # 不依赖 curl / wget，避免基础镜像缺少网络排查工具
+      test: [ "CMD-SHELL", "OLLAMA_HOST=http://127.0.0.1:11434 ollama list >/dev/null 2>&1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
 
   # 一次性模型初始化任务
-  # 使用独立容器拉取模型，避免 Java 应用启动时被模型下载阻塞
+  # 该服务只用于联网开发环境或首次联网初始化，不属于离线生产启动链路
+  # 默认 docker compose up -d 不会启动该服务
+  # 联网初始化时执行：docker compose --profile init up ollama-init
+  # 离线生产环境必须提前准备好 .data/ollama 模型目录，再拷贝到目标机器
+  # meta-ai-agent 不依赖该任务成功，避免离线环境因无法拉模型而阻塞应用启动
   ollama-init:
     image: ${OLLAMA_IMAGE:-ollama/ollama:latest}
     container_name: meta-ai-ollama-init
     restart: "no"
+    profiles:
+      - init
     environment:
       TZ: Asia/Shanghai
       OLLAMA_HOST: http://ollama:11434
@@ -86,7 +116,8 @@ services:
         ollama pull "$${OLLAMA_CHAT_MODEL}"
         ollama pull "$${OLLAMA_EMBEDDING_MODEL}"
     depends_on:
-      - ollama
+      ollama:
+        condition: service_healthy
 
   # Redis Stack 不是普通 Redis
   # Redis VectorStore 依赖 RediSearch 和 RedisJSON 模块
@@ -96,10 +127,9 @@ services:
     restart: unless-stopped
     ports:
       # 宿主机端口由 .env 统一规划，容器内端口保持 Redis 默认端口
-      - "${REDIS_HOST_PORT:-6399}:6379"
-      # Redis Stack Browser 控制台端口
-      # 浏览器访问路径为 /redis-stack/browser
-      - "${REDIS_STACK_BROWSER_HOST_PORT:-8001}:8001"
+      - "${REDIS_HOST_PORT:-18003}:6379"
+      # Redis Stack Browser 控制台端口，浏览器访问路径为 /redis-stack/browser
+      - "${REDIS_STACK_BROWSER_HOST_PORT:-18004}:8001"
     volumes:
       # Redis 数据目录挂载到 Compose 同级 .data
       # AOF 由 REDIS_ARGS 显式开启，RDB 仍按 Redis 默认 save 策略工作
@@ -132,9 +162,9 @@ services:
         hard: ${QDRANT_ULIMIT_NOFILE_HARD:-65535}
     ports:
       # HTTP API 宿主机端口由 .env 统一规划，容器内端口保持 Qdrant 默认端口
-      - "${QDRANT_HTTP_HOST_PORT:-6333}:6333"
+      - "${QDRANT_HTTP_HOST_PORT:-18005}:6333"
       # gRPC API 宿主机端口由 .env 统一规划，容器内端口保持 Qdrant 默认端口
-      - "${QDRANT_GRPC_HOST_PORT:-6334}:6334"
+      - "${QDRANT_GRPC_HOST_PORT:-18006}:6334"
     volumes:
       # Qdrant collection 和 payload 持久化目录
       - ./.data/qdrant:/qdrant/storage
@@ -146,6 +176,7 @@ services:
       # Qdrant 服务日志级别
       # 排障时可临时改为 DEBUG，稳定运行建议保持 INFO
       QDRANT__LOG_LEVEL: ${QDRANT_LOG_LEVEL:-INFO}
+
   # RustFS 提供 S3 兼容对象存储
   # RAG 原始文件先进入对象存储，再进入 OCR / Reader / VectorStore 链路
   rustfs:
@@ -155,10 +186,10 @@ services:
     ports:
       # S3 API 宿主机端口由 .env 统一规划，容器内端口保持 RustFS 默认端口
       # 默认暴露到宿主机所有网卡，局域网可访问，访问范围依赖宿主机防火墙或内网边界控制
-      - "${RUSTFS_API_HOST_PORT:-9000}:9000"
+      - "${RUSTFS_API_HOST_PORT:-18007}:9000"
       # Console 宿主机端口由 .env 统一规划，容器内端口保持 RustFS 默认端口
       # 默认暴露到宿主机所有网卡，便于局域网运维访问
-      - "${RUSTFS_CONSOLE_HOST_PORT:-9001}:9001"
+      - "${RUSTFS_CONSOLE_HOST_PORT:-18008}:9001"
     volumes:
       # RustFS bucket 和对象数据持久化目录
       - ./.data/rustfs:/data
@@ -190,7 +221,7 @@ services:
     restart: unless-stopped
     ports:
       # 宿主机端口由 .env 统一规划，容器内端口保持 OCR 服务端口
-      - "${PADDLEX_OCR_HOST_PORT:-18080}:8080"
+      - "${PADDLEX_OCR_HOST_PORT:-18009}:8080"
     environment:
       TZ: Asia/Shanghai
 
@@ -202,7 +233,7 @@ services:
     restart: unless-stopped
     ports:
       # 宿主机端口由 .env 统一规划，容器内端口保持 FunASR WebSocket 端口
-      - "${LIVE_ASR_HOST_PORT:-10096}:10095"
+      - "${LIVE_ASR_HOST_PORT:-18010}:10095"
     environment:
       TZ: Asia/Shanghai
       # FunASR 服务端推理线程池数量，基本决定最大并发识别路数
