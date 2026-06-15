@@ -443,7 +443,7 @@ public class MetaRetrievalProperties {
          * <p>
          * 生产环境必须通过环境变量或密钥系统注入，不要写死真实密钥
          */
-        private String accessKey = "rustfsadmin";
+        private String accessKey = "admin";
 
         /**
          * 对象存储 secret key
@@ -451,7 +451,7 @@ public class MetaRetrievalProperties {
          * <p>
          * 生产环境必须通过环境变量或密钥系统注入，不要写死真实密钥
          */
-        private String secretKey = "rustfsadmin";
+        private String secretKey = "Xc.123456";
 
         /**
          * 对象存储 region
