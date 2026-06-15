@@ -1,0 +1,16 @@
+.git
+.idea
+.playwright-mcp
+.vscode
+logs
+target
+**/target
+build
+**/build
+.data
+**/.data
+docker/compose/**/.env
+*.iml
+*.iws
+*.ipr
+.DS_Store
