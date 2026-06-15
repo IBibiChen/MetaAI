@@ -18,7 +18,7 @@ ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlex/paddlex:paddlex3.3.11-paddlepaddle3
 
 - 不要求有 NVIDIA GPU
 - 必须能运行 Docker Desktop 或 Docker Engine
-- 必须能使用 Buildx，按 `docker/README.md` 初始化 `metax-multiarch`
+- 必须能使用 Buildx，按 `docker/PaddleX-OCR/README.md` 初始化 `metax-multiarch`
 - 必须能访问 PaddleX 官方基础镜像源和阿里云镜像仓库
 
 推送要求：
@@ -77,7 +77,7 @@ Dockerfile 默认使用阿里云 PyPI 源，避免基础镜像内置源或部分
 
 ## 本地构建并手动推送
 
-构建前先按 `docker/README.md` 初始化并启用 `metax-multiarch` Buildx 构建器
+构建前先按 `docker/PaddleX-OCR/README.md` 初始化并启用 `metax-multiarch` Buildx 构建器
 
 GPU 镜像使用 multi-stage 构建。`model-cache` 阶段基于官方 CPU 镜像预热 OCR 模型缓存，final 阶段再复制到官方 GPU 镜像
 
@@ -91,7 +91,7 @@ Windows PowerShell：
 docker buildx build `
   --platform linux/amd64 `
   -t registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-official-gpu-amd64 `
-  .\docker\official-gpu `
+  .\docker\PaddleX-OCR\official-gpu `
   --load
 docker images registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr
 docker push registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-official-gpu-amd64
@@ -104,7 +104,7 @@ Linux / macOS / Git Bash：
 docker buildx build \
   --platform linux/amd64 \
   -t registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-official-gpu-amd64 \
-  docker/official-gpu \
+  docker/PaddleX-OCR/official-gpu \
   --load
 docker images registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr
 docker push registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-official-gpu-amd64

@@ -38,7 +38,7 @@ Dockerfile 默认使用阿里云 PyPI 源，避免基础镜像内置源或部分
 
 ## AMD64 本地构建并手动推送
 
-构建前先按 `docker/README.md` 初始化并启用 `metax-multiarch` Buildx 构建器
+构建前先按 `docker/PaddleX-OCR/README.md` 初始化并启用 `metax-multiarch` Buildx 构建器
 
 Windows PowerShell：
 
@@ -46,7 +46,7 @@ Windows PowerShell：
 docker buildx build `
   --platform linux/amd64 `
   -t registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-openeuler-cpu-amd64 `
-  .\docker\openeuler-cpu `
+  .\docker\PaddleX-OCR\openeuler-cpu `
   --load
 docker images registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr
 docker push registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-openeuler-cpu-amd64
@@ -59,7 +59,7 @@ Linux / macOS / Git Bash：
 docker buildx build \
   --platform linux/amd64 \
   -t registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-openeuler-cpu-amd64 \
-  docker/openeuler-cpu \
+  docker/PaddleX-OCR/openeuler-cpu \
   --load
 docker images registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr
 docker push registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-openeuler-cpu-amd64
@@ -77,7 +77,7 @@ Windows PowerShell：
 docker buildx build `
   --platform linux/arm64 `
   -t registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-openeuler-cpu-arm64 `
-  .\docker\openeuler-cpu `
+  .\docker\PaddleX-OCR\openeuler-cpu `
   --push
 docker buildx imagetools inspect registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-openeuler-cpu-arm64
 ```
@@ -88,7 +88,7 @@ Linux / macOS / Git Bash：
 docker buildx build \
   --platform linux/arm64 \
   -t registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-openeuler-cpu-arm64 \
-  docker/openeuler-cpu \
+  docker/PaddleX-OCR/openeuler-cpu \
   --push
 docker buildx imagetools inspect registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-openeuler-cpu-arm64
 ```
@@ -103,9 +103,18 @@ Windows PowerShell：
 docker buildx build `
   --platform linux/amd64,linux/arm64 `
   -t registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-openeuler-cpu `
-  .\docker\openeuler-cpu `
+  .\docker\PaddleX-OCR\openeuler-cpu `
   --push
 docker buildx imagetools inspect registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-openeuler-cpu
+```
+
+```powershell
+docker buildx build `
+  --platform linux/amd64,linux/arm64 `
+  -t registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:v1.0.0 `
+  .\docker\PaddleX-OCR\openeuler-cpu `
+  --push
+docker buildx imagetools inspect registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:v1.0.0
 ```
 
 ## 启动
@@ -120,6 +129,10 @@ Windows PowerShell：
 
 ```powershell
 docker run -d --name openeuler-cpu -p 8080:8080 registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:3.3.11-openeuler-cpu-amd64
+```
+
+```powershell
+docker run -d --name openeuler-cpu -p 8080:8080 registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:v1.0.0
 ```
 
 离线部署时不要挂载空的 `/root/.paddlex`，否则会覆盖镜像内已经预置的 OCR 模型缓存
