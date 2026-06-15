@@ -91,12 +91,15 @@ services:
   # Redis Stack 不是普通 Redis
   # Redis VectorStore 依赖 RediSearch 和 RedisJSON 模块
   redis-stack:
-    image: ${REDIS_IMAGE:-redis/redis-stack-server:7.4.0-v8}
+    image: ${REDIS_IMAGE:-redis/redis-stack:7.4.0-v8}
     container_name: meta-ai-redis-stack-ollama
     restart: unless-stopped
     ports:
       # 宿主机端口由 .env 统一规划，容器内端口保持 Redis 默认端口
       - "${REDIS_HOST_PORT:-6399}:6379"
+      # Redis Stack Browser 控制台端口
+      # 浏览器访问路径为 /redis-stack/browser
+      - "${REDIS_STACK_BROWSER_HOST_PORT:-8001}:8001"
     volumes:
       # Redis 数据目录挂载到 Compose 同级 .data
       # AOF 由 REDIS_ARGS 显式开启，RDB 仍按 Redis 默认 save 策略工作

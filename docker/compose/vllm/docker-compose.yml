@@ -7,7 +7,7 @@ services:
     restart: unless-stopped
     ports:
       # 宿主机端口由 .env 统一规划，容器内端口保持应用监听端口
-      - "${META_AI_AGENT_HOST_PORT:-8008}:8008"
+      - "${META_AI_AGENT_HOST_PORT:-18000}:8008"
     volumes:
       # 应用配置由挂载文件统一管理，Compose 不再注入 Spring 配置
       - ./.data/config/application.properties:/app/application.properties
@@ -56,7 +56,7 @@ services:
     gpus: all
     ports:
       # 宿主机端口由 .env 统一规划，容器内端口保持 vLLM 服务端口
-      - "${VLLM_CHAT_HOST_PORT:-8000}:8000"
+      - "${VLLM_CHAT_HOST_PORT:-18001}:8000"
     volumes:
       # Hugging Face 缓存落到 Compose 同级 .data，避免容器重建后重复下载模型
       # 模型权重和 tokenizer 文件通常在 Windows / Linux、amd64 / arm64 上内容一致
@@ -77,6 +77,9 @@ services:
       # 必须与 application-openai.properties 中的 chat options model 保持一致
       - --served-model-name
       - ${VLLM_CHAT_SERVED_MODEL:-Qwen3.6-27B}
+      # 当前系统使用文本问答 / RAG / OCR 后文本输入，不加载视觉编码器
+      # Qwen3.6 文本场景推荐开启该参数，降低多模态加载和显存成本
+      - --language-model-only
       # 容器内监听所有网卡，便于 Compose 内其他服务访问
       - --host
       - 0.0.0.0
@@ -139,7 +142,7 @@ services:
     gpus: all
     ports:
       # 宿主机端口由 .env 统一规划，容器内端口保持 vLLM 服务端口
-      - "${VLLM_EMBEDDING_HOST_PORT:-8001}:8000"
+      - "${VLLM_EMBEDDING_HOST_PORT:-18002}:8000"
     volumes:
       # 与 Chat 服务共享模型缓存，避免同一模型仓库重复下载
       # 共享的是 Hugging Face 模型资产，不代表不同系统架构一定能运行同一推理镜像
@@ -186,12 +189,14 @@ services:
   # Redis Stack 不是普通 Redis
   # Redis VectorStore 依赖 RediSearch 和 RedisJSON 模块
   redis-stack:
-    image: ${REDIS_IMAGE:-redis/redis-stack-server:7.4.0-v8}
+    image: ${REDIS_IMAGE:-redis/redis-stack:7.4.0-v8}
     container_name: meta-ai-redis-stack-vllm
     restart: unless-stopped
     ports:
       # 宿主机端口由 .env 统一规划，容器内端口保持 Redis 默认端口
-      - "${REDIS_HOST_PORT:-6399}:6379"
+      - "${REDIS_HOST_PORT:-18003}:6379"
+      # Redis Stack Browser 控制台端口，浏览器访问路径为 /redis-stack/browser
+      - "${REDIS_STACK_BROWSER_HOST_PORT:-18004}:8001"
     volumes:
       # Redis 数据目录挂载到 Compose 同级 .data
       # AOF 由 REDIS_ARGS 显式开启，RDB 仍按 Redis 默认 save 策略工作
@@ -224,9 +229,9 @@ services:
         hard: ${QDRANT_ULIMIT_NOFILE_HARD:-65535}
     ports:
       # HTTP API 宿主机端口由 .env 统一规划，容器内端口保持 Qdrant 默认端口
-      - "${QDRANT_HTTP_HOST_PORT:-6333}:6333"
+      - "${QDRANT_HTTP_HOST_PORT:-18005}:6333"
       # gRPC API 宿主机端口由 .env 统一规划，容器内端口保持 Qdrant 默认端口
-      - "${QDRANT_GRPC_HOST_PORT:-6334}:6334"
+      - "${QDRANT_GRPC_HOST_PORT:-18006}:6334"
     volumes:
       # Qdrant collection 和 payload 持久化目录
       - ./.data/qdrant:/qdrant/storage
@@ -248,10 +253,10 @@ services:
     ports:
       # S3 API 宿主机端口由 .env 统一规划，容器内端口保持 RustFS 默认端口
       # 默认暴露到宿主机所有网卡，局域网可访问，访问范围依赖宿主机防火墙或内网边界控制
-      - "${RUSTFS_API_HOST_PORT:-9000}:9000"
+      - "${RUSTFS_API_HOST_PORT:-18007}:9000"
       # Console 宿主机端口由 .env 统一规划，容器内端口保持 RustFS 默认端口
       # 默认暴露到宿主机所有网卡，便于局域网运维访问
-      - "${RUSTFS_CONSOLE_HOST_PORT:-9001}:9001"
+      - "${RUSTFS_CONSOLE_HOST_PORT:-18008}:9001"
     volumes:
       # RustFS bucket 和对象数据持久化目录
       - ./.data/rustfs:/data
@@ -283,7 +288,7 @@ services:
     restart: unless-stopped
     ports:
       # 宿主机端口由 .env 统一规划，容器内端口保持 OCR 服务端口
-      - "${PADDLEX_OCR_HOST_PORT:-18080}:8080"
+      - "${PADDLEX_OCR_HOST_PORT:-18009}:8080"
     environment:
       TZ: Asia/Shanghai
 
@@ -295,7 +300,7 @@ services:
     restart: unless-stopped
     ports:
       # 宿主机端口由 .env 统一规划，容器内端口保持 FunASR WebSocket 端口
-      - "${LIVE_ASR_HOST_PORT:-10096}:10095"
+      - "${LIVE_ASR_HOST_PORT:-18010}:10095"
     environment:
       TZ: Asia/Shanghai
       # FunASR 服务端推理线程池数量，基本决定最大并发识别路数
