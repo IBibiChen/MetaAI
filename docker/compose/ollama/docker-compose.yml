@@ -1,0 +1,214 @@
+services:
+  # Java 应用容器只负责运行 meta-ai-agent
+  # PostgreSQL 作为外部数据库接入，不在本 Compose 中编排
+  meta-ai-agent:
+    image: ${META_AI_IMAGE:-registry.cn-hangzhou.aliyuncs.com/metax/meta-ai-agent:latest}
+    container_name: meta-ai-agent-ollama
+    restart: unless-stopped
+    ports:
+      # 宿主机端口由 .env 统一规划，容器内端口保持应用监听端口
+      - "${META_AI_AGENT_HOST_PORT:-8008}:8008"
+    volumes:
+      # 应用配置由挂载文件统一管理，Compose 不再注入 Spring 配置
+      - ./.data/config/application.properties:/app/application.properties
+      - ./.data/config/application-ollama.properties:/app/application-ollama.properties
+      # 应用日志落到 Compose 同级 .data/logs，便于按部署栈隔离排查
+      - ./.data/logs:/root/logs
+    environment:
+      TZ: Asia/Shanghai
+    depends_on:
+      ollama:
+        condition: service_started
+      # 等待模型拉取任务成功结束，避免应用启动后立即找不到本地模型
+      ollama-init:
+        condition: service_completed_successfully
+      # Redis 是 ChatMemory 和 Redis VectorStore 的基础设施
+      # 等待健康检查通过可以避免应用启动早于 Redis 密码初始化
+      redis-stack:
+        condition: service_healthy
+      # Qdrant 使用 service_started 保持 Compose 简洁
+      # 该条件只保证容器已启动，不保证 HTTP / gRPC 已经完全就绪
+      # 如果现场出现应用早于 Qdrant 可用的问题，再恢复 healthcheck 或在应用侧增加重试
+      qdrant:
+        condition: service_started
+      # RustFS 镜像内置 curl，可用简洁健康检查等待对象存储 API 可用
+      # 避免应用启动时 bucket 初始化或文件上传早于 RustFS 就绪
+      rustfs:
+        condition: service_healthy
+      paddlex-ocr:
+        condition: service_started
+      live-asr:
+        condition: service_started
+    # 让容器内可以访问宿主机上的 PostgreSQL
+    # Linux Docker Engine 需要 host-gateway 映射，Docker Desktop 也兼容该写法
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # Ollama 本地模型服务
+  # 小型工作站优先使用该栈，模型缓存持久化到 .data/ollama
+  ollama:
+    image: ${OLLAMA_IMAGE:-ollama/ollama:latest}
+    container_name: meta-ai-ollama
+    restart: unless-stopped
+    gpus: all
+    ports:
+      # 宿主机端口由 .env 统一规划，容器内端口保持 Ollama 默认端口
+      - "${OLLAMA_HOST_PORT:-11434}:11434"
+    volumes:
+      # Ollama 模型缓存目录，容器重建后不需要重新拉模型
+      # Ollama 使用自身模型存储格式，不要和 Hugging Face 缓存目录混用
+      - ./.data/ollama:/root/.ollama
+    environment:
+      TZ: Asia/Shanghai
+      OLLAMA_HOST: 0.0.0.0:11434
+
+  # 一次性模型初始化任务
+  # 使用独立容器拉取模型，避免 Java 应用启动时被模型下载阻塞
+  ollama-init:
+    image: ${OLLAMA_IMAGE:-ollama/ollama:latest}
+    container_name: meta-ai-ollama-init
+    restart: "no"
+    environment:
+      TZ: Asia/Shanghai
+      OLLAMA_HOST: http://ollama:11434
+      OLLAMA_CHAT_MODEL: ${OLLAMA_CHAT_MODEL:-qwen3.6:35b}
+      OLLAMA_EMBEDDING_MODEL: ${OLLAMA_EMBEDDING_MODEL:-bge-m3}
+    entrypoint:
+      - /bin/sh
+      - -c
+    command:
+      - |
+        set -e
+        # 等待 Ollama API 可用后再拉模型
+        until ollama list >/dev/null 2>&1; do
+          sleep 2
+        done
+        ollama pull "$${OLLAMA_CHAT_MODEL}"
+        ollama pull "$${OLLAMA_EMBEDDING_MODEL}"
+    depends_on:
+      - ollama
+
+  # Redis Stack 不是普通 Redis
+  # Redis VectorStore 依赖 RediSearch 和 RedisJSON 模块
+  redis-stack:
+    image: ${REDIS_IMAGE:-redis/redis-stack-server:7.4.0-v8}
+    container_name: meta-ai-redis-stack-ollama
+    restart: unless-stopped
+    ports:
+      # 宿主机端口由 .env 统一规划，容器内端口保持 Redis 默认端口
+      - "${REDIS_HOST_PORT:-6399}:6379"
+    volumes:
+      # Redis 数据目录挂载到 Compose 同级 .data
+      # AOF 由 REDIS_ARGS 显式开启，RDB 仍按 Redis 默认 save 策略工作
+      - ./.data/redis:/data
+    environment:
+      TZ: Asia/Shanghai
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-123456}
+      # appendonly yes 开启 AOF 持久化
+      # appendfsync everysec 表示每秒刷盘一次，通常是性能和可靠性的折中
+      # 检查方式：docker compose exec redis-stack redis-cli -a "$REDIS_PASSWORD" CONFIG GET appendonly appendfsync
+      # 检查文件：docker compose exec redis-stack sh -c 'ls -lah /data'
+      REDIS_ARGS: --requirepass ${REDIS_PASSWORD:-123456} --appendonly yes --appendfsync everysec
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli --no-auth-warning -a \"$${REDIS_PASSWORD}\" ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # Qdrant 用于和 Redis VectorStore 做召回性能对比
+  # 是否启用由挂载的 application.properties 中 spring.ai.vectorstore.type 决定
+  qdrant:
+    image: ${QDRANT_IMAGE:-qdrant/qdrant:v1.18}
+    container_name: meta-ai-qdrant-ollama
+    restart: unless-stopped
+    # 提高 Qdrant 可打开文件数量上限
+    # 高并发检索、较多 segment、较大 collection 时默认 nofile 可能过低
+    ulimits:
+      nofile:
+        soft: ${QDRANT_ULIMIT_NOFILE_SOFT:-65535}
+        hard: ${QDRANT_ULIMIT_NOFILE_HARD:-65535}
+    ports:
+      # HTTP API 宿主机端口由 .env 统一规划，容器内端口保持 Qdrant 默认端口
+      - "${QDRANT_HTTP_HOST_PORT:-6333}:6333"
+      # gRPC API 宿主机端口由 .env 统一规划，容器内端口保持 Qdrant 默认端口
+      - "${QDRANT_GRPC_HOST_PORT:-6334}:6334"
+    volumes:
+      # Qdrant collection 和 payload 持久化目录
+      - ./.data/qdrant:/qdrant/storage
+    environment:
+      TZ: Asia/Shanghai
+      # 关闭 Qdrant 匿名遥测
+      # 单机离线部署不依赖外部观测链路，显式关闭便于企业环境审计
+      QDRANT__TELEMETRY_DISABLED: ${QDRANT_TELEMETRY_DISABLED:-true}
+      # Qdrant 服务日志级别
+      # 排障时可临时改为 DEBUG，稳定运行建议保持 INFO
+      QDRANT__LOG_LEVEL: ${QDRANT_LOG_LEVEL:-INFO}
+  # RustFS 提供 S3 兼容对象存储
+  # RAG 原始文件先进入对象存储，再进入 OCR / Reader / VectorStore 链路
+  rustfs:
+    image: ${RUSTFS_IMAGE:-rustfs/rustfs:1.0.0-beta.6}
+    container_name: meta-ai-rustfs-ollama
+    restart: unless-stopped
+    ports:
+      # S3 API 宿主机端口由 .env 统一规划，容器内端口保持 RustFS 默认端口
+      # 默认暴露到宿主机所有网卡，局域网可访问，访问范围依赖宿主机防火墙或内网边界控制
+      - "${RUSTFS_API_HOST_PORT:-9000}:9000"
+      # Console 宿主机端口由 .env 统一规划，容器内端口保持 RustFS 默认端口
+      # 默认暴露到宿主机所有网卡，便于局域网运维访问
+      - "${RUSTFS_CONSOLE_HOST_PORT:-9001}:9001"
+    volumes:
+      # RustFS bucket 和对象数据持久化目录
+      - ./.data/rustfs:/data
+    environment:
+      TZ: Asia/Shanghai
+      RUSTFS_ADDRESS: :9000
+      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:-admin}
+      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY:-Xc.123456}
+      RUSTFS_CONSOLE_ENABLE: "true"
+      # :9001 表示 Console 在容器内监听所有网卡的 9001 端口
+      # 宿主机和局域网访问范围由 ports 映射和主机防火墙共同决定
+      RUSTFS_CONSOLE_ADDRESS: :9001
+    command:
+      - /data
+    healthcheck:
+      # RustFS 当前镜像内置 curl
+      # 已验证 /health 返回 200，/healthz、/readyz 和 MinIO 风格健康路径返回 403
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9000/health >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # PaddleX OCR 负责扫描版 PDF 和图片识别
+  # 默认使用 CPU 镜像，避免与 Ollama 抢 GPU 显存
+  paddlex-ocr:
+    image: ${PADDLEX_OCR_IMAGE:-registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:v1.0.0}
+    container_name: meta-ai-paddlex-ocr-ollama
+    restart: unless-stopped
+    ports:
+      # 宿主机端口由 .env 统一规划，容器内端口保持 OCR 服务端口
+      - "${PADDLEX_OCR_HOST_PORT:-18080}:8080"
+    environment:
+      TZ: Asia/Shanghai
+
+  # live-asr 提供 FunASR 2pass WebSocket 实时语音识别
+  # 镜像内已预置模型，不挂载 /workspace/models
+  live-asr:
+    image: ${LIVE_ASR_IMAGE:-registry.cn-hangzhou.aliyuncs.com/metax/live-asr:v1.0.0}
+    container_name: meta-ai-live-asr-ollama
+    restart: unless-stopped
+    ports:
+      # 宿主机端口由 .env 统一规划，容器内端口保持 FunASR WebSocket 端口
+      - "${LIVE_ASR_HOST_PORT:-10096}:10095"
+    environment:
+      TZ: Asia/Shanghai
+      # FunASR 服务端推理线程池数量，基本决定最大并发识别路数
+      # 不设置时镜像会按 CPU processor 数自动取值，单机混部时可能过高
+      FUNASR_DECODER_THREAD_NUM: ${FUNASR_DECODER_THREAD_NUM:-4}
+      # WebSocket / 网络 IO 线程数
+      # 低并发单机部署通常 1 ~ 2 即可，连接数明显增加时再调大
+      FUNASR_IO_THREAD_NUM: ${FUNASR_IO_THREAD_NUM:-2}
+      # 每路识别内部 ONNX 模型线程数
+      # 官方建议 decoder-thread-num * model-thread-num 接近可用于 ASR 的 CPU 线程数
+      # 单机混部默认 1，避免 ASR 抢占 Ollama / OCR / Java 应用 CPU
+      FUNASR_MODEL_THREAD_NUM: ${FUNASR_MODEL_THREAD_NUM:-1}

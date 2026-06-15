@@ -1,0 +1,310 @@
+services:
+  # Java 应用容器只负责运行 meta-ai-agent
+  # PostgreSQL 作为外部数据库接入，不在本 Compose 中编排
+  meta-ai-agent:
+    image: ${META_AI_IMAGE:-registry.cn-hangzhou.aliyuncs.com/metax/meta-ai-agent:latest}
+    container_name: meta-ai-agent-vllm
+    restart: unless-stopped
+    ports:
+      # 宿主机端口由 .env 统一规划，容器内端口保持应用监听端口
+      - "${META_AI_AGENT_HOST_PORT:-8008}:8008"
+    volumes:
+      # 应用配置由挂载文件统一管理，Compose 不再注入 Spring 配置
+      - ./.data/config/application.properties:/app/application.properties
+      - ./.data/config/application-openai.properties:/app/application-openai.properties
+      # 应用日志落到 Compose 同级 .data/logs，便于按部署栈隔离排查
+      - ./.data/logs:/root/logs
+    environment:
+      TZ: Asia/Shanghai
+    depends_on:
+      # vLLM 模型加载时间较长，service_started 只保证容器启动
+      # 真正可用性仍以应用调用和服务日志为准
+      vllm-chat:
+        condition: service_started
+      vllm-embedding:
+        condition: service_started
+      # Redis 是 ChatMemory 和 Redis VectorStore 的基础设施
+      # 等待健康检查通过可以避免应用启动早于 Redis 密码初始化
+      redis-stack:
+        condition: service_healthy
+      # Qdrant 使用 service_started 保持 Compose 简洁
+      # 该条件只保证容器已启动，不保证 HTTP / gRPC 已经完全就绪
+      # 如果现场出现应用早于 Qdrant 可用的问题，再恢复 healthcheck 或在应用侧增加重试
+      qdrant:
+        condition: service_started
+      # RustFS 镜像内置 curl，可用简洁健康检查等待对象存储 API 可用
+      # 避免应用启动时 bucket 初始化或文件上传早于 RustFS 就绪
+      rustfs:
+        condition: service_healthy
+      paddlex-ocr:
+        condition: service_started
+      live-asr:
+        condition: service_started
+    # 让容器内可以访问宿主机上的 PostgreSQL
+    # Linux Docker Engine 需要 host-gateway 映射，Docker Desktop 也兼容该写法
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # vLLM Chat 服务面向 OpenAI 兼容 chat completions
+  # 本地开发默认按 2 张 RTX 4090 张量并行，现场部署按实际 GPU 数调整
+  vllm-chat:
+    image: ${VLLM_IMAGE:-vllm/vllm-openai:v0.23.0-cu129-ubuntu2404}
+    container_name: meta-ai-vllm-chat
+    restart: unless-stopped
+    # vLLM 官方推荐 GPU 场景使用 host IPC，降低大模型加载和推理时的共享内存问题
+    ipc: host
+    gpus: all
+    ports:
+      # 宿主机端口由 .env 统一规划，容器内端口保持 vLLM 服务端口
+      - "${VLLM_CHAT_HOST_PORT:-8000}:8000"
+    volumes:
+      # Hugging Face 缓存落到 Compose 同级 .data，避免容器重建后重复下载模型
+      # 模型权重和 tokenizer 文件通常在 Windows / Linux、amd64 / arm64 上内容一致
+      # 运行是否兼容仍取决于 vLLM 镜像、CUDA、GPU 驱动和 CPU 架构
+      - ./.data/huggingface:/root/.cache/huggingface
+    environment:
+      TZ: Asia/Shanghai
+      # 显式固定 Hugging Face 缓存根目录，避免基础镜像或运行用户变化导致缓存路径漂移
+      HF_HOME: /root/.cache/huggingface
+      HUGGING_FACE_HUB_TOKEN: ${HF_TOKEN:-}
+      # Chat 默认看见 0,1 两张 GPU，用于匹配 tensor parallel size 2
+      CUDA_VISIBLE_DEVICES: ${VLLM_CHAT_CUDA_VISIBLE_DEVICES:-0,1}
+    command:
+      # 实际加载的 Hugging Face 模型 ID 或本地模型路径
+      - --model
+      - ${VLLM_CHAT_MODEL:-Qwen/Qwen3.6-27B}
+      # OpenAI API 暴露给 Java 侧使用的模型名
+      # 必须与 application-openai.properties 中的 chat options model 保持一致
+      - --served-model-name
+      - ${VLLM_CHAT_SERVED_MODEL:-Qwen3.6-27B}
+      # 容器内监听所有网卡，便于 Compose 内其他服务访问
+      - --host
+      - 0.0.0.0
+      # vLLM 容器内服务端口
+      - --port
+      - "8000"
+      # 张量并行 GPU 数，当前默认适配 2 张 RTX 4090
+      # 单卡部署时需要改为 1，同时模型也可能需要换小或量化版本
+      - --tensor-parallel-size
+      - ${VLLM_TENSOR_PARALLEL_SIZE:-2}
+      # vLLM 单实例可使用的 GPU 显存比例
+      # 单机同时运行 Embedding 时不要贴近 1，避免压垮共享 GPU
+      - --gpu-memory-utilization
+      - ${VLLM_CHAT_GPU_MEMORY_UTILIZATION:-0.88}
+      # 最大上下文长度，包含 prompt 和 output
+      # 24GB 级显存不要直接使用 Qwen3.6 的长上下文上限
+      # 8192 表示 8192 个 token，不是字符数
+      # 总 token 预算 = 输入侧 token + 输出侧 token
+      # 输入侧包括 system prompt、历史对话、RAG 检索内容、用户问题和工具上下文
+      # 输出侧由应用侧 max-tokens 控制，例如 application-openai.properties 中 max-tokens 为 2048
+      # 计算示例：总预算 8192 token，输出侧 2048 token，输入侧 ≈ 8192 - 2048 = 6144 token
+      #
+      # 粗略换算，不同分词器有差异，仅供估算
+      # 中文常规估算：1 个汉字 ≈ 0.7 ~ 1.3 token，1 token ≈ 0.8 ~ 1.4 个汉字
+      # 中文字符数 ≈ token 数 * 0.75 ~ token 数 * 1.5
+      # 例如 8192 token ≈ 8192 * 0.75 ~ 8192 * 1.5 ≈ 6000 ~ 12000 个中文字符
+      # 中文保守预算：OCR、表格、数字、英文混排较多时，可按 1 个汉字 ≈ 1 ~ 1.5 token 预估
+      #
+      # 英文常规估算：1 个英文字符 ≈ 0.25 ~ 0.33 token，1 token ≈ 3 ~ 4 个英文字符，约 0.75 个单词
+      # 英文字符数 ≈ token 数 * 3 ~ token 数 * 4
+      # 英文单词数 ≈ token 数 * 0.75
+      # 例如 8192 token ≈ 8192 * 3 ~ 8192 * 4 ≈ 24000 ~ 32000 个英文字符
+      #
+      # 粗略估算
+      # 8192 token ≈ 6000 ~ 12000 个中文字符，或 24000 ~ 32000 个英文字符
+      # 6144 token ≈ 4500 ~ 9000 个中文字符，或 18000 ~ 24000 个英文字符
+      # Qwen3.6-27B 模型卡标注原生上下文为 262144 token，可扩展到约 1010000 token
+      # 官方 262144 token vLLM 示例使用 8 卡张量并行，本机 2 张 4090 不应直接照搬
+      # 2 张 RTX 4090 仍是两张 24GB 显卡，不能简单等同单张 48GB 显卡
+      # 部署后可按实际并发、RAG 内容长度和显存余量逐步调到 16384
+      - --max-model-len
+      - ${VLLM_MAX_MODEL_LEN:-8192}
+      # Qwen3 reasoning 输出解析器
+      # --reasoning-parser qwen3 会把 <think>...</think> 中的内容解析为 OpenAI 兼容 reasoning 字段
+      # 当前 vLLM 官方稳定版文档未要求搭配 --enable-reasoning
+      - --reasoning-parser
+      - qwen3
+      # 默认关闭 Qwen3 thinking，避免普通问答额外输出 reasoning content 并增加 token 消耗
+      # 如需单次请求开启，可由请求侧通过 chat_template_kwargs.enable_thinking=true 覆盖
+      - --default-chat-template-kwargs
+      - '{"enable_thinking": false}'
+
+  # vLLM Embedding 服务单独运行
+  # Chat 模型和 Embedding 模型拆开，便于独立评测吞吐和显存占用
+  vllm-embedding:
+    image: ${VLLM_IMAGE:-vllm/vllm-openai:v0.23.0-cu129-ubuntu2404}
+    container_name: meta-ai-vllm-embedding
+    restart: unless-stopped
+    ipc: host
+    gpus: all
+    ports:
+      # 宿主机端口由 .env 统一规划，容器内端口保持 vLLM 服务端口
+      - "${VLLM_EMBEDDING_HOST_PORT:-8001}:8000"
+    volumes:
+      # 与 Chat 服务共享模型缓存，避免同一模型仓库重复下载
+      # 共享的是 Hugging Face 模型资产，不代表不同系统架构一定能运行同一推理镜像
+      - ./.data/huggingface:/root/.cache/huggingface
+    environment:
+      TZ: Asia/Shanghai
+      # 与 Chat 服务使用同一个 Hugging Face 缓存根目录
+      HF_HOME: /root/.cache/huggingface
+      HUGGING_FACE_HUB_TOKEN: ${HF_TOKEN:-}
+      # Embedding 只看见一张 GPU，避免主动占用 Chat 的全部可见设备
+      # 当 Chat 使用 0,1 两张卡时，这里仍会与 Chat 共享 GPU 1
+      CUDA_VISIBLE_DEVICES: ${VLLM_EMBEDDING_CUDA_VISIBLE_DEVICES:-1}
+    command:
+      # 实际加载的 Hugging Face Embedding 模型 ID 或本地模型路径
+      - --model
+      - ${VLLM_EMBEDDING_MODEL:-BAAI/bge-m3}
+      # 固定模型权重 revision，避免 upstream 更新导致历史向量和新向量不可比
+      - --revision
+      - ${VLLM_EMBEDDING_REVISION:-5617a9f61b028005a4858fdac845db406aefb181}
+      # tokenizer 也固定到同一 revision，避免分词逻辑和权重版本错位
+      - --tokenizer-revision
+      - ${VLLM_EMBEDDING_REVISION:-5617a9f61b028005a4858fdac845db406aefb181}
+      # OpenAI API 暴露给 Java 侧使用的模型名
+      # 必须与 application-openai.properties 中的 embedding options model 保持一致
+      - --served-model-name
+      - ${VLLM_EMBEDDING_SERVED_MODEL:-bge-m3}
+      # 明确启用 embedding 任务，避免 vLLM 按模型类型推断成其他服务模式
+      - --task
+      - embed
+      # 容器内监听所有网卡，便于 Compose 内其他服务访问
+      - --host
+      - 0.0.0.0
+      # vLLM 容器内服务端口，宿主机通过 8001 映射访问
+      - --port
+      - "8000"
+      # Embedding 服务可使用的 GPU 显存比例
+      # 单机共享 GPU 时必须低于 Chat，避免 embedding 批处理挤占推理显存
+      - --gpu-memory-utilization
+      - ${VLLM_EMBEDDING_GPU_MEMORY_UTILIZATION:-0.25}
+      # 限制 Embedding 并发序列数，控制峰值显存和瞬时计算压力
+      - --max-num-seqs
+      - ${VLLM_EMBEDDING_MAX_NUM_SEQS:-16}
+
+  # Redis Stack 不是普通 Redis
+  # Redis VectorStore 依赖 RediSearch 和 RedisJSON 模块
+  redis-stack:
+    image: ${REDIS_IMAGE:-redis/redis-stack-server:7.4.0-v8}
+    container_name: meta-ai-redis-stack-vllm
+    restart: unless-stopped
+    ports:
+      # 宿主机端口由 .env 统一规划，容器内端口保持 Redis 默认端口
+      - "${REDIS_HOST_PORT:-6399}:6379"
+    volumes:
+      # Redis 数据目录挂载到 Compose 同级 .data
+      # AOF 由 REDIS_ARGS 显式开启，RDB 仍按 Redis 默认 save 策略工作
+      - ./.data/redis:/data
+    environment:
+      TZ: Asia/Shanghai
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-123456}
+      # appendonly yes 开启 AOF 持久化
+      # appendfsync everysec 表示每秒刷盘一次，通常是性能和可靠性的折中
+      # 检查方式：docker compose exec redis-stack redis-cli -a "$REDIS_PASSWORD" CONFIG GET appendonly appendfsync
+      # 检查文件：docker compose exec redis-stack sh -c 'ls -lah /data'
+      REDIS_ARGS: --requirepass ${REDIS_PASSWORD:-123456} --appendonly yes --appendfsync everysec
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli --no-auth-warning -a \"$${REDIS_PASSWORD}\" ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # Qdrant 用于和 Redis VectorStore 做召回性能对比
+  # 是否启用由挂载的 application.properties 中 spring.ai.vectorstore.type 决定
+  qdrant:
+    image: ${QDRANT_IMAGE:-qdrant/qdrant:v1.18}
+    container_name: meta-ai-qdrant-vllm
+    restart: unless-stopped
+    # 提高 Qdrant 可打开文件数量上限
+    # 高并发检索、较多 segment、较大 collection 时默认 nofile 可能过低
+    ulimits:
+      nofile:
+        soft: ${QDRANT_ULIMIT_NOFILE_SOFT:-65535}
+        hard: ${QDRANT_ULIMIT_NOFILE_HARD:-65535}
+    ports:
+      # HTTP API 宿主机端口由 .env 统一规划，容器内端口保持 Qdrant 默认端口
+      - "${QDRANT_HTTP_HOST_PORT:-6333}:6333"
+      # gRPC API 宿主机端口由 .env 统一规划，容器内端口保持 Qdrant 默认端口
+      - "${QDRANT_GRPC_HOST_PORT:-6334}:6334"
+    volumes:
+      # Qdrant collection 和 payload 持久化目录
+      - ./.data/qdrant:/qdrant/storage
+    environment:
+      TZ: Asia/Shanghai
+      # 关闭 Qdrant 匿名遥测
+      # 单机离线部署不依赖外部观测链路，显式关闭便于企业环境审计
+      QDRANT__TELEMETRY_DISABLED: ${QDRANT_TELEMETRY_DISABLED:-true}
+      # Qdrant 服务日志级别
+      # 排障时可临时改为 DEBUG，稳定运行建议保持 INFO
+      QDRANT__LOG_LEVEL: ${QDRANT_LOG_LEVEL:-INFO}
+
+  # RustFS 提供 S3 兼容对象存储
+  # RAG 原始文件先进入对象存储，再进入 OCR / Reader / VectorStore 链路
+  rustfs:
+    image: ${RUSTFS_IMAGE:-rustfs/rustfs:1.0.0-beta.6}
+    container_name: meta-ai-rustfs-vllm
+    restart: unless-stopped
+    ports:
+      # S3 API 宿主机端口由 .env 统一规划，容器内端口保持 RustFS 默认端口
+      # 默认暴露到宿主机所有网卡，局域网可访问，访问范围依赖宿主机防火墙或内网边界控制
+      - "${RUSTFS_API_HOST_PORT:-9000}:9000"
+      # Console 宿主机端口由 .env 统一规划，容器内端口保持 RustFS 默认端口
+      # 默认暴露到宿主机所有网卡，便于局域网运维访问
+      - "${RUSTFS_CONSOLE_HOST_PORT:-9001}:9001"
+    volumes:
+      # RustFS bucket 和对象数据持久化目录
+      - ./.data/rustfs:/data
+    environment:
+      TZ: Asia/Shanghai
+      RUSTFS_ADDRESS: :9000
+      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:-admin}
+      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY:-Xc.123456}
+      RUSTFS_CONSOLE_ENABLE: "true"
+      # :9001 表示 Console 在容器内监听所有网卡的 9001 端口
+      # 宿主机和局域网访问范围由 ports 映射和主机防火墙共同决定
+      RUSTFS_CONSOLE_ADDRESS: :9001
+    command:
+      - /data
+    healthcheck:
+      # RustFS 当前镜像内置 curl
+      # 已验证 /health 返回 200，/healthz、/readyz 和 MinIO 风格健康路径返回 403
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9000/health >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # PaddleX OCR 负责扫描版 PDF 和图片识别
+  # 默认使用 CPU 镜像，避免与 vLLM 抢 GPU 显存
+  paddlex-ocr:
+    image: ${PADDLEX_OCR_IMAGE:-registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:v1.0.0}
+    container_name: meta-ai-paddlex-ocr-vllm
+    restart: unless-stopped
+    ports:
+      # 宿主机端口由 .env 统一规划，容器内端口保持 OCR 服务端口
+      - "${PADDLEX_OCR_HOST_PORT:-18080}:8080"
+    environment:
+      TZ: Asia/Shanghai
+
+  # live-asr 提供 FunASR 2pass WebSocket 实时语音识别
+  # 镜像内已预置模型，不挂载 /workspace/models
+  live-asr:
+    image: ${LIVE_ASR_IMAGE:-registry.cn-hangzhou.aliyuncs.com/metax/live-asr:v1.0.0}
+    container_name: meta-ai-live-asr-vllm
+    restart: unless-stopped
+    ports:
+      # 宿主机端口由 .env 统一规划，容器内端口保持 FunASR WebSocket 端口
+      - "${LIVE_ASR_HOST_PORT:-10096}:10095"
+    environment:
+      TZ: Asia/Shanghai
+      # FunASR 服务端推理线程池数量，基本决定最大并发识别路数
+      # 不设置时镜像会按 CPU processor 数自动取值，单机混部时可能过高
+      FUNASR_DECODER_THREAD_NUM: ${FUNASR_DECODER_THREAD_NUM:-4}
+      # WebSocket / 网络 IO 线程数
+      # 低并发单机部署通常 1 ~ 2 即可，连接数明显增加时再调大
+      FUNASR_IO_THREAD_NUM: ${FUNASR_IO_THREAD_NUM:-2}
+      # 每路识别内部 ONNX 模型线程数
+      # 官方建议 decoder-thread-num * model-thread-num 接近可用于 ASR 的 CPU 线程数
+      # 单机混部默认 1，避免 ASR 抢占 vLLM / OCR / Java 应用 CPU
+      FUNASR_MODEL_THREAD_NUM: ${FUNASR_MODEL_THREAD_NUM:-1}
