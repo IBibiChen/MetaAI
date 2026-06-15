@@ -2779,10 +2779,19 @@ async function downloadReference(reference: RetrievalDocumentReference) {
 }
 
 .message-avatar.user {
-  border: 1px solid rgba(126, 168, 255, 0.24);
+  width: 30px;
+  height: 30px;
+  //border: 1px solid rgba(126, 168, 255, 0.24);
   color: #c2d2ff;
   background: radial-gradient(circle at 35% 30%, rgba(126, 168, 255, 0.18), transparent 58%),
   rgba(15, 22, 32, 0.92);
+  font-size: 22px;
+}
+
+.message-avatar.user :deep(.n-icon),
+.message-avatar.user :deep(svg) {
+  width: 28px;
+  height: 28px;
 }
 
 .message-bubble {
