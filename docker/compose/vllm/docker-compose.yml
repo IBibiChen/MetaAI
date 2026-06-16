@@ -169,8 +169,12 @@ services:
       # 必须与 application-openai.properties 中的 embedding options model 保持一致
       - --served-model-name
       - ${VLLM_EMBEDDING_SERVED_MODEL:-bge-m3}
-      # 明确启用 embedding 任务，避免 vLLM 按模型类型推断成其他服务模式
-      - --task
+      # 明确使用 vLLM pooling runner 提供 Embedding 服务
+      # embed 是普通 dense embedding 任务，适配 OpenAI 兼容 /v1/embeddings
+      # 不要改成 token_embed，除非应用侧支持 BGE-M3 多向量输出
+      - --runner
+      - pooling
+      - --pooler-config.task
       - embed
       # 容器内监听所有网卡，便于 Compose 内其他服务访问
       - --host
