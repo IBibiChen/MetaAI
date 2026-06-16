@@ -138,54 +138,6 @@
         </div>
       </div>
 
-      <section
-          v-if="voicePanelVisible"
-          class="voice-assistant-panel"
-          :class="`is-${voiceUiState}`"
-          :style="voicePanelStyle"
-          aria-live="polite"
-      >
-        <div class="voice-assistant-core">
-          <div class="voice-brand-block">
-            <div class="voice-logo-shell" aria-hidden="true">
-              <img class="voice-logo" :src="lingXiaoZhiVoiceLogo" alt=""/>
-            </div>
-            <strong>陵小智</strong>
-          </div>
-          <span class="voice-panel-divider" aria-hidden="true"></span>
-          <div class="voice-dialog-block">
-            <div class="voice-panel-copy">
-              <strong>{{ voicePanelGreeting }}</strong>
-              <span>{{ voiceStatusTitle }}</span>
-              <small>{{ voiceStatusDescription }}</small>
-            </div>
-            <div class="voice-wave-shell" aria-hidden="true">
-              <span class="voice-wave-ribbon before"></span>
-              <span class="voice-wave-ribbon after"></span>
-              <span class="voice-wave-baseline"></span>
-              <span
-                  v-for="index in voiceWaveBars"
-                  :key="index"
-                  class="voice-wave-bar"
-                  :style="voiceWaveBarStyle(index)"
-              ></span>
-            </div>
-          </div>
-        </div>
-        <p v-if="voicePreviewText" class="voice-preview-text">{{ voicePreviewText }}</p>
-        <button
-            class="voice-panel-close"
-            type="button"
-            title="结束语音"
-            aria-label="结束语音"
-            @click="() => stopVoiceInput()"
-        >
-          <n-icon>
-            <X/>
-          </n-icon>
-        </button>
-      </section>
-
       <div class="message-scroll-shell" @mouseenter="revealMessageScrollbar">
         <section
             ref="messageViewport"
@@ -413,7 +365,7 @@
         <button
             type="button"
             :class="['composer-button', 'voice-button', { recording: voiceSessionActive }]"
-            :disabled="sending || fileContextBusy"
+            :disabled="voiceButtonDisabled"
             :title="voiceButtonTitle"
             :aria-label="voiceButtonTitle"
             @click="toggleVoiceInput"
@@ -422,6 +374,9 @@
             <span class="voice-mic-orbit"></span>
             <span class="voice-mic-dots"></span>
             <span class="voice-mic-wave left"></span>
+            <span class="voice-idle-mark">
+              <i v-for="index in 4" :key="index"></i>
+            </span>
             <span class="voice-mic-core">
               <Mic class="voice-mic-icon"/>
             </span>
@@ -432,7 +387,9 @@
             class="composer-button attachment-button"
             secondary
             :loading="chatFileUploading"
-            :disabled="sending || fileContextBusy"
+            :disabled="attachmentDisabled"
+            :title="attachmentButtonTitle"
+            :aria-label="attachmentButtonTitle"
             @click="openChatFilePicker"
         >
           <template #icon>
@@ -582,8 +539,7 @@ import {
   Sparkles,
   SquarePen,
   Star,
-  Trash2,
-  X
+  Trash2
 } from 'lucide-vue-next'
 
 import {
@@ -613,7 +569,6 @@ import type {
   StorageDocument
 } from '@/types/api'
 import type {ChatStreamHandle} from '@/api/chat'
-import lingXiaoZhiVoiceLogo from '@/assets/lingxiaozhi-v.png'
 
 interface ChatMessage {
   id: string
@@ -628,7 +583,7 @@ interface ChatMessage {
 
 type ChatFileItemStatus = 'uploading' | 'parsing' | 'ready' | 'failed'
 
-type VoiceUiState = 'idle' | 'connecting' | 'voiceReady' | 'listening' | 'recognizing' | 'finalizing' | 'error'
+type VoiceUiState = 'idle' | 'connecting' | 'voiceReady' | 'listening' | 'recognizing' | 'error'
 
 interface ChatFileItem {
   key: string
@@ -673,7 +628,6 @@ const voiceRecording = ref(false)
 const voiceConnecting = ref(false)
 const voiceUiState = ref<VoiceUiState>('idle')
 const voiceLevel = ref(0)
-const voicePreviewText = ref('')
 const uploadingChatFileScopeKey = ref<string | null>(null)
 const historyLoading = ref(false)
 const messageTransitioning = ref(false)
@@ -751,7 +705,6 @@ const FUNASR_TARGET_SAMPLE_RATE = 16000
 const FUNASR_CHUNK_SAMPLE_SIZE = 960
 const VOICE_ACTIVE_LEVEL_THRESHOLD = 0.045
 const VOICE_ACTIVE_HOLD_MS = 720
-const voiceWaveBars = Array.from({length: 44}, (_, index) => index + 1)
 
 const markdown = new MarkdownIt({
   breaks: true,
@@ -817,13 +770,14 @@ const chatFileUploading = computed(() => uploadingChatFileScopeKey.value === cur
 const fileContextBusy = computed(() => chatFileUploading.value || visibleChatFiles.value.some((file) =>
     file.status === 'uploading' || file.status === 'parsing'))
 const selectedReadyFileCount = computed(() => selectedReadyChatFiles().length)
-const showRagContextScope = computed(() => chatMode.value === 'rag' && selectedReadyFileCount.value > 0)
-const canSend = computed(() => Boolean(draft.value.trim()) && !sending.value && !fileContextBusy.value
-    && !voiceRecording.value && !voiceConnecting.value)
-const sendButtonText = computed(() => fileContextBusy.value ? '处理中' : '发送')
 const voiceSessionActive = computed(() => voiceRecording.value || voiceConnecting.value || voiceUiState.value !== 'idle')
+const showRagContextScope = computed(() => chatMode.value === 'rag' && selectedReadyFileCount.value > 0)
+const canSend = computed(() => Boolean(draft.value.trim()) && !sending.value && !fileContextBusy.value)
+const sendButtonText = computed(() => fileContextBusy.value ? '处理中' : '发送')
 const composerPlaceholder = computed(() => voiceSessionActive.value ? '' : '输入问题，Enter 发送，Shift + Enter 换行')
-const voicePanelVisible = computed(() => voiceSessionActive.value)
+const attachmentDisabled = computed(() => sending.value || fileContextBusy.value)
+const attachmentButtonTitle = computed(() => '添加附件')
+const voiceButtonDisabled = computed(() => !voiceSessionActive.value && (sending.value || fileContextBusy.value))
 const voiceStatusTitle = computed(() => {
   switch (voiceUiState.value) {
     case 'connecting':
@@ -832,8 +786,6 @@ const voiceStatusTitle = computed(() => {
       return '语音已开启'
     case 'recognizing':
       return '识别中'
-    case 'finalizing':
-      return '整理中'
     case 'error':
       return '语音连接异常'
     case 'listening':
@@ -842,40 +794,13 @@ const voiceStatusTitle = computed(() => {
       return '陵小智'
   }
 })
-const voicePanelGreeting = computed(() => {
-  if (voiceUiState.value === 'connecting') {
-    return '连接中'
-  }
-  if (voiceUiState.value === 'error') {
-    return '异常'
-  }
-  if (voiceUiState.value === 'finalizing') {
-    return '收到'
-  }
-  return '我在'
-})
-const voiceStatusDescription = computed(() => {
-  switch (voiceUiState.value) {
-    case 'connecting':
-      return '正在请求麦克风并连接实时识别'
-    case 'voiceReady':
-      return '我在，直接说话即可'
-    case 'recognizing':
-      return '实时转写会先进入输入框'
-    case 'finalizing':
-      return '正在等待句尾修正结果'
-    case 'error':
-      return '请检查麦克风权限和 FunASR WebSocket'
-    case 'listening':
-      return '我在，继续说'
-    default:
-      return '点击麦克风开启语音模式'
-  }
-})
-const voicePanelStyle = computed(() => ({
-  '--voice-level': `${voiceLevel.value}`,
-}))
 const voiceButtonTitle = computed(() => {
+  if (!voiceSessionActive.value && fileContextBusy.value) {
+    return '附件处理中，暂不能开启语音'
+  }
+  if (!voiceSessionActive.value && sending.value) {
+    return '正在发送，暂不能开启语音'
+  }
   if (voiceConnecting.value) {
     return '连接语音模式'
   }
@@ -919,25 +844,6 @@ function streamSwitchRailStyle({checked}: { checked: boolean }) {
   }
 }
 
-/**
- * 计算语音浮层单个声纹条的动效参数
- *
- * <p>
- * 每个条形保留不同相位，整体再叠加实时音量，避免识别中动画变成机械闪烁
- *
- * @param index 声纹条序号
- * @return CSS 变量和动画延迟
- */
-function voiceWaveBarStyle(index: number) {
-  const phase = (index % 6) / 6
-  const weight = 0.42 + Math.abs(Math.sin(index * 1.35)) * 0.58
-  const height = 18 + Math.round((voiceLevel.value * 42 + phase * 18) * weight)
-  return {
-    '--bar-height': `${height}px`,
-    animationDelay: `${index * -72}ms`,
-  }
-}
-
 let stopActiveTyping: (() => void) | null = null
 let activeTypingRenderer: TypingRenderer | null = null
 let activeStream: ChatStreamHandle | null = null
@@ -957,7 +863,6 @@ let voicePendingSamples = new Int16Array()
 let voiceBaseDraft = ''
 let voiceConfirmedText = ''
 let voiceOnlineText = ''
-let voiceCloseTimer: number | null = null
 let voiceLastActiveAt = 0
 let draggingThumb = false
 let thumbDragStartY = 0
@@ -1021,9 +926,6 @@ watch(showRagContextScope, async (visible) => {
  * 流式请求使用 SSE 增量返回，非流式请求等待一次性响应
  */
 async function sendMessage() {
-  if (voiceRecording.value || voiceConnecting.value) {
-    stopVoiceInput()
-  }
   const content = draft.value.trim()
   if (fileContextBusy.value) {
     message.warning('文件处理完成后再发送')
@@ -1032,6 +934,7 @@ async function sendMessage() {
   if (sending.value || !content) return
   if (content) {
     draft.value = ''
+    resetVoiceDraftAfterSend()
   }
   await sendMessageContent(content)
 }
@@ -1144,7 +1047,6 @@ async function startVoiceInput() {
   resetVoiceTranscript()
   try {
     voiceBaseDraft = draft.value
-    clearVoiceCloseTimer()
     if (voiceSocket) {
       voiceSocket.close()
       voiceSocket = null
@@ -1359,7 +1261,7 @@ function handleVoiceSocketMessage(event: MessageEvent<string>) {
  * 停止语音输入
  *
  * <p>
- * 停止时先补发剩余 PCM，再发送 FunASR 断句结束标志，保留短暂时间等待 2pass-offline 修正结果
+ * 停止时立即释放页面语音态和浏览器采集资源，不等待 FunASR 离线句尾修正
  *
  * @param sendEnd 是否向 FunASR 发送结束标志
  */
@@ -1371,27 +1273,22 @@ function stopVoiceInput(sendEnd = true) {
   }
   voiceRecording.value = false
   voiceConnecting.value = false
-  voiceUiState.value = 'finalizing'
+  voiceUiState.value = 'idle'
+  voiceLevel.value = 0
   flushVoiceSamples()
-  if (sendEnd && voiceSocket?.readyState === WebSocket.OPEN) {
-    voiceSocket.send(JSON.stringify({
+  const socket = voiceSocket
+  if (sendEnd && socket?.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify({
       is_speaking: false,
     }))
   }
   cleanupVoiceAudio()
-  const socket = voiceSocket
-  voiceCloseTimer = window.setTimeout(() => {
-    if (socket?.readyState === WebSocket.OPEN || socket?.readyState === WebSocket.CONNECTING) {
-      socket.close()
-    }
-    if (voiceSocket === socket) {
-      voiceSocket = null
-    }
-    if (voiceUiState.value === 'finalizing') {
-      voiceUiState.value = 'idle'
-      voiceLevel.value = 0
-    }
-  }, 3000)
+  if (socket?.readyState === WebSocket.OPEN || socket?.readyState === WebSocket.CONNECTING) {
+    socket.close()
+  }
+  if (voiceSocket === socket) {
+    voiceSocket = null
+  }
 }
 
 /**
@@ -1409,7 +1306,6 @@ function flushVoiceSamples() {
  */
 function updateVoiceDraft() {
   const voiceText = `${voiceConfirmedText}${voiceOnlineText}`
-  voicePreviewText.value = voiceText
   if (!voiceText) {
     draft.value = voiceBaseDraft
     return
@@ -1419,13 +1315,29 @@ function updateVoiceDraft() {
 }
 
 /**
+ * 发送后重置语音转写草稿基准
+ *
+ * <p>
+ * 发送消息不再结束语音连接，只清理已经进入本轮消息的转写文本，后续识别继续写入空输入框
+ */
+function resetVoiceDraftAfterSend() {
+  if (!voiceSessionActive.value) return
+  voiceBaseDraft = ''
+  voiceConfirmedText = ''
+  voiceOnlineText = ''
+  voiceLastActiveAt = 0
+  if (voiceUiState.value === 'recognizing') {
+    voiceUiState.value = 'listening'
+  }
+}
+
+/**
  * 重置当前语音识别文本缓存
  */
 function resetVoiceTranscript() {
   voicePendingSamples = new Int16Array()
   voiceConfirmedText = ''
   voiceOnlineText = ''
-  voicePreviewText.value = ''
   voiceLastActiveAt = 0
 }
 
@@ -1440,7 +1352,6 @@ function cleanupVoiceInput(closeSocket: boolean) {
   voiceUiState.value = 'idle'
   voiceLevel.value = 0
   cleanupVoiceAudio()
-  clearVoiceCloseTimer()
   if (closeSocket && voiceSocket) {
     voiceSocket.close()
     voiceSocket = null
@@ -1464,16 +1375,6 @@ function cleanupVoiceAudio() {
     void voiceAudioContext.close()
   }
   voiceAudioContext = null
-}
-
-/**
- * 清理延迟关闭 WebSocket 的定时器
- */
-function clearVoiceCloseTimer() {
-  if (voiceCloseTimer !== null) {
-    window.clearTimeout(voiceCloseTimer)
-    voiceCloseTimer = null
-  }
 }
 
 /**
@@ -3010,268 +2911,6 @@ async function downloadReference(reference: RetrievalDocumentReference) {
   overflow: hidden;
 }
 
-.voice-assistant-panel {
-  position: absolute;
-  top: clamp(132px, 33%, 258px);
-  left: 50%;
-  z-index: 8;
-  display: grid;
-  width: min(860px, calc(100% - 260px));
-  min-width: 620px;
-  min-height: 220px;
-  grid-template-columns: minmax(0, 1fr);
-  align-items: center;
-  gap: 10px;
-  border: 1px solid rgba(151, 184, 221, 0.42);
-  border-radius: 24px;
-  padding: 24px 58px 24px 28px;
-  color: #dce5f0;
-  background: linear-gradient(135deg, rgba(12, 24, 38, 0.92), rgba(7, 15, 27, 0.86)),
-  radial-gradient(circle at 18% 30%, rgba(0, 209, 255, 0.16), transparent 32%);
-  box-shadow: 0 26px 72px rgba(0, 0, 0, 0.36),
-  inset 0 0 0 1px rgba(255, 255, 255, 0.05),
-  0 0 42px rgba(0, 209, 255, calc(0.06 + var(--voice-level) * 0.12));
-  backdrop-filter: blur(20px);
-  transform: translateX(-50%);
-}
-
-.voice-assistant-panel::before {
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: linear-gradient(90deg, transparent, rgba(102, 217, 255, 0.08), transparent),
-  radial-gradient(circle at 74% 52%, rgba(0, 209, 255, calc(0.08 + var(--voice-level) * 0.18)), transparent 34%);
-  content: "";
-  pointer-events: none;
-}
-
-.voice-assistant-panel.is-recognizing {
-  border-color: rgba(120, 221, 255, 0.66);
-  box-shadow: 0 28px 78px rgba(0, 0, 0, 0.4),
-  inset 0 0 0 1px rgba(255, 255, 255, 0.06),
-  0 0 54px rgba(0, 209, 255, calc(0.12 + var(--voice-level) * 0.22));
-}
-
-.voice-assistant-panel.is-error {
-  border-color: rgba(255, 117, 117, 0.38);
-}
-
-.voice-assistant-core {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  grid-template-columns: 190px 1px minmax(0, 1fr);
-  align-items: center;
-  gap: 28px;
-  min-height: 154px;
-}
-
-.voice-brand-block {
-  display: grid;
-  place-items: center;
-  gap: 8px;
-}
-
-.voice-brand-block strong {
-  color: #eef8ff;
-  font-size: 20px;
-  font-weight: 850;
-  line-height: 1.2;
-  text-shadow: 0 0 16px rgba(0, 209, 255, 0.28);
-}
-
-.voice-panel-divider {
-  display: block;
-  width: 1px;
-  height: 144px;
-  background: linear-gradient(180deg, transparent, rgba(151, 184, 221, 0.54), transparent);
-}
-
-.voice-dialog-block {
-  display: grid;
-  grid-template-columns: 132px minmax(0, 1fr);
-  align-items: center;
-  gap: 22px;
-  min-width: 0;
-}
-
-.voice-logo-shell {
-  position: relative;
-  display: grid;
-  width: 128px;
-  height: 128px;
-  place-items: center;
-  border: 1px solid rgba(0, 209, 255, 0.28);
-  border-radius: 999px;
-  background: radial-gradient(circle, rgba(0, 209, 255, 0.16), rgba(4, 18, 31, 0.74) 58%, rgba(2, 8, 16, 0.88));
-  box-shadow: inset 0 0 28px rgba(0, 209, 255, 0.12),
-  0 0 30px rgba(0, 209, 255, calc(0.08 + var(--voice-level) * 0.22));
-}
-
-.voice-logo-shell::before,
-.voice-logo-shell::after {
-  position: absolute;
-  inset: 8px;
-  border: 1px solid rgba(0, 209, 255, 0.34);
-  border-radius: inherit;
-  content: "";
-  pointer-events: none;
-}
-
-.voice-logo-shell::after {
-  inset: -9px;
-  border-style: dashed;
-  opacity: 0.44;
-  animation: voice-orbit-spin 10s linear infinite;
-}
-
-.voice-logo {
-  display: block;
-  width: 92px;
-  height: 92px;
-  object-fit: contain;
-  filter: drop-shadow(0 0 18px rgba(0, 209, 255, 0.32));
-}
-
-.voice-wave-shell {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  height: 126px;
-  min-width: 0;
-  overflow: hidden;
-}
-
-.voice-wave-shell::before {
-  position: absolute;
-  inset: 10px 0;
-  background-image: radial-gradient(circle, rgba(0, 209, 255, 0.32) 1px, transparent 1.6px);
-  background-size: 28px 22px;
-  opacity: 0.3;
-  content: "";
-  mask-image: linear-gradient(90deg, transparent, black 18%, black 82%, transparent);
-  pointer-events: none;
-}
-
-.voice-wave-ribbon {
-  position: absolute;
-  top: 50%;
-  width: 50%;
-  height: 54px;
-  opacity: calc(0.34 + var(--voice-level) * 0.32);
-  background: linear-gradient(90deg, transparent, rgba(0, 209, 255, 0.3), rgba(126, 168, 255, 0.12), transparent);
-  filter: blur(1px);
-  transform: translateY(-50%) skewY(-7deg);
-  pointer-events: none;
-}
-
-.voice-wave-ribbon.before {
-  left: 0;
-  clip-path: polygon(0 52%, 20% 42%, 40% 50%, 58% 32%, 78% 58%, 100% 46%, 100% 64%, 78% 78%, 58% 52%, 40% 68%, 20% 58%, 0 68%);
-}
-
-.voice-wave-ribbon.after {
-  right: 0;
-  clip-path: polygon(0 46%, 20% 58%, 42% 34%, 60% 52%, 80% 42%, 100% 52%, 100% 68%, 80% 58%, 60% 70%, 42% 52%, 20% 78%, 0 64%);
-}
-
-.voice-wave-baseline {
-  position: absolute;
-  top: 50%;
-  left: 3%;
-  right: 3%;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(0, 209, 255, 0.72), rgba(126, 168, 255, 0.46), transparent);
-  box-shadow: 0 0 10px rgba(0, 209, 255, 0.32);
-  transform: translateY(-50%);
-}
-
-.voice-wave-bar {
-  position: relative;
-  z-index: 1;
-  display: block;
-  width: 3px;
-  height: var(--bar-height);
-  min-height: 4px;
-  max-height: 108px;
-  border-radius: 999px;
-  opacity: calc(0.56 + var(--voice-level) * 0.4);
-  background: linear-gradient(180deg, rgba(0, 209, 255, 0.1), rgba(0, 238, 255, 0.98), rgba(0, 120, 255, 0.86), rgba(0, 209, 255, 0.1));
-  box-shadow: 0 0 16px rgba(0, 209, 255, calc(0.12 + var(--voice-level) * 0.32));
-  animation: voice-wave-flow 920ms ease-in-out infinite;
-  transition: height 90ms ease-out, opacity 90ms ease-out;
-}
-
-.voice-panel-copy {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  align-content: center;
-  gap: 5px;
-  padding-left: 1px;
-}
-
-.voice-panel-copy strong {
-  color: #f4f7fb;
-  font-size: 22px;
-  font-weight: 850;
-  line-height: 1.35;
-}
-
-.voice-panel-copy span {
-  color: #00e5ff;
-  font-size: 22px;
-  font-weight: 850;
-  line-height: 1.28;
-  text-shadow: 0 0 18px rgba(0, 209, 255, 0.35);
-}
-
-.voice-panel-copy small {
-  color: #9fb0c3;
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-.voice-preview-text {
-  position: relative;
-  z-index: 1;
-  grid-column: 1 / -1;
-  max-height: 72px;
-  margin: 2px 0 0 220px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 10px 0 0 0;
-  overflow: hidden;
-  color: #d9f9ff;
-  font-size: 13px;
-  line-height: 1.55;
-  word-break: break-word;
-}
-
-.voice-panel-close {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  z-index: 2;
-  display: grid;
-  width: 30px;
-  height: 30px;
-  place-items: center;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 7px;
-  padding: 0;
-  color: #9aa8ba;
-  background: rgba(255, 255, 255, 0.055);
-  cursor: pointer;
-}
-
-.voice-panel-close:hover {
-  border-color: rgba(65, 214, 183, 0.34);
-  color: #d7fff6;
-  background: rgba(65, 214, 183, 0.1);
-}
-
 .chat-toolbar {
   display: flex;
   align-items: center;
@@ -3847,6 +3486,12 @@ async function downloadReference(reference: RetrievalDocumentReference) {
   gap: 10px 12px;
 }
 
+.composer.voice-active .composer-context-row {
+  margin-bottom: 10px;
+  position: relative;
+  z-index: 3;
+}
+
 .context-scope-row {
   display: inline-flex;
   flex: 0 0 auto;
@@ -3956,14 +3601,20 @@ async function downloadReference(reference: RetrievalDocumentReference) {
 }
 
 .composer.voice-active {
-  grid-template-columns: minmax(0, 1fr) 150px auto auto;
-  min-height: 118px;
+  grid-template-columns: minmax(0, 1fr) 150px 86px 92px;
+  column-gap: 14px;
+  min-height: 196px;
   align-items: center;
-  padding-top: 16px;
+  padding-top: 28px;
   padding-right: 16px;
-  padding-bottom: 16px;
+  padding-bottom: 28px;
   background: radial-gradient(circle at 75% 50%, rgba(0, 209, 255, 0.12), transparent 22%),
   linear-gradient(180deg, rgba(0, 209, 255, 0.04), transparent);
+}
+
+.composer.voice-active > .composer-button {
+  position: relative;
+  z-index: 3;
 }
 
 .chat-file-input {
@@ -3974,6 +3625,7 @@ async function downloadReference(reference: RetrievalDocumentReference) {
   position: relative;
   min-width: 0;
   grid-column: 1;
+  z-index: 2;
 }
 
 .composer-input {
@@ -4170,9 +3822,9 @@ async function downloadReference(reference: RetrievalDocumentReference) {
 .composer.voice-active .composer-input :deep(.n-input__textarea-el) {
   min-height: 84px !important;
   padding-left: 164px !important;
-  padding-right: 132px !important;
-  padding-top: 28px !important;
-  padding-bottom: 18px !important;
+  padding-right: 20px !important;
+  padding-top: 34px !important;
+  padding-bottom: 12px !important;
 }
 
 .composer.voice-active .composer-input :deep(.n-input__textarea-el::placeholder) {
@@ -4244,29 +3896,36 @@ async function downloadReference(reference: RetrievalDocumentReference) {
 .voice-button {
   position: relative;
   display: grid;
+  box-sizing: border-box;
   width: 42px;
   min-width: 42px;
   height: 42px;
+  aspect-ratio: 1;
   place-items: center;
-  border: 1px solid rgba(126, 168, 255, 0.22);
+  border: 0;
   border-radius: 999px;
   padding: 0;
-  color: #b8c7d9;
+  color: #d7fff6;
   line-height: 1;
-  background: rgba(255, 255, 255, 0.055);
+  background: transparent;
   cursor: pointer;
 }
 
-.voice-button:hover:not(:disabled) {
-  border-color: rgba(65, 214, 183, 0.38);
-  color: #8ff2df;
-  background: rgba(65, 214, 183, 0.1);
+.voice-button:not(.recording) {
+  border: 1px solid rgba(0, 209, 255, 0.26);
+  border-radius: 9px;
+  background: rgba(8, 18, 31, 0.72);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.035), 0 0 18px rgba(0, 209, 255, 0.06);
 }
 
-.voice-button:active:not(:disabled) {
-  border-color: rgba(65, 214, 183, 0.44);
-  color: #b7fff0;
-  background: rgba(65, 214, 183, 0.13);
+.voice-button:not(.recording):hover:not(:disabled) {
+  border-color: rgba(0, 229, 255, 0.46);
+  background: rgba(10, 32, 48, 0.86);
+  box-shadow: inset 0 0 0 1px rgba(0, 209, 255, 0.08), 0 0 22px rgba(0, 209, 255, 0.12);
+}
+
+.voice-button:not(.recording):active:not(:disabled) {
+  background: rgba(6, 24, 38, 0.92);
 }
 
 .voice-button:disabled {
@@ -4277,15 +3936,52 @@ async function downloadReference(reference: RetrievalDocumentReference) {
 .voice-mic-visual {
   position: relative;
   display: grid;
-  width: 22px;
-  height: 22px;
+  width: 32px;
+  height: 32px;
   place-items: center;
+}
+
+.voice-idle-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: radial-gradient(circle at 50% 50%, rgba(0, 209, 255, 0.18), rgba(2, 9, 16, 0.94) 62%);
+  box-shadow: inset 0 0 12px rgba(0, 209, 255, 0.16),
+  0 0 12px rgba(0, 209, 255, 0.1);
+}
+
+.voice-idle-mark i {
+  display: block;
+  width: 2px;
+  border-radius: 999px;
+  background: #8ff7ff;
+  box-shadow: 0 0 8px rgba(0, 229, 255, 0.45);
+}
+
+.voice-idle-mark i:nth-child(1) {
+  height: 11px;
+}
+
+.voice-idle-mark i:nth-child(2) {
+  height: 17px;
+}
+
+.voice-idle-mark i:nth-child(3) {
+  height: 14px;
+}
+
+.voice-idle-mark i:nth-child(4) {
+  height: 8px;
 }
 
 .voice-mic-core {
   position: relative;
   z-index: 3;
-  display: grid;
+  display: none;
   width: 22px;
   height: 22px;
   place-items: center;
@@ -4303,66 +3999,70 @@ async function downloadReference(reference: RetrievalDocumentReference) {
 .voice-button.recording {
   grid-column: 2;
   place-self: center;
-  width: 124px;
-  min-width: 124px;
-  height: 124px;
-  border-color: rgba(0, 209, 255, 0.44);
-  color: #d7fff6;
-  background: rgba(5, 31, 48, 0.86);
-  box-shadow: inset 0 0 24px rgba(0, 209, 255, 0.26),
-  inset 0 0 0 10px rgba(0, 209, 255, 0.05),
-  0 0 0 12px rgba(0, 209, 255, 0.05),
-  0 0 54px rgba(0, 209, 255, 0.32);
-  animation: voice-recording-pulse 1.4s ease-in-out infinite;
+  width: 96px;
+  min-width: 96px;
+  height: 96px;
+  aspect-ratio: 1;
+  border: 1px solid rgba(94, 234, 212, 0.18);
+  color: #edfefe;
+  background: radial-gradient(circle at 50% 50%, rgba(37, 122, 140, 0.48), rgba(10, 38, 54, 0.94) 58%, rgba(8, 18, 31, 0.98) 100%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+  inset 0 0 26px rgba(94, 234, 212, 0.08),
+  0 0 28px rgba(45, 212, 191, 0.16);
+  animation: none;
   overflow: visible;
+  z-index: 1;
+}
+
+.voice-button.recording .voice-idle-mark {
+  display: none;
 }
 
 .voice-button.recording::before,
 .voice-button.recording::after {
   position: absolute;
-  inset: -16px;
-  border: 1px solid rgba(0, 209, 255, 0.38);
+  border: 1px solid rgba(94, 234, 212, 0.14);
   border-radius: 999px;
   content: "";
   pointer-events: none;
+  transform-origin: 50% 50%;
 }
 
 .voice-button.recording::before {
-  border-style: dashed;
-  animation: voice-orbit-spin 12s linear infinite;
+  inset: -13px;
+  background: radial-gradient(circle at 50% 50%, transparent 68%, rgba(45, 212, 191, 0.07) 70%, transparent 73%);
+  box-shadow: 0 0 30px rgba(45, 212, 191, 0.16);
+  opacity: 0.68;
+  animation: voice-listening-halo 1.7s ease-in-out infinite;
 }
 
 .voice-button.recording::after {
-  inset: -32px;
-  border-color: rgba(0, 209, 255, 0.16);
-  box-shadow: 0 0 28px rgba(0, 209, 255, 0.12);
-}
-
-.voice-button.recording + .attachment-button {
-  grid-column: 3;
+  display: none;
 }
 
 .voice-button.recording .voice-mic-visual {
-  width: 124px;
-  height: 124px;
+  width: 96px;
+  height: 96px;
+  aspect-ratio: 1;
 }
 
 .voice-button.recording .voice-mic-core {
-  width: 70px;
-  height: 70px;
-  border: 1px solid rgba(146, 241, 255, 0.34);
-  border-radius: 999px;
-  background: radial-gradient(circle at 50% 50%, rgba(0, 209, 255, 0.38), rgba(0, 157, 255, 0.18) 56%, rgba(5, 28, 48, 0.08) 72%);
-  box-shadow: inset 0 0 22px rgba(0, 209, 255, 0.26),
-  0 0 18px rgba(0, 209, 255, 0.3);
+  display: grid;
+  width: 42px;
+  height: 42px;
+  aspect-ratio: 1;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .voice-button.recording .voice-mic-icon {
-  width: 42px;
-  height: 42px;
+  width: 34px;
+  height: 34px;
   stroke-width: 2.2;
-  color: #f6fdff;
-  filter: drop-shadow(0 0 12px rgba(255, 255, 255, 0.48)) drop-shadow(0 0 18px rgba(0, 209, 255, 0.42));
+  color: #f7ffff;
+  filter: drop-shadow(0 0 7px rgba(255, 255, 255, 0.24)) drop-shadow(0 0 12px rgba(45, 212, 191, 0.18));
   transform: translateY(-1px);
 }
 
@@ -4374,30 +4074,16 @@ async function downloadReference(reference: RetrievalDocumentReference) {
 .voice-button.recording .voice-mic-orbit,
 .voice-button.recording .voice-mic-dots {
   position: absolute;
-  display: block;
   border-radius: 999px;
   pointer-events: none;
 }
 
 .voice-button.recording .voice-mic-orbit {
-  inset: 14px;
-  border: 2px solid rgba(0, 229, 255, 0.54);
-  box-shadow: inset 0 0 20px rgba(0, 209, 255, 0.14),
-  0 0 18px rgba(0, 209, 255, 0.2);
+  display: none;
 }
 
 .voice-button.recording .voice-mic-dots {
-  inset: 0;
-  opacity: 0.86;
-  background: radial-gradient(circle at 50% 0%, #00e5ff 0 3px, transparent 4px),
-  radial-gradient(circle at 85% 15%, #00e5ff 0 2px, transparent 3px),
-  radial-gradient(circle at 100% 50%, #66f2ff 0 3px, transparent 4px),
-  radial-gradient(circle at 85% 85%, #00e5ff 0 2px, transparent 3px),
-  radial-gradient(circle at 50% 100%, #00e5ff 0 3px, transparent 4px),
-  radial-gradient(circle at 15% 85%, #66f2ff 0 2px, transparent 3px),
-  radial-gradient(circle at 0% 50%, #00e5ff 0 3px, transparent 4px),
-  radial-gradient(circle at 15% 15%, #00e5ff 0 2px, transparent 3px);
-  animation: voice-orbit-spin 9s linear infinite;
+  display: none;
 }
 
 .voice-mic-wave {
@@ -4405,10 +4091,10 @@ async function downloadReference(reference: RetrievalDocumentReference) {
 }
 
 .voice-button.recording .voice-mic-wave {
+  display: none;
   position: absolute;
   top: 50%;
-  display: block;
-  width: 46px;
+  width: 18px;
   height: 28px;
   opacity: 0.82;
   background: repeating-linear-gradient(
@@ -4425,11 +4111,11 @@ async function downloadReference(reference: RetrievalDocumentReference) {
 }
 
 .voice-button.recording .voice-mic-wave.left {
-  right: calc(100% - 10px);
+  right: calc(100% - 2px);
 }
 
 .voice-button.recording .voice-mic-wave.right {
-  left: calc(100% - 10px);
+  left: calc(100% - 2px);
 }
 
 .streaming-stop-button {
@@ -4539,6 +4225,19 @@ async function downloadReference(reference: RetrievalDocumentReference) {
   }
 }
 
+@keyframes voice-listening-halo {
+  0%,
+  100% {
+    opacity: 0.48;
+    transform: scale(0.98);
+  }
+
+  50% {
+    opacity: 0.84;
+    transform: scale(1.04);
+  }
+}
+
 @keyframes composer-chip-wave {
   0%,
   100% {
@@ -4549,12 +4248,6 @@ async function downloadReference(reference: RetrievalDocumentReference) {
   50% {
     height: 18px;
     opacity: 1;
-  }
-}
-
-@keyframes voice-orbit-spin {
-  100% {
-    transform: rotate(360deg);
   }
 }
 
@@ -4571,17 +4264,6 @@ async function downloadReference(reference: RetrievalDocumentReference) {
   }
 }
 
-@keyframes voice-wave-flow {
-  0%,
-  100% {
-    transform: scaleY(0.72);
-  }
-
-  45% {
-    transform: scaleY(1.08);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .message-scrollbar {
     transition: none;
@@ -4592,16 +4274,10 @@ async function downloadReference(reference: RetrievalDocumentReference) {
   .voice-button.recording::before,
   .voice-button.recording .voice-mic-dots,
   .voice-button.recording .voice-mic-wave,
-  .voice-logo-shell::after,
   .composer-chip-wave i,
-  .voice-wave-bar,
   .streaming-stop-button::before,
   .stop-indicator::after {
     animation: none;
-  }
-
-  .voice-wave-bar {
-    transition: none;
   }
 }
 
@@ -4626,69 +4302,13 @@ async function downloadReference(reference: RetrievalDocumentReference) {
     display: none;
   }
 
-  .voice-assistant-panel {
-    top: 120px;
-    width: min(520px, calc(100% - 24px));
-    min-width: 0;
-    min-height: 172px;
-    border-radius: 18px;
-    padding: 16px 46px 16px 16px;
-    transform: translateX(-50%);
-  }
-
-  .voice-assistant-core {
-    grid-template-columns: 94px 1px minmax(0, 1fr);
-    gap: 12px;
-    min-height: 118px;
-  }
-
-  .voice-brand-block strong {
-    font-size: 15px;
-  }
-
-  .voice-panel-divider {
-    height: 104px;
-  }
-
-  .voice-dialog-block {
-    grid-template-columns: minmax(82px, auto) minmax(0, 1fr);
-    gap: 10px;
-  }
-
-  .voice-logo-shell {
-    width: 64px;
-    height: 64px;
-  }
-
-  .voice-logo {
-    width: 46px;
-    height: 46px;
-  }
-
-  .voice-wave-shell {
-    gap: 2px;
-    height: 64px;
-  }
-
-  .voice-wave-bar {
-    width: 2px;
-    max-height: 52px;
-  }
-
-  .voice-panel-copy strong,
-  .voice-panel-copy span {
-    font-size: 16px;
-  }
-
-  .voice-preview-text {
-    margin-left: 102px;
-  }
-
   .composer.voice-active {
-    grid-template-columns: minmax(0, 1fr) 76px auto auto;
-    min-height: 104px;
+    grid-template-columns: minmax(0, 1fr) 72px 82px 86px;
+    column-gap: 8px;
+    min-height: 148px;
+    padding-top: 18px;
     padding-right: 12px;
-    padding-bottom: 12px;
+    padding-bottom: 18px;
   }
 
   .composer.voice-active .composer-input-shell {
@@ -4708,8 +4328,8 @@ async function downloadReference(reference: RetrievalDocumentReference) {
     min-height: 74px !important;
     padding-left: 122px !important;
     padding-right: 16px !important;
-    padding-top: 24px !important;
-    padding-bottom: 14px !important;
+    padding-top: 27px !important;
+    padding-bottom: 11px !important;
   }
 
   .composer-voice-chip {
@@ -4735,8 +4355,8 @@ async function downloadReference(reference: RetrievalDocumentReference) {
   }
 
   .voice-button.recording .voice-mic-core {
-    width: 42px;
-    height: 42px;
+    width: 32px;
+    height: 32px;
   }
 
   .voice-button.recording .voice-mic-icon {
@@ -4753,12 +4373,20 @@ async function downloadReference(reference: RetrievalDocumentReference) {
   }
 
   .voice-button.recording .voice-mic-orbit {
-    inset: 8px;
+    inset: 10px;
     border-width: 1px;
   }
 
   .voice-button.recording .voice-mic-wave {
     display: none;
+  }
+
+  .composer.voice-active .attachment-button {
+    min-width: 82px;
+  }
+
+  .composer.voice-active > .composer-button:last-child {
+    min-width: 86px;
   }
 }
 </style>
