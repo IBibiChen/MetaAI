@@ -348,6 +348,7 @@
         </div>
         <div class="composer-input-shell">
           <n-input
+              ref="composerInputRef"
               class="composer-input"
               v-model:value="draft"
               type="textarea"
@@ -365,22 +366,19 @@
         <button
             type="button"
             :class="['composer-button', 'voice-button', { recording: voiceSessionActive }]"
+            :style="voiceButtonStyle"
             :disabled="voiceButtonDisabled"
             :title="voiceButtonTitle"
             :aria-label="voiceButtonTitle"
             @click="toggleVoiceInput"
         >
           <span class="voice-mic-visual" aria-hidden="true">
-            <span class="voice-mic-orbit"></span>
-            <span class="voice-mic-dots"></span>
-            <span class="voice-mic-wave left"></span>
             <span class="voice-idle-mark">
               <i v-for="index in 4" :key="index"></i>
             </span>
             <span class="voice-mic-core">
               <Mic class="voice-mic-icon"/>
             </span>
-            <span class="voice-mic-wave right"></span>
           </span>
         </button>
         <n-button
@@ -523,6 +521,7 @@ import MarkdownIt from 'markdown-it'
 import {computed, nextTick, onMounted, onUnmounted, reactive, ref, watch} from 'vue'
 import type {ComponentPublicInstance} from 'vue'
 import {useMessage} from 'naive-ui'
+import type {InputInst} from 'naive-ui'
 import {
   Bot,
   CircleUserRound,
@@ -583,7 +582,7 @@ interface ChatMessage {
 
 type ChatFileItemStatus = 'uploading' | 'parsing' | 'ready' | 'failed'
 
-type VoiceUiState = 'idle' | 'connecting' | 'voiceReady' | 'listening' | 'recognizing' | 'error'
+type VoiceUiState = 'idle' | 'connecting' | 'voiceReady' | 'listening' | 'recognizing'
 
 interface ChatFileItem {
   key: string
@@ -608,6 +607,7 @@ const message = useMessage()
 const messageViewport = ref<HTMLElement | null>(null)
 const messageScrollbarTrack = ref<HTMLElement | null>(null)
 const chatFileInputRef = ref<HTMLInputElement | null>(null)
+const composerInputRef = ref<InputInst | null>(null)
 const messages = ref<ChatMessage[]>([])
 const chats = ref<MetaChat[]>([])
 const chatFiles = ref<MetaChatFileItem[]>([])
@@ -705,7 +705,6 @@ const FUNASR_TARGET_SAMPLE_RATE = 16000
 const FUNASR_CHUNK_SAMPLE_SIZE = 960
 const VOICE_ACTIVE_LEVEL_THRESHOLD = 0.045
 const VOICE_ACTIVE_HOLD_MS = 720
-
 const markdown = new MarkdownIt({
   breaks: true,
   html: false,
@@ -786,8 +785,6 @@ const voiceStatusTitle = computed(() => {
       return '语音已开启'
     case 'recognizing':
       return '识别中'
-    case 'error':
-      return '语音连接异常'
     case 'listening':
       return '正在听'
     default:
@@ -805,6 +802,15 @@ const voiceButtonTitle = computed(() => {
     return '连接语音模式'
   }
   return voiceSessionActive.value ? '结束语音模式' : '开启语音模式'
+})
+const voiceButtonStyle = computed(() => {
+  const level = voiceSessionActive.value ? voiceLevel.value : 0
+  return {
+    '--voice-core-scale': `${1 + level * 0.08}`,
+    '--voice-level-glow': `${28 + level * 20}px`,
+    '--voice-level-opacity': `${0.16 + level * 0.20}`,
+    '--voice-level-ring-opacity': `${0.14 + level * 0.20}`,
+  }
 })
 const segmentedStreamMode = computed({
   get: () => !streamEnabled.value,
@@ -864,6 +870,8 @@ let voiceBaseDraft = ''
 let voiceConfirmedText = ''
 let voiceOnlineText = ''
 let voiceLastActiveAt = 0
+let voiceRunId = 0
+let voiceComposerSyncPending = false
 let draggingThumb = false
 let thumbDragStartY = 0
 let thumbDragStartTop = 0
@@ -890,6 +898,7 @@ onUnmounted(() => {
 
 watch(() => workspace.contextVersion, async () => {
   stopStreaming()
+  cleanupVoiceInput(true)
   activeMetaChatId.value = null
   messages.value = []
   chatFiles.value = []
@@ -1041,6 +1050,7 @@ async function startVoiceInput() {
     message.error('当前浏览器不支持麦克风录音')
     return
   }
+  const runId = ++voiceRunId
   voiceConnecting.value = true
   voiceUiState.value = 'connecting'
   voiceLevel.value = 0
@@ -1051,7 +1061,7 @@ async function startVoiceInput() {
       voiceSocket.close()
       voiceSocket = null
     }
-    voiceMediaStream = await navigator.mediaDevices.getUserMedia({
+    const stream = await navigator.mediaDevices.getUserMedia({
       audio: {
         channelCount: 1,
         echoCancellation: true,
@@ -1059,17 +1069,46 @@ async function startVoiceInput() {
         autoGainControl: true,
       },
     })
-    voiceSocket = await openVoiceSocket()
-    await startVoiceAudioPipeline(voiceMediaStream)
+    if (!isCurrentVoiceRun(runId) || !voiceConnecting.value) {
+      stream.getTracks().forEach((track) => track.stop())
+      return
+    }
+    voiceMediaStream = stream
+    const socket = await openVoiceSocket(runId)
+    if (!isCurrentVoiceRun(runId) || !voiceConnecting.value) {
+      socket.close()
+      cleanupVoiceAudio()
+      return
+    }
+    await startVoiceAudioPipeline(stream)
+    if (!isCurrentVoiceRun(runId) || !voiceConnecting.value) {
+      cleanupVoiceInput(true)
+      return
+    }
     voiceRecording.value = true
     voiceUiState.value = 'voiceReady'
   } catch (error) {
+    if (!isCurrentVoiceRun(runId)) return
     cleanupVoiceInput(true)
-    voiceUiState.value = 'error'
     message.error(error instanceof Error ? error.message : '语音输入启动失败')
   } finally {
-    voiceConnecting.value = false
+    if (isCurrentVoiceRun(runId)) {
+      voiceConnecting.value = false
+    }
   }
+}
+
+/**
+ * 判断异步语音启动流程是否仍属于当前操作
+ *
+ * <p>
+ * 用户在授权、连接 WebSocket 或初始化音频链路期间点击结束时，旧流程必须失效
+ *
+ * @param runId 启动语音时生成的批次 ID
+ * @return 是否仍是当前有效语音流程
+ */
+function isCurrentVoiceRun(runId: number) {
+  return runId === voiceRunId
 }
 
 /**
@@ -1080,12 +1119,29 @@ async function startVoiceInput() {
  *
  * @return 已建立的 WebSocket 连接
  */
-function openVoiceSocket() {
+function openVoiceSocket(runId: number) {
   return new Promise<WebSocket>((resolve, reject) => {
     const socket = new WebSocket(FUNASR_WS_URL)
     let opened = false
+    let settled = false
+    const safeResolve = () => {
+      if (settled) return
+      settled = true
+      resolve(socket)
+    }
+    const safeReject = (error: Error) => {
+      if (settled) return
+      settled = true
+      reject(error)
+    }
+    voiceSocket = socket
     socket.binaryType = 'arraybuffer'
     socket.onopen = () => {
+      if (!isCurrentVoiceRun(runId) || (!voiceConnecting.value && !voiceRecording.value)) {
+        socket.close()
+        safeReject(new Error('语音连接已取消'))
+        return
+      }
       opened = true
       socket.send(JSON.stringify({
         mode: '2pass',
@@ -1097,20 +1153,27 @@ function openVoiceSocket() {
         audio_fs: FUNASR_TARGET_SAMPLE_RATE,
         itn: true,
       }))
-      resolve(socket)
+      safeResolve()
     }
-    socket.onmessage = handleVoiceSocketMessage
+    socket.onmessage = (event) => handleVoiceSocketMessage(event, runId, socket)
     socket.onerror = () => {
-      if (!opened) {
-        reject(new Error('FunASR WebSocket 连接失败'))
+      if (!isCurrentVoiceRun(runId)) {
+        safeReject(new Error('语音连接已取消'))
         return
       }
-      message.error('FunASR WebSocket 连接异常')
+      if (!opened) {
+        safeReject(new Error('语音服务连接失败，请稍后重试'))
+        return
+      }
+      message.error('语音服务连接异常，请稍后重试')
     }
     socket.onclose = () => {
-      if (voiceRecording.value || voiceConnecting.value) {
+      if (!opened) {
+        safeReject(new Error(isCurrentVoiceRun(runId) ? '语音服务连接失败，请稍后重试' : '语音连接已取消'))
+        return
+      }
+      if (isCurrentVoiceRun(runId) && (voiceRecording.value || voiceConnecting.value)) {
         cleanupVoiceInput(false)
-        voiceUiState.value = 'error'
         message.warning('语音识别连接已断开')
       }
     }
@@ -1149,11 +1212,12 @@ async function startVoiceAudioPipeline(stream: MediaStream) {
  * @param event 音频处理事件
  */
 function handleVoiceAudioProcess(event: AudioProcessingEvent) {
-  if (!voiceRecording.value || !voiceSocket || voiceSocket.readyState !== WebSocket.OPEN) return
+  if (!voiceRecording.value) return
   const input = event.inputBuffer.getChannelData(0)
   const output = event.outputBuffer.getChannelData(0)
   output.fill(0)
   updateVoiceActivity(input)
+  if (!voiceSocket || voiceSocket.readyState !== WebSocket.OPEN) return
   appendVoiceSamples(resampleToPcm16(input, event.inputBuffer.sampleRate))
 }
 
@@ -1239,16 +1303,18 @@ function resampleToPcm16(input: Float32Array, sourceSampleRate: number) {
  *
  * @param event WebSocket 消息
  */
-function handleVoiceSocketMessage(event: MessageEvent<string>) {
+function handleVoiceSocketMessage(event: MessageEvent<string>, runId: number, socket: WebSocket) {
+  if (!isCurrentVoiceRun(runId) || voiceSocket !== socket) return
   if (typeof event.data !== 'string') return
   try {
     const payload = JSON.parse(event.data) as { mode?: string, text?: string }
     if (!payload.text) return
     voiceUiState.value = 'recognizing'
     if (payload.mode === '2pass-offline' || payload.mode === 'offline') {
-      voiceConfirmedText += payload.text
+      mergeVoiceOfflineText(payload.text)
       voiceOnlineText = ''
     } else {
+      // 当前 FunASR 接入按 online 增量文本处理，offline 结果负责句尾确认
       voiceOnlineText += payload.text
     }
     updateVoiceDraft()
@@ -1266,6 +1332,7 @@ function handleVoiceSocketMessage(event: MessageEvent<string>) {
  * @param sendEnd 是否向 FunASR 发送结束标志
  */
 function stopVoiceInput(sendEnd = true) {
+  voiceRunId++
   if (!voiceRecording.value && !voiceConnecting.value) {
     voiceUiState.value = 'idle'
     voiceLevel.value = 0
@@ -1308,10 +1375,79 @@ function updateVoiceDraft() {
   const voiceText = `${voiceConfirmedText}${voiceOnlineText}`
   if (!voiceText) {
     draft.value = voiceBaseDraft
+    void syncVoiceComposerViewport()
     return
   }
   const separator = voiceBaseDraft && !/\s$/.test(voiceBaseDraft) ? '\n' : ''
   draft.value = `${voiceBaseDraft}${separator}${voiceText}`
+  void syncVoiceComposerViewport()
+}
+
+/**
+ * 同步语音写入后的输入框可视区域
+ *
+ * <p>
+ * 语音识别直接更新 draft，不会像键盘输入一样触发 textarea 内部滚动位置刷新
+ */
+async function syncVoiceComposerViewport() {
+  if (voiceComposerSyncPending) return
+  voiceComposerSyncPending = true
+  try {
+    await nextTick()
+    await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()))
+    const textarea = composerInputRef.value?.textareaElRef
+    if (!textarea) return
+    const top = textarea.scrollHeight
+    textarea.scrollTop = top
+    composerInputRef.value?.scrollTo({top})
+  } finally {
+    voiceComposerSyncPending = false
+  }
+}
+
+/**
+ * 合并 FunASR offline 修正结果
+ *
+ * <p>
+ * FunASR 2pass 的 offline 可能是当前 WebSocket 会话内的累计修正文本，不能简单追加
+ *
+ * @param offlineText 离线修正文本
+ */
+function mergeVoiceOfflineText(offlineText: string) {
+  if (!voiceConfirmedText) {
+    voiceConfirmedText = offlineText
+    return
+  }
+  if (offlineText === voiceConfirmedText || offlineText.startsWith(voiceConfirmedText)) {
+    voiceConfirmedText = offlineText
+    return
+  }
+  if (voiceConfirmedText.startsWith(offlineText)) {
+    return
+  }
+  const comparableLength = Math.min(voiceConfirmedText.length, offlineText.length)
+  const commonPrefixLength = sharedPrefixLength(voiceConfirmedText, offlineText)
+  if (comparableLength >= 12 && commonPrefixLength / comparableLength >= 0.45) {
+    voiceConfirmedText = offlineText
+    return
+  }
+  voiceConfirmedText += offlineText
+}
+
+/**
+ * 计算两段文本的共同前缀长度
+ *
+ * @param left 左侧文本
+ * @param right 右侧文本
+ * @return 共同前缀长度
+ */
+function sharedPrefixLength(left: string, right: string) {
+  const maxLength = Math.min(left.length, right.length)
+  let index = 0
+  while (index < maxLength && left[index] === right[index]) {
+    index++
+  }
+  return index
 }
 
 /**
@@ -1319,6 +1455,7 @@ function updateVoiceDraft() {
  *
  * <p>
  * 发送消息不再结束语音连接，只清理已经进入本轮消息的转写文本，后续识别继续写入空输入框
+ * FunASR 2pass 的 offline 结果可能返回旧连接中的累计修正，发送后必须切换 WebSocket 会话边界
  */
 function resetVoiceDraftAfterSend() {
   if (!voiceSessionActive.value) return
@@ -1328,6 +1465,48 @@ function resetVoiceDraftAfterSend() {
   voiceLastActiveAt = 0
   if (voiceUiState.value === 'recognizing') {
     voiceUiState.value = 'listening'
+  }
+  void syncVoiceComposerViewport()
+  void restartVoiceSocketForActiveSession()
+}
+
+/**
+ * 重建当前语音模式下的 FunASR WebSocket 会话
+ *
+ * <p>
+ * 页面语音模式和麦克风采集保持开启，只让旧 ASR 连接失效，避免旧 offline 修正串入下一轮输入
+ */
+async function restartVoiceSocketForActiveSession() {
+  if (!voiceRecording.value) return
+  const previousSocket = voiceSocket
+  const runId = ++voiceRunId
+  voicePendingSamples = new Int16Array()
+  try {
+    if (previousSocket?.readyState === WebSocket.OPEN) {
+      previousSocket.send(JSON.stringify({
+        is_speaking: false,
+      }))
+    }
+    if (previousSocket?.readyState === WebSocket.OPEN || previousSocket?.readyState === WebSocket.CONNECTING) {
+      previousSocket.close()
+    }
+    if (voiceSocket === previousSocket) {
+      voiceSocket = null
+    }
+    const socket = await openVoiceSocket(runId)
+    if (!isCurrentVoiceRun(runId) || !voiceRecording.value) {
+      socket.close()
+      return
+    }
+    voiceUiState.value = 'voiceReady'
+  } catch (error) {
+    if (!isCurrentVoiceRun(runId)) return
+    cleanupVoiceInput(true)
+    message.error(error instanceof Error ? error.message : '语音服务连接失败，请稍后重试')
+  } finally {
+    if (isCurrentVoiceRun(runId)) {
+      voiceConnecting.value = false
+    }
   }
 }
 
@@ -1342,11 +1521,33 @@ function resetVoiceTranscript() {
 }
 
 /**
+ * 会话变化时重置语音草稿基准
+ *
+ * <p>
+ * 语音输入作为页面级工具跨会话保留，切换会话时只隔离旧会话识别缓存
+ * 调用方会先以当前输入框内容重设基准，再切换会话上下文
+ */
+function rebaseVoiceInputForSessionChange() {
+  if (!voiceSessionActive.value) return
+  voicePendingSamples = new Int16Array()
+  voiceBaseDraft = draft.value
+  voiceConfirmedText = ''
+  voiceOnlineText = ''
+  voiceLastActiveAt = 0
+  if (voiceUiState.value === 'recognizing') {
+    voiceUiState.value = 'listening'
+  }
+  void syncVoiceComposerViewport()
+  void restartVoiceSocketForActiveSession()
+}
+
+/**
  * 清理语音输入资源
  *
  * @param closeSocket 是否立即关闭 WebSocket
  */
 function cleanupVoiceInput(closeSocket: boolean) {
+  voiceRunId++
   voiceRecording.value = false
   voiceConnecting.value = false
   voiceUiState.value = 'idle'
@@ -1884,6 +2085,7 @@ async function loadHistory(chat: MetaChat | null = activeChat.value) {
  */
 function handleNewSession() {
   stopStreaming()
+  rebaseVoiceInputForSessionChange()
   stopChatFilePolling()
   workspace.resetSession()
   activeMetaChatId.value = null
@@ -1915,6 +2117,7 @@ async function loadChats() {
 
 async function selectChat(chat: MetaChat) {
   stopStreaming()
+  rebaseVoiceInputForSessionChange()
   stopChatFilePolling()
   pendingChatFilePlaceholders.value = []
   selectedChatFileIds.value = []
@@ -2010,6 +2213,7 @@ async function submitDelete() {
   try {
     await deleteChat(chat.id)
     if (activeMetaChatId.value === chat.id) {
+      rebaseVoiceInputForSessionChange()
       activeMetaChatId.value = null
       messages.value = []
       workspace.resetSession()
@@ -4008,7 +4212,7 @@ async function downloadReference(reference: RetrievalDocumentReference) {
   background: radial-gradient(circle at 50% 50%, rgba(37, 122, 140, 0.48), rgba(10, 38, 54, 0.94) 58%, rgba(8, 18, 31, 0.98) 100%);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04),
   inset 0 0 26px rgba(94, 234, 212, 0.08),
-  0 0 28px rgba(45, 212, 191, 0.16);
+  0 0 var(--voice-level-glow, 28px) rgba(45, 212, 191, var(--voice-level-opacity, 0.16));
   animation: none;
   overflow: visible;
   z-index: 1;
@@ -4021,7 +4225,7 @@ async function downloadReference(reference: RetrievalDocumentReference) {
 .voice-button.recording::before,
 .voice-button.recording::after {
   position: absolute;
-  border: 1px solid rgba(94, 234, 212, 0.14);
+  border: 1px solid rgba(94, 234, 212, var(--voice-level-ring-opacity, 0.14));
   border-radius: 999px;
   content: "";
   pointer-events: none;
@@ -4055,6 +4259,8 @@ async function downloadReference(reference: RetrievalDocumentReference) {
   border-radius: 0;
   background: transparent;
   box-shadow: none;
+  transform: scale(var(--voice-core-scale, 1));
+  transition: transform 120ms ease-out;
 }
 
 .voice-button.recording .voice-mic-icon {
@@ -4064,58 +4270,6 @@ async function downloadReference(reference: RetrievalDocumentReference) {
   color: #f7ffff;
   filter: drop-shadow(0 0 7px rgba(255, 255, 255, 0.24)) drop-shadow(0 0 12px rgba(45, 212, 191, 0.18));
   transform: translateY(-1px);
-}
-
-.voice-mic-orbit,
-.voice-mic-dots {
-  display: none;
-}
-
-.voice-button.recording .voice-mic-orbit,
-.voice-button.recording .voice-mic-dots {
-  position: absolute;
-  border-radius: 999px;
-  pointer-events: none;
-}
-
-.voice-button.recording .voice-mic-orbit {
-  display: none;
-}
-
-.voice-button.recording .voice-mic-dots {
-  display: none;
-}
-
-.voice-mic-wave {
-  display: none;
-}
-
-.voice-button.recording .voice-mic-wave {
-  display: none;
-  position: absolute;
-  top: 50%;
-  width: 18px;
-  height: 28px;
-  opacity: 0.82;
-  background: repeating-linear-gradient(
-      90deg,
-      transparent 0 4px,
-      rgba(0, 229, 255, 0.95) 4px 6px,
-      transparent 6px 10px
-  );
-  filter: drop-shadow(0 0 10px rgba(0, 209, 255, 0.5));
-  mask-image: linear-gradient(90deg, transparent, black 28%, black 72%, transparent);
-  transform: translateY(-50%) scaleY(0.78);
-  animation: voice-side-wave 920ms ease-in-out infinite;
-  pointer-events: none;
-}
-
-.voice-button.recording .voice-mic-wave.left {
-  right: calc(100% - 2px);
-}
-
-.voice-button.recording .voice-mic-wave.right {
-  left: calc(100% - 2px);
 }
 
 .streaming-stop-button {
@@ -4214,17 +4368,6 @@ async function downloadReference(reference: RetrievalDocumentReference) {
   }
 }
 
-@keyframes voice-recording-pulse {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 rgba(65, 214, 183, 0.14), 0 0 14px rgba(65, 214, 183, 0.08);
-  }
-
-  50% {
-    box-shadow: 0 0 0 5px rgba(65, 214, 183, 0.09), 0 0 24px rgba(65, 214, 183, 0.16);
-  }
-}
-
 @keyframes voice-listening-halo {
   0%,
   100% {
@@ -4251,19 +4394,6 @@ async function downloadReference(reference: RetrievalDocumentReference) {
   }
 }
 
-@keyframes voice-side-wave {
-  0%,
-  100% {
-    opacity: 0.52;
-    transform: translateY(-50%) scaleY(0.56);
-  }
-
-  50% {
-    opacity: 0.95;
-    transform: translateY(-50%) scaleY(1);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .message-scrollbar {
     transition: none;
@@ -4272,8 +4402,6 @@ async function downloadReference(reference: RetrievalDocumentReference) {
   .streaming-stop-button,
   .voice-button.recording,
   .voice-button.recording::before,
-  .voice-button.recording .voice-mic-dots,
-  .voice-button.recording .voice-mic-wave,
   .composer-chip-wave i,
   .streaming-stop-button::before,
   .stop-indicator::after {
@@ -4370,15 +4498,6 @@ async function downloadReference(reference: RetrievalDocumentReference) {
 
   .voice-button.recording::after {
     inset: -15px;
-  }
-
-  .voice-button.recording .voice-mic-orbit {
-    inset: 10px;
-    border-width: 1px;
-  }
-
-  .voice-button.recording .voice-mic-wave {
-    display: none;
   }
 
   .composer.voice-active .attachment-button {

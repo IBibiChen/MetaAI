@@ -301,7 +301,7 @@
         </div>
       </div>
 
-      <footer class="composer">
+      <footer :class="['composer', { 'voice-active': voiceSessionActive }]">
         <input
             ref="chatFileInputRef"
             class="chat-file-input"
@@ -349,19 +349,48 @@
             </div>
           </div>
         </div>
-        <n-input
-            class="composer-input"
-            v-model:value="draft"
-            type="textarea"
-            placeholder="输入问题，Enter 发送，Shift + Enter 换行"
-            :autosize="{ minRows: 2, maxRows: 5 }"
-            @keydown.enter="handleEnter"
-        />
+        <div class="composer-input-shell">
+          <n-input
+              ref="composerInputRef"
+              class="composer-input"
+              v-model:value="draft"
+              type="textarea"
+              :placeholder="composerPlaceholder"
+              :autosize="{ minRows: 2, maxRows: 5 }"
+              @keydown.enter="handleEnter"
+          />
+          <div v-if="voiceSessionActive" class="composer-voice-chip" aria-hidden="true">
+            <span>{{ voiceStatusTitle }}</span>
+            <span class="composer-chip-wave">
+              <i v-for="index in 5" :key="index"></i>
+            </span>
+          </div>
+        </div>
+        <button
+            type="button"
+            :class="['composer-button', 'voice-button', { recording: voiceSessionActive }]"
+            :style="voiceButtonStyle"
+            :disabled="voiceButtonDisabled"
+            :title="voiceButtonTitle"
+            :aria-label="voiceButtonTitle"
+            @click="toggleVoiceInput"
+        >
+          <span class="voice-mic-visual" aria-hidden="true">
+            <span class="voice-idle-mark">
+              <i v-for="index in 4" :key="index"></i>
+            </span>
+            <span class="voice-mic-core">
+              <Mic class="voice-mic-icon"/>
+            </span>
+          </span>
+        </button>
         <n-button
             class="composer-button attachment-button"
             secondary
             :loading="chatFileUploading"
-            :disabled="sending || fileContextBusy"
+            :disabled="attachmentDisabled"
+            :title="attachmentButtonTitle"
+            :aria-label="attachmentButtonTitle"
             @click="openChatFilePicker"
         >
           <template #icon>
@@ -496,12 +525,14 @@ import {computed, nextTick, onMounted, onUnmounted, reactive, ref, watch} from '
 import type {ComponentPublicInstance} from 'vue'
 import {useRoute} from 'vue-router'
 import {useMessage} from 'naive-ui'
+import type {InputInst} from 'naive-ui'
 import {
   CircleUserRound,
   Copy,
   Eraser,
   FileUp,
   ListFilter,
+  Mic,
   Pencil,
   Pin,
   RefreshCw,
@@ -554,6 +585,8 @@ interface ChatMessage {
 
 type ChatFileItemStatus = 'uploading' | 'parsing' | 'ready' | 'failed'
 
+type VoiceUiState = 'idle' | 'connecting' | 'voiceReady' | 'listening' | 'recognizing'
+
 interface ChatFileItem {
   key: string
   fileId?: string
@@ -578,6 +611,7 @@ const message = useMessage()
 const messageViewport = ref<HTMLElement | null>(null)
 const messageScrollbarTrack = ref<HTMLElement | null>(null)
 const chatFileInputRef = ref<HTMLInputElement | null>(null)
+const composerInputRef = ref<InputInst | null>(null)
 const messages = ref<ChatMessage[]>([])
 const chats = ref<MetaChat[]>([])
 const chatFiles = ref<MetaChatFileItem[]>([])
@@ -594,6 +628,10 @@ const contextScopePillAnimated = ref(false)
 const activeMetaChatId = ref<string | null>(null)
 const draft = ref('')
 const sending = ref(false)
+const voiceRecording = ref(false)
+const voiceConnecting = ref(false)
+const voiceUiState = ref<VoiceUiState>('idle')
+const voiceLevel = ref(0)
 const uploadingChatFileScopeKey = ref<string | null>(null)
 const historyLoading = ref(false)
 const messageTransitioning = ref(false)
@@ -666,7 +704,11 @@ const MESSAGE_SCROLLBAR_MIN_THUMB_HEIGHT = 38
 const MESSAGE_SCROLLBAR_HIDE_DELAY_MS = 1200
 const MESSAGE_ARROW_REPEAT_DELAY_MS = 240
 const MESSAGE_ARROW_REPEAT_INTERVAL_MS = 80
-
+const FUNASR_WS_URL = import.meta.env.VITE_FUNASR_WS_URL || 'ws://localhost:10096'
+const FUNASR_TARGET_SAMPLE_RATE = 16000
+const FUNASR_CHUNK_SAMPLE_SIZE = 960
+const VOICE_ACTIVE_LEVEL_THRESHOLD = 0.045
+const VOICE_ACTIVE_HOLD_MS = 720
 const markdown = new MarkdownIt({
   breaks: true,
   html: false,
@@ -731,9 +773,49 @@ const chatFileUploading = computed(() => uploadingChatFileScopeKey.value === cur
 const fileContextBusy = computed(() => chatFileUploading.value || visibleChatFiles.value.some((file) =>
     file.status === 'uploading' || file.status === 'parsing'))
 const selectedReadyFileCount = computed(() => selectedReadyChatFiles().length)
+const voiceSessionActive = computed(() => voiceRecording.value || voiceConnecting.value || voiceUiState.value !== 'idle')
 const showRagContextScope = computed(() => chatMode.value === 'rag' && selectedReadyFileCount.value > 0)
 const canSend = computed(() => Boolean(draft.value.trim()) && !sending.value && !fileContextBusy.value)
 const sendButtonText = computed(() => fileContextBusy.value ? '处理中' : '发送')
+const composerPlaceholder = computed(() => voiceSessionActive.value ? '' : '输入问题，Enter 发送，Shift + Enter 换行')
+const attachmentDisabled = computed(() => sending.value || fileContextBusy.value)
+const attachmentButtonTitle = computed(() => '添加附件')
+const voiceButtonDisabled = computed(() => !voiceSessionActive.value && (sending.value || fileContextBusy.value))
+const voiceStatusTitle = computed(() => {
+  switch (voiceUiState.value) {
+    case 'connecting':
+      return '正在连接陵小智'
+    case 'voiceReady':
+      return '语音已开启'
+    case 'recognizing':
+      return '识别中'
+    case 'listening':
+      return '正在听'
+    default:
+      return '陵小智'
+  }
+})
+const voiceButtonTitle = computed(() => {
+  if (!voiceSessionActive.value && fileContextBusy.value) {
+    return '附件处理中，暂不能开启语音'
+  }
+  if (!voiceSessionActive.value && sending.value) {
+    return '正在发送，暂不能开启语音'
+  }
+  if (voiceConnecting.value) {
+    return '连接语音模式'
+  }
+  return voiceSessionActive.value ? '结束语音模式' : '开启语音模式'
+})
+const voiceButtonStyle = computed(() => {
+  const level = voiceSessionActive.value ? voiceLevel.value : 0
+  return {
+    '--voice-core-scale': `${1 + level * 0.08}`,
+    '--voice-level-glow': `${34 + level * 22}px`,
+    '--voice-level-opacity': `${0.24 + level * 0.22}`,
+    '--voice-level-ring-opacity': `${0.30 + level * 0.28}`,
+  }
+})
 const segmentedStreamMode = computed({
   get: () => !streamEnabled.value,
   set: (value: boolean) => {
@@ -781,6 +863,19 @@ let messageScrollbarHideTimer: number | null = null
 let arrowScrollDelayTimer: number | null = null
 let arrowScrollIntervalTimer: number | null = null
 let chatFilePollingTimer: number | null = null
+let voiceSocket: WebSocket | null = null
+let voiceMediaStream: MediaStream | null = null
+let voiceAudioContext: AudioContext | null = null
+let voiceSourceNode: MediaStreamAudioSourceNode | null = null
+let voiceProcessorNode: ScriptProcessorNode | null = null
+let voiceSilentGainNode: GainNode | null = null
+let voicePendingSamples = new Int16Array()
+let voiceBaseDraft = ''
+let voiceConfirmedText = ''
+let voiceOnlineText = ''
+let voiceLastActiveAt = 0
+let voiceRunId = 0
+let voiceComposerSyncPending = false
 let draggingThumb = false
 let thumbDragStartY = 0
 let thumbDragStartTop = 0
@@ -830,6 +925,7 @@ function queryText(key: string) {
 
 onUnmounted(() => {
   stopStreaming()
+  cleanupVoiceInput(true)
   stopChatFilePolling()
   teardownMessageScrollbar()
   window.removeEventListener('resize', handleContextScopeResize)
@@ -837,6 +933,7 @@ onUnmounted(() => {
 
 watch(() => workspace.contextVersion, async () => {
   stopStreaming()
+  cleanupVoiceInput(true)
   activeMetaChatId.value = null
   messages.value = []
   chatFiles.value = []
@@ -881,6 +978,7 @@ async function sendMessage() {
   if (sending.value || !content) return
   if (content) {
     draft.value = ''
+    resetVoiceDraftAfterSend()
   }
   await sendMessageContent(content)
 }
@@ -956,6 +1054,563 @@ async function sendMessageContent(content: string) {
   }
   selectedChatFileIds.value = []
   resetRagContextScope()
+}
+
+/**
+ * 切换语音输入状态
+ *
+ * <p>
+ * 语音输入只负责把 FunASR 转写文本写入 draft，真正发送仍复用现有聊天流程
+ */
+async function toggleVoiceInput() {
+  if (voiceSessionActive.value) {
+    stopVoiceInput()
+    return
+  }
+  await startVoiceInput()
+}
+
+/**
+ * 启动 FunASR 实时语音输入
+ *
+ * <p>
+ * 浏览器端使用 16 kHz、16 bit、单声道 PCM 分片对接 FunASR WebSocket 2pass 协议
+ */
+async function startVoiceInput() {
+  if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+    message.error('当前页面不是安全上下文，浏览器不会开放麦克风权限')
+    return
+  }
+  if (!navigator.mediaDevices?.getUserMedia) {
+    message.error('当前浏览器不支持麦克风录音')
+    return
+  }
+  const runId = ++voiceRunId
+  voiceConnecting.value = true
+  voiceUiState.value = 'connecting'
+  voiceLevel.value = 0
+  resetVoiceTranscript()
+  try {
+    voiceBaseDraft = draft.value
+    if (voiceSocket) {
+      voiceSocket.close()
+      voiceSocket = null
+    }
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        channelCount: 1,
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+    })
+    if (!isCurrentVoiceRun(runId) || !voiceConnecting.value) {
+      stream.getTracks().forEach((track) => track.stop())
+      return
+    }
+    voiceMediaStream = stream
+    const socket = await openVoiceSocket(runId)
+    if (!isCurrentVoiceRun(runId) || !voiceConnecting.value) {
+      socket.close()
+      cleanupVoiceAudio()
+      return
+    }
+    await startVoiceAudioPipeline(stream)
+    if (!isCurrentVoiceRun(runId) || !voiceConnecting.value) {
+      cleanupVoiceInput(true)
+      return
+    }
+    voiceRecording.value = true
+    voiceUiState.value = 'voiceReady'
+  } catch (error) {
+    if (!isCurrentVoiceRun(runId)) return
+    cleanupVoiceInput(true)
+    message.error(error instanceof Error ? error.message : '语音输入启动失败')
+  } finally {
+    if (isCurrentVoiceRun(runId)) {
+      voiceConnecting.value = false
+    }
+  }
+}
+
+/**
+ * 判断异步语音启动流程是否仍属于当前操作
+ *
+ * <p>
+ * 用户在授权、连接 WebSocket 或初始化音频链路期间点击结束时，旧流程必须失效
+ *
+ * @param runId 启动语音时生成的批次 ID
+ * @return 是否仍是当前有效语音流程
+ */
+function isCurrentVoiceRun(runId: number) {
+  return runId === voiceRunId
+}
+
+/**
+ * 打开 FunASR WebSocket 连接
+ *
+ * <p>
+ * 连接建立后必须先发送协议初始化 JSON，再发送 PCM 二进制音频分片
+ *
+ * @return 已建立的 WebSocket 连接
+ */
+function openVoiceSocket(runId: number) {
+  return new Promise<WebSocket>((resolve, reject) => {
+    const socket = new WebSocket(FUNASR_WS_URL)
+    let opened = false
+    let settled = false
+    const safeResolve = () => {
+      if (settled) return
+      settled = true
+      resolve(socket)
+    }
+    const safeReject = (error: Error) => {
+      if (settled) return
+      settled = true
+      reject(error)
+    }
+    voiceSocket = socket
+    socket.binaryType = 'arraybuffer'
+    socket.onopen = () => {
+      if (!isCurrentVoiceRun(runId) || (!voiceConnecting.value && !voiceRecording.value)) {
+        socket.close()
+        safeReject(new Error('语音连接已取消'))
+        return
+      }
+      opened = true
+      socket.send(JSON.stringify({
+        mode: '2pass',
+        wav_name: `meta-ai-console-${Date.now()}`,
+        is_speaking: true,
+        wav_format: 'pcm',
+        chunk_size: [5, 10, 5],
+        chunk_interval: 10,
+        audio_fs: FUNASR_TARGET_SAMPLE_RATE,
+        itn: true,
+      }))
+      safeResolve()
+    }
+    socket.onmessage = (event) => handleVoiceSocketMessage(event, runId, socket)
+    socket.onerror = () => {
+      if (!isCurrentVoiceRun(runId)) {
+        safeReject(new Error('语音连接已取消'))
+        return
+      }
+      if (!opened) {
+        safeReject(new Error('语音服务连接失败，请稍后重试'))
+        return
+      }
+      message.error('语音服务连接异常，请稍后重试')
+    }
+    socket.onclose = () => {
+      if (!opened) {
+        safeReject(new Error(isCurrentVoiceRun(runId) ? '语音服务连接失败，请稍后重试' : '语音连接已取消'))
+        return
+      }
+      if (isCurrentVoiceRun(runId) && (voiceRecording.value || voiceConnecting.value)) {
+        cleanupVoiceInput(false)
+        message.warning('语音识别连接已断开')
+      }
+    }
+  })
+}
+
+/**
+ * 启动浏览器音频采集链路
+ *
+ * <p>
+ * ScriptProcessorNode 虽然较旧，但无需额外 worklet 文件，适合当前单页局部接入
+ *
+ * @param stream 麦克风媒体流
+ */
+async function startVoiceAudioPipeline(stream: MediaStream) {
+  voiceAudioContext = new AudioContext()
+  if (voiceAudioContext.state === 'suspended') {
+    await voiceAudioContext.resume()
+  }
+  voiceSourceNode = voiceAudioContext.createMediaStreamSource(stream)
+  voiceProcessorNode = voiceAudioContext.createScriptProcessor(4096, 1, 1)
+  voiceSilentGainNode = voiceAudioContext.createGain()
+  voiceSilentGainNode.gain.value = 0
+  voiceProcessorNode.onaudioprocess = handleVoiceAudioProcess
+  voiceSourceNode.connect(voiceProcessorNode)
+  voiceProcessorNode.connect(voiceSilentGainNode)
+  voiceSilentGainNode.connect(voiceAudioContext.destination)
+}
+
+/**
+ * 处理麦克风音频分片
+ *
+ * <p>
+ * FunASR 实时协议只接受 PCM 流，这里把浏览器 Float32 音频重采样并转成 Int16
+ *
+ * @param event 音频处理事件
+ */
+function handleVoiceAudioProcess(event: AudioProcessingEvent) {
+  if (!voiceRecording.value) return
+  const input = event.inputBuffer.getChannelData(0)
+  const output = event.outputBuffer.getChannelData(0)
+  output.fill(0)
+  updateVoiceActivity(input)
+  if (!voiceSocket || voiceSocket.readyState !== WebSocket.OPEN) return
+  appendVoiceSamples(resampleToPcm16(input, event.inputBuffer.sampleRate))
+}
+
+/**
+ * 根据浏览器实时采集的原始音频估算当前说话强度
+ *
+ * <p>
+ * 语音状态必须跟真实输入绑定，否则用户无法判断页面是否真的在听
+ *
+ * @param input 麦克风采集的 Float32 音频
+ */
+function updateVoiceActivity(input: Float32Array) {
+  let sum = 0
+  for (let i = 0; i < input.length; i++) {
+    sum += input[i] * input[i]
+  }
+  const rms = Math.sqrt(sum / Math.max(1, input.length))
+  const nextLevel = Math.min(1, rms * 9)
+  voiceLevel.value = Math.max(nextLevel, voiceLevel.value * 0.78)
+  if (nextLevel > VOICE_ACTIVE_LEVEL_THRESHOLD) {
+    voiceLastActiveAt = Date.now()
+    voiceUiState.value = 'recognizing'
+    return
+  }
+  if (voiceUiState.value === 'recognizing' && Date.now() - voiceLastActiveAt < VOICE_ACTIVE_HOLD_MS) return
+  if (voiceUiState.value === 'voiceReady' || voiceUiState.value === 'recognizing') {
+    voiceUiState.value = 'listening'
+  }
+}
+
+/**
+ * 追加并发送固定大小的 PCM 分片
+ *
+ * <p>
+ * 官方 HTML5 示例使用 960 个 Int16 采样点作为 `[5, 10, 5]` 配置下的发送粒度
+ *
+ * @param samples 新采集的 16 kHz PCM 采样
+ */
+function appendVoiceSamples(samples: Int16Array) {
+  if (!samples.length || !voiceSocket || voiceSocket.readyState !== WebSocket.OPEN) return
+  const merged = new Int16Array(voicePendingSamples.length + samples.length)
+  merged.set(voicePendingSamples, 0)
+  merged.set(samples, voicePendingSamples.length)
+  let offset = 0
+  while (merged.length - offset >= FUNASR_CHUNK_SAMPLE_SIZE) {
+    const chunk = merged.slice(offset, offset + FUNASR_CHUNK_SAMPLE_SIZE)
+    voiceSocket.send(chunk.buffer)
+    offset += FUNASR_CHUNK_SAMPLE_SIZE
+  }
+  voicePendingSamples = merged.slice(offset)
+}
+
+/**
+ * 重采样并转换为 16 bit PCM
+ *
+ * @param input 浏览器采集的 Float32 音频
+ * @param sourceSampleRate 原始采样率
+ * @return 16 kHz、16 bit、单声道 PCM
+ */
+function resampleToPcm16(input: Float32Array, sourceSampleRate: number) {
+  const ratio = sourceSampleRate / FUNASR_TARGET_SAMPLE_RATE
+  const outputLength = Math.max(0, Math.floor(input.length / ratio))
+  const output = new Int16Array(outputLength)
+  for (let i = 0; i < outputLength; i++) {
+    const start = Math.floor(i * ratio)
+    const end = Math.min(input.length, Math.floor((i + 1) * ratio))
+    let sum = 0
+    const count = Math.max(1, end - start)
+    for (let j = start; j < end; j++) {
+      sum += input[j]
+    }
+    const sample = Math.max(-1, Math.min(1, sum / count))
+    output[i] = sample < 0 ? sample * 0x8000 : sample * 0x7fff
+  }
+  return output
+}
+
+/**
+ * 处理 FunASR 识别结果
+ *
+ * <p>
+ * 2pass-online 作为实时预览，2pass-offline 作为句尾修正结果写入最终文本
+ *
+ * @param event WebSocket 消息
+ */
+function handleVoiceSocketMessage(event: MessageEvent<string>, runId: number, socket: WebSocket) {
+  if (!isCurrentVoiceRun(runId) || voiceSocket !== socket) return
+  if (typeof event.data !== 'string') return
+  try {
+    const payload = JSON.parse(event.data) as { mode?: string, text?: string }
+    if (!payload.text) return
+    voiceUiState.value = 'recognizing'
+    if (payload.mode === '2pass-offline' || payload.mode === 'offline') {
+      mergeVoiceOfflineText(payload.text)
+      voiceOnlineText = ''
+    } else {
+      // 当前 FunASR 接入按 online 增量文本处理，offline 结果负责句尾确认
+      voiceOnlineText += payload.text
+    }
+    updateVoiceDraft()
+  } catch {
+    message.warning('语音识别结果解析失败')
+  }
+}
+
+/**
+ * 合并 FunASR offline 修正结果
+ *
+ * <p>
+ * FunASR 2pass 的 offline 可能是当前 WebSocket 会话内的累计修正文本，不能简单追加
+ *
+ * @param offlineText 离线修正文本
+ */
+function mergeVoiceOfflineText(offlineText: string) {
+  if (!voiceConfirmedText) {
+    voiceConfirmedText = offlineText
+    return
+  }
+  if (offlineText === voiceConfirmedText || offlineText.startsWith(voiceConfirmedText)) {
+    voiceConfirmedText = offlineText
+    return
+  }
+  if (voiceConfirmedText.startsWith(offlineText)) {
+    return
+  }
+  const comparableLength = Math.min(voiceConfirmedText.length, offlineText.length)
+  const commonPrefixLength = sharedPrefixLength(voiceConfirmedText, offlineText)
+  if (comparableLength >= 12 && commonPrefixLength / comparableLength >= 0.45) {
+    voiceConfirmedText = offlineText
+    return
+  }
+  voiceConfirmedText += offlineText
+}
+
+/**
+ * 计算两段文本的共同前缀长度
+ *
+ * @param left 左侧文本
+ * @param right 右侧文本
+ * @return 共同前缀长度
+ */
+function sharedPrefixLength(left: string, right: string) {
+  const maxLength = Math.min(left.length, right.length)
+  let index = 0
+  while (index < maxLength && left[index] === right[index]) {
+    index++
+  }
+  return index
+}
+
+/**
+ * 停止语音输入
+ *
+ * <p>
+ * 停止时立即释放页面语音态和浏览器采集资源，不等待 FunASR 离线句尾修正
+ *
+ * @param sendEnd 是否向 FunASR 发送结束标志
+ */
+function stopVoiceInput(sendEnd = true) {
+  voiceRunId++
+  if (!voiceRecording.value && !voiceConnecting.value) {
+    voiceUiState.value = 'idle'
+    voiceLevel.value = 0
+    return
+  }
+  voiceRecording.value = false
+  voiceConnecting.value = false
+  voiceUiState.value = 'idle'
+  voiceLevel.value = 0
+  flushVoiceSamples()
+  const socket = voiceSocket
+  if (sendEnd && socket?.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify({
+      is_speaking: false,
+    }))
+  }
+  cleanupVoiceAudio()
+  if (socket?.readyState === WebSocket.OPEN || socket?.readyState === WebSocket.CONNECTING) {
+    socket.close()
+  }
+  if (voiceSocket === socket) {
+    voiceSocket = null
+  }
+}
+
+/**
+ * 发送剩余不足一个 chunk 的音频
+ */
+function flushVoiceSamples() {
+  if (voicePendingSamples.length && voiceSocket?.readyState === WebSocket.OPEN) {
+    voiceSocket.send(voicePendingSamples.buffer)
+  }
+  voicePendingSamples = new Int16Array()
+}
+
+/**
+ * 更新输入框中的语音转写草稿
+ */
+function updateVoiceDraft() {
+  const voiceText = `${voiceConfirmedText}${voiceOnlineText}`
+  if (!voiceText) {
+    draft.value = voiceBaseDraft
+    void syncVoiceComposerViewport()
+    return
+  }
+  const separator = voiceBaseDraft && !/\s$/.test(voiceBaseDraft) ? '\n' : ''
+  draft.value = `${voiceBaseDraft}${separator}${voiceText}`
+  void syncVoiceComposerViewport()
+}
+
+/**
+ * 同步语音写入后的输入框可视区域
+ *
+ * <p>
+ * 语音识别直接更新 draft，不会像键盘输入一样触发 textarea 内部滚动位置刷新
+ */
+async function syncVoiceComposerViewport() {
+  if (voiceComposerSyncPending) return
+  voiceComposerSyncPending = true
+  try {
+    await nextTick()
+    await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()))
+    const textarea = composerInputRef.value?.textareaElRef
+    if (!textarea) return
+    const top = textarea.scrollHeight
+    textarea.scrollTop = top
+    composerInputRef.value?.scrollTo({top})
+  } finally {
+    voiceComposerSyncPending = false
+  }
+}
+
+/**
+ * 发送后重置语音转写草稿基准
+ *
+ * <p>
+ * 发送消息不再结束语音连接，只清理已经进入本轮消息的转写文本，后续识别继续写入空输入框
+ * FunASR 2pass 的 offline 结果可能返回旧连接中的累计修正，发送后必须切换 WebSocket 会话边界
+ */
+function resetVoiceDraftAfterSend() {
+  if (!voiceSessionActive.value) return
+  voiceBaseDraft = ''
+  voiceConfirmedText = ''
+  voiceOnlineText = ''
+  voiceLastActiveAt = 0
+  if (voiceUiState.value === 'recognizing') {
+    voiceUiState.value = 'listening'
+  }
+  void syncVoiceComposerViewport()
+  void restartVoiceSocketForActiveSession()
+}
+
+/**
+ * 重建当前语音模式下的 FunASR WebSocket 会话
+ *
+ * <p>
+ * 页面语音模式和麦克风采集保持开启，只让旧 ASR 连接失效，避免旧 offline 修正串入下一轮输入
+ */
+async function restartVoiceSocketForActiveSession() {
+  if (!voiceRecording.value) return
+  const previousSocket = voiceSocket
+  const runId = ++voiceRunId
+  voicePendingSamples = new Int16Array()
+  try {
+    if (previousSocket?.readyState === WebSocket.OPEN) {
+      previousSocket.send(JSON.stringify({
+        is_speaking: false,
+      }))
+    }
+    if (previousSocket?.readyState === WebSocket.OPEN || previousSocket?.readyState === WebSocket.CONNECTING) {
+      previousSocket.close()
+    }
+    if (voiceSocket === previousSocket) {
+      voiceSocket = null
+    }
+    const socket = await openVoiceSocket(runId)
+    if (!isCurrentVoiceRun(runId) || !voiceRecording.value) {
+      socket.close()
+      return
+    }
+    voiceUiState.value = 'voiceReady'
+  } catch (error) {
+    if (!isCurrentVoiceRun(runId)) return
+    cleanupVoiceInput(true)
+    message.error(error instanceof Error ? error.message : '语音服务连接失败，请稍后重试')
+  } finally {
+    if (isCurrentVoiceRun(runId)) {
+      voiceConnecting.value = false
+    }
+  }
+}
+
+/**
+ * 重置当前语音识别文本缓存
+ */
+function resetVoiceTranscript() {
+  voicePendingSamples = new Int16Array()
+  voiceConfirmedText = ''
+  voiceOnlineText = ''
+  voiceLastActiveAt = 0
+}
+
+/**
+ * 会话变化时重置语音草稿基准
+ *
+ * <p>
+ * 语音输入作为页面级工具跨会话保留，切换会话时只隔离旧会话识别缓存
+ * 调用方会先以当前输入框内容重设基准，再切换会话上下文
+ */
+function rebaseVoiceInputForSessionChange() {
+  if (!voiceSessionActive.value) return
+  voicePendingSamples = new Int16Array()
+  voiceBaseDraft = draft.value
+  voiceConfirmedText = ''
+  voiceOnlineText = ''
+  voiceLastActiveAt = 0
+  if (voiceUiState.value === 'recognizing') {
+    voiceUiState.value = 'listening'
+  }
+  void syncVoiceComposerViewport()
+  void restartVoiceSocketForActiveSession()
+}
+
+/**
+ * 清理语音输入资源
+ *
+ * @param closeSocket 是否立即关闭 WebSocket
+ */
+function cleanupVoiceInput(closeSocket: boolean) {
+  voiceRunId++
+  voiceRecording.value = false
+  voiceConnecting.value = false
+  voiceUiState.value = 'idle'
+  voiceLevel.value = 0
+  cleanupVoiceAudio()
+  if (closeSocket && voiceSocket) {
+    voiceSocket.close()
+    voiceSocket = null
+  }
+  resetVoiceTranscript()
+}
+
+/**
+ * 清理浏览器音频采集资源
+ */
+function cleanupVoiceAudio() {
+  voiceProcessorNode?.disconnect()
+  voiceSourceNode?.disconnect()
+  voiceSilentGainNode?.disconnect()
+  voiceProcessorNode = null
+  voiceSourceNode = null
+  voiceSilentGainNode = null
+  voiceMediaStream?.getTracks().forEach((track) => track.stop())
+  voiceMediaStream = null
+  if (voiceAudioContext && voiceAudioContext.state !== 'closed') {
+    void voiceAudioContext.close()
+  }
+  voiceAudioContext = null
 }
 
 /**
@@ -1465,6 +2120,7 @@ async function loadHistory(chat: MetaChat | null = activeChat.value) {
  */
 function handleNewSession() {
   stopStreaming()
+  rebaseVoiceInputForSessionChange()
   stopChatFilePolling()
   workspace.resetSession()
   activeMetaChatId.value = null
@@ -1496,6 +2152,7 @@ async function loadChats() {
 
 async function selectChat(chat: MetaChat) {
   stopStreaming()
+  rebaseVoiceInputForSessionChange()
   stopChatFilePolling()
   pendingChatFilePlaceholders.value = []
   selectedChatFileIds.value = []
@@ -1592,6 +2249,7 @@ async function submitDelete() {
   try {
     await deleteChat(chat.id)
     if (activeMetaChatId.value === chat.id) {
+      rebaseVoiceInputForSessionChange()
       activeMetaChatId.value = null
       messages.value = []
       workspace.resetSession()
@@ -2781,7 +3439,7 @@ async function downloadReference(reference: RetrievalDocumentReference) {
 .message-avatar.user {
   width: 30px;
   height: 30px;
-  //border: 1px solid rgba(126, 168, 255, 0.24);
+  /* border: 1px solid rgba(126, 168, 255, 0.24); */
   color: #c2d2ff;
   background: radial-gradient(circle at 35% 30%, rgba(126, 168, 255, 0.18), transparent 58%),
   rgba(15, 22, 32, 0.92);
@@ -3106,6 +3764,12 @@ async function downloadReference(reference: RetrievalDocumentReference) {
   gap: 10px 12px;
 }
 
+.composer.voice-active .composer-context-row {
+  position: relative;
+  z-index: 3;
+  margin-bottom: 10px;
+}
+
 .context-scope-row {
   display: inline-flex;
   flex: 0 0 auto;
@@ -3205,16 +3869,43 @@ async function downloadReference(reference: RetrievalDocumentReference) {
 }
 
 .composer {
+  position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
   align-items: center;
   gap: 12px;
   padding: 14px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+.composer.voice-active {
+  grid-template-columns: minmax(0, 1fr) 150px 86px 92px;
+  min-height: 196px;
+  align-items: center;
+  column-gap: 14px;
+  padding-top: 28px;
+  padding-right: 16px;
+  padding-bottom: 28px;
+}
+
+.composer.voice-active > .composer-button {
+  position: relative;
+  z-index: 3;
+}
+
 .chat-file-input {
   display: none;
+}
+
+.composer-input-shell {
+  position: relative;
+  z-index: 2;
+  grid-column: 1;
+  min-width: 0;
+}
+
+.composer-input {
+  width: 100%;
 }
 
 .chat-file-strip {
@@ -3387,12 +4078,271 @@ async function downloadReference(reference: RetrievalDocumentReference) {
   color: rgba(154, 168, 186, 0.82);
 }
 
+.composer.voice-active .composer-input-shell {
+  min-height: 86px;
+}
+
+.composer.voice-active .composer-input {
+  min-height: 86px;
+}
+
+.composer.voice-active .composer-input :deep(.n-input-wrapper) {
+  min-height: 86px;
+  border-color: rgba(47, 125, 246, 0.52) !important;
+  background: linear-gradient(90deg, rgba(47, 125, 246, 0.08), rgba(255, 255, 255, 0.96)),
+  #ffffff !important;
+  box-shadow: inset 0 0 0 1px rgba(47, 125, 246, 0.08),
+  0 0 0 2px rgba(47, 125, 246, 0.10);
+}
+
+.composer.voice-active .composer-input :deep(.n-input__textarea-el) {
+  min-height: 84px !important;
+  padding-top: 34px !important;
+  padding-right: 20px !important;
+  padding-bottom: 12px !important;
+  padding-left: 164px !important;
+}
+
+.composer.voice-active .composer-input :deep(.n-input__textarea-el::placeholder) {
+  color: transparent;
+}
+
+.composer-voice-chip {
+  position: absolute;
+  top: 50%;
+  left: 18px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  border: 1px solid rgba(47, 125, 246, 0.20);
+  border-radius: 9px;
+  padding: 0 14px;
+  color: #1f63d9;
+  font-size: 13px;
+  font-weight: 800;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 8px 20px rgba(47, 125, 246, 0.10);
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.composer-chip-wave {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 18px;
+}
+
+.composer-chip-wave i {
+  display: block;
+  width: 3px;
+  height: 10px;
+  border-radius: 999px;
+  background: #146bff;
+  box-shadow: 0 0 10px rgba(20, 107, 255, 0.46);
+  animation: composer-chip-wave 860ms ease-in-out infinite;
+}
+
+.composer-chip-wave i:nth-child(2) {
+  animation-delay: -160ms;
+}
+
+.composer-chip-wave i:nth-child(3) {
+  animation-delay: -320ms;
+}
+
+.composer-chip-wave i:nth-child(4) {
+  animation-delay: -480ms;
+}
+
+.composer-chip-wave i:nth-child(5) {
+  animation-delay: -640ms;
+}
+
 .composer-button {
   min-width: 92px;
   height: 42px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+
+.voice-button {
+  position: relative;
+  display: grid;
+  box-sizing: border-box;
+  width: 42px;
+  min-width: 42px;
+  height: 42px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0;
+  color: #1f63d9;
+  line-height: 1;
+  background: transparent;
+  cursor: pointer;
+  aspect-ratio: 1;
+  place-items: center;
+}
+
+.voice-button:not(.recording) {
+  border: 1px solid #b9d3fb;
+  border-radius: 9px;
+  background: #f3f8ff;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.74), 0 5px 14px rgba(47, 125, 246, 0.08);
+}
+
+.voice-button:not(.recording):hover:not(:disabled) {
+  border-color: #86b8ff;
+  color: #1b57bd;
+  background: #eaf3ff;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.84), 0 7px 18px rgba(47, 125, 246, 0.13);
+}
+
+.voice-button:not(.recording):active:not(:disabled) {
+  background: #dcecff;
+}
+
+.voice-button:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+
+.voice-mic-visual {
+  position: relative;
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+}
+
+.voice-idle-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: radial-gradient(circle at 50% 50%, rgba(47, 125, 246, 0.18), rgba(255, 255, 255, 0.96) 64%);
+  box-shadow: inset 0 0 10px rgba(47, 125, 246, 0.16), 0 0 10px rgba(47, 125, 246, 0.08);
+}
+
+.voice-idle-mark i {
+  display: block;
+  width: 2px;
+  border-radius: 999px;
+  background: #2f7df6;
+  box-shadow: 0 0 7px rgba(47, 125, 246, 0.32);
+}
+
+.voice-idle-mark i:nth-child(1) {
+  height: 11px;
+}
+
+.voice-idle-mark i:nth-child(2) {
+  height: 17px;
+}
+
+.voice-idle-mark i:nth-child(3) {
+  height: 14px;
+}
+
+.voice-idle-mark i:nth-child(4) {
+  height: 8px;
+}
+
+.voice-mic-core {
+  position: relative;
+  z-index: 3;
+  display: none;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+}
+
+.voice-mic-icon {
+  display: block;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  stroke-width: 2.2;
+  transform: translateY(-0.5px);
+}
+
+.voice-button.recording {
+  z-index: 1;
+  grid-column: 2;
+  width: 96px;
+  min-width: 96px;
+  height: 96px;
+  border: 1px solid rgba(20, 107, 255, 0.32);
+  color: #ffffff;
+  overflow: visible;
+  background: radial-gradient(circle at 50% 42%, #6aa7ff 0%, #237cff 44%, #0f62e8 72%, #084fc8 100%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28),
+  inset 0 0 30px rgba(255, 255, 255, 0.18),
+  0 14px 34px rgba(20, 107, 255, 0.34),
+  0 0 var(--voice-level-glow, 34px) rgba(20, 107, 255, var(--voice-level-opacity, 0.24));
+  animation: none;
+  aspect-ratio: 1;
+  place-self: center;
+}
+
+.voice-button.recording .voice-idle-mark {
+  display: none;
+}
+
+.voice-button.recording::before,
+.voice-button.recording::after {
+  position: absolute;
+  border: 1px solid rgba(20, 107, 255, var(--voice-level-ring-opacity, 0.30));
+  border-radius: 999px;
+  content: "";
+  pointer-events: none;
+  transform-origin: 50% 50%;
+}
+
+.voice-button.recording::before {
+  inset: -13px;
+  opacity: 0.78;
+  background: radial-gradient(circle at 50% 50%, rgba(20, 107, 255, 0.08) 0%, transparent 64%, rgba(20, 107, 255, 0.18) 70%, transparent 76%);
+  box-shadow: 0 0 38px rgba(20, 107, 255, 0.30);
+  animation: voice-listening-halo 1.45s ease-in-out infinite;
+}
+
+.voice-button.recording::after {
+  display: none;
+}
+
+.voice-button.recording .voice-mic-visual {
+  width: 96px;
+  height: 96px;
+  aspect-ratio: 1;
+}
+
+.voice-button.recording .voice-mic-core {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  aspect-ratio: 1;
+  transform: scale(var(--voice-core-scale, 1));
+  transition: transform 120ms ease-out;
+}
+
+.voice-button.recording .voice-mic-icon {
+  width: 34px;
+  height: 34px;
+  color: #ffffff;
+  stroke-width: 2.2;
+  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.34)) drop-shadow(0 0 14px rgba(20, 107, 255, 0.34));
+  transform: translateY(-1px);
 }
 
 .streaming-stop-button {
@@ -3494,12 +4444,41 @@ async function downloadReference(reference: RetrievalDocumentReference) {
   }
 }
 
+@keyframes voice-listening-halo {
+  0%,
+  100% {
+    opacity: 0.58;
+    transform: scale(0.96);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.07);
+  }
+}
+
+@keyframes composer-chip-wave {
+  0%,
+  100% {
+    height: 8px;
+    opacity: 0.48;
+  }
+
+  50% {
+    height: 18px;
+    opacity: 1;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .message-scrollbar {
     transition: none;
   }
 
   .streaming-stop-button,
+  .voice-button.recording,
+  .voice-button.recording::before,
+  .composer-chip-wave i,
   .streaming-stop-button::before,
   .stop-indicator::after {
     animation: none;
@@ -3525,6 +4504,84 @@ async function downloadReference(reference: RetrievalDocumentReference) {
 
   .message-scrollbar {
     display: none;
+  }
+
+  .composer.voice-active {
+    grid-template-columns: minmax(0, 1fr) 72px 82px 86px;
+    min-height: 148px;
+    column-gap: 8px;
+    padding-top: 18px;
+    padding-right: 12px;
+    padding-bottom: 18px;
+  }
+
+  .composer.voice-active .composer-input-shell {
+    grid-column: 1 / -1;
+    min-height: 76px;
+  }
+
+  .composer.voice-active .composer-input {
+    min-height: 76px;
+  }
+
+  .composer.voice-active .composer-input :deep(.n-input-wrapper) {
+    min-height: 76px;
+  }
+
+  .composer.voice-active .composer-input :deep(.n-input__textarea-el) {
+    min-height: 74px !important;
+    padding-top: 27px !important;
+    padding-right: 16px !important;
+    padding-bottom: 11px !important;
+    padding-left: 122px !important;
+  }
+
+  .composer-voice-chip {
+    top: 50%;
+    left: 16px;
+    height: 34px;
+    padding: 0 9px;
+    font-size: 12px;
+    transform: translateY(-50%);
+  }
+
+  .voice-button.recording {
+    grid-column: 2;
+    width: 68px;
+    min-width: 68px;
+    height: 68px;
+    place-self: center;
+  }
+
+  .voice-button.recording .voice-mic-visual {
+    width: 68px;
+    height: 68px;
+  }
+
+  .voice-button.recording .voice-mic-core {
+    width: 32px;
+    height: 32px;
+  }
+
+  .voice-button.recording .voice-mic-icon {
+    width: 26px;
+    height: 26px;
+  }
+
+  .voice-button.recording::before {
+    inset: -8px;
+  }
+
+  .voice-button.recording::after {
+    inset: -15px;
+  }
+
+  .composer.voice-active .attachment-button {
+    min-width: 82px;
+  }
+
+  .composer.voice-active > .composer-button:last-child {
+    min-width: 86px;
   }
 }
 
