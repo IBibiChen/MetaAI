@@ -164,6 +164,18 @@
               <button
                   class="message-action-button"
                   type="button"
+                  title="编辑消息"
+                  aria-label="编辑消息"
+                  :disabled="sending || !messageItem.content"
+                  @click.stop="editUserMessage(messageItem)"
+              >
+                <n-icon>
+                  <Pencil/>
+                </n-icon>
+              </button>
+              <button
+                  class="message-action-button"
+                  type="button"
                   title="复制消息"
                   aria-label="复制消息"
                   :disabled="!messageItem.content"
@@ -2280,6 +2292,31 @@ function copyMessage(messageItem: ChatMessage) {
   copyText(messageItem.content, '已复制消息')
 }
 
+/**
+ * 将历史用户消息填入当前输入框
+ *
+ * <p>
+ * 编辑语义是作为新消息发送，旧消息和旧回答保持不变
+ *
+ * @param messageItem 被编辑的用户消息
+ */
+async function editUserMessage(messageItem: ChatMessage) {
+  if (messageItem.role !== 'user' || sending.value || !messageItem.content) return
+  if (voiceSessionActive.value) {
+    stopVoiceInput()
+  }
+  draft.value = messageItem.content
+  await nextTick()
+  composerInputRef.value?.focus()
+  const textarea = composerInputRef.value?.textareaElRef
+  if (textarea) {
+    const cursorPosition = textarea.value.length
+    textarea.setSelectionRange(cursorPosition, cursorPosition)
+    textarea.scrollTop = textarea.scrollHeight
+  }
+  message.info('已填入输入框，可修改后发送')
+}
+
 function resendUserMessage(messageItem: ChatMessage) {
   if (messageItem.role !== 'user' || sending.value || !messageItem.content) return
   if (fileContextBusy.value) {
@@ -3405,7 +3442,7 @@ async function downloadReference(reference: RetrievalDocumentReference) {
 
 .message-actions {
   display: flex;
-  width: 58px;
+  width: auto;
   flex: none;
   justify-content: flex-start;
   gap: 6px;
@@ -3416,6 +3453,7 @@ async function downloadReference(reference: RetrievalDocumentReference) {
 }
 
 .message-row.user .message-actions {
+  width: 90px;
   justify-content: flex-start;
 }
 
