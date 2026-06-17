@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "vue-tsc -b && vite build",
+    "build:local": "vue-tsc -b && vite build --mode boot",
+    "build:prod": "vue-tsc -b && vite build --mode production",
     "preview": "vite preview --host 0.0.0.0",
     "typecheck": "vue-tsc -b"
   },

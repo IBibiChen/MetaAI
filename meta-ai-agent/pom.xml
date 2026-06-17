@@ -153,6 +153,19 @@
     </dependencies>
 
     <build>
+        <resources>
+            <!--
+                后端资源复制：排除环境配置文件
+                运行时通过外部配置或环境变量注入 Spring Boot 配置
+            -->
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>false</filtering>
+                <excludes>
+                    <exclude>application*.properties</exclude>
+                </excludes>
+            </resource>
+        </resources>
         <plugins>
             <!--
                 前端构建：本地 Maven 直接调用 PATH 中的 npm

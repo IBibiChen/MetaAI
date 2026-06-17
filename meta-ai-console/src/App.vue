@@ -92,7 +92,6 @@ import {useWorkspaceStore} from '@/stores/workspace'
 const route = useRoute()
 const router = useRouter()
 const workspace = useWorkspaceStore()
-workspace.persist()
 const embeddedRoute = computed(() => route.meta.embedded === true)
 const appTheme = computed(() => embeddedRoute.value ? null : darkTheme)
 

@@ -222,6 +222,12 @@ Node 22 和 npm 10，与 Dockerfile 的 Node 构建阶段保持同一主版本
 Docker 镜像构建不会在 Maven 阶段再次执行 npm。Dockerfile 会先用 Node 阶段执行 `npm ci` 和 `npm run build`，再通过
 `-Dmeta-ai.console.skip=true` 让 Maven 只复制已有 `dist` 并打包 Spring Boot jar
 
+Maven 打包会排除 `meta-ai-agent/src/main/resources/application*.properties`，避免把本地模型地址、Token、Redis 密码等环境配置打进
+jar
+
+容器运行时必须通过外部配置文件或环境变量提供 Spring Boot 配置。推荐把配置挂载到 `/app/config/`，让 Spring Boot
+默认外部配置优先级自动读取，例如 `/app/config/application.properties`
+
 `spring-boot-maven-plugin` 当前不配置 `<classifier>exec</classifier>`。Spring Boot 默认会把主产物
 `meta-ai-agent-1.0.0.jar` 重打包为可执行 jar，并把原始普通 jar 备份为 `meta-ai-agent-1.0.0.jar.original`
 
@@ -239,6 +245,17 @@ mvn -pl :meta-ai-agent -am package -DskipTests
 
 ```bash
 mvn -pl :meta-ai-agent -am package -DskipTests "-Dmeta-ai.console.skip=true"
+```
+
+本地直接 `java -jar` 验证时，前端需要使用 `.env.boot` 生成根路径版本的 `dist`，否则生产构建中的 `/meta-ai/assets/**`
+或开发代理中的 `/api/v1/**` 会绕过 Nginx / Vite 直接请求后端，导致 404：
+
+```bash
+cd meta-ai-console
+npm run build:local
+cd ..
+mvn -pl :meta-ai-agent -am clean package -DskipTests "-Dmeta-ai.console.skip=true"
+java -jar meta-ai-agent/target/meta-ai-agent-1.0.0.jar --spring.config.additional-location=file:meta-ai-agent/src/main/resources/
 ```
 
 PowerShell 中带点号的 Maven 属性建议加引号，例如 `"-Dmeta-ai.console.skip=true"`。不加引号时，某些环境会把后半段误解析成

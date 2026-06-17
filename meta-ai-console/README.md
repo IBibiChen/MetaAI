@@ -44,6 +44,25 @@ npm run dev
 http://localhost:5173
 ```
 
+## 构建模式
+
+生产构建使用 `.env.production`，前端资源路径带 `/meta-ai/` 前缀，适合通过 Nginx 网关访问：
+
+```bash
+npm run build
+```
+
+本地 `java -jar` 直连验证使用 `.env.boot`，前端资源和 API 都从 Spring Boot 根路径访问：
+
+```bash
+npm run build:local
+```
+
+`.env.boot` 的 API 前缀应为 `/`，这样浏览器会直接请求 `/v1/**`，不再依赖 Vite proxy 或 Nginx rewrite
+
+如果先执行 `npm run build:local` 生成本地直连版 `dist`，后端重新打 jar 时必须使用 `-Dmeta-ai.console.skip=true`，避免
+Maven 再次执行默认生产构建覆盖 `dist`
+
 ## 后端代理
 
 开发期 API 前缀由 `.env.development` 配置：

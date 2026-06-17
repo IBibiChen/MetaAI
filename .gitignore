@@ -39,7 +39,7 @@ build/
 ### Mac OS ###
 .DS_Store
 /.playwright-mcp/
-/logs/
+**/logs/
 
 ### Docker Compose local data ###
 /docker/compose/**/.data/

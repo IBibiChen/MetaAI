@@ -893,8 +893,10 @@ let draggingThumb = false
 let thumbDragStartY = 0
 let thumbDragStartTop = 0
 
+// 嵌入页首屏渲染前先应用 URL 上下文，避免短暂使用普通工作区缓存
+applyRouteContext()
+
 onMounted(async () => {
-  applyRouteContext()
   await nextTick()
   setupMessageScrollbar()
   window.addEventListener('resize', handleContextScopeResize)
