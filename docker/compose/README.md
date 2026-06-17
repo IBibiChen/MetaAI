@@ -139,6 +139,73 @@ Ollama 栈入口：
 
 - Ollama 模型列表：`http://localhost:18001/api/tags`
 
+## Nginx 网关配置
+
+MetaAI 前端已经打入 `meta-ai-agent` 可执行 jar，生产网关需要同时暴露页面路径和 API 路径：
+
+- 页面入口：`/meta-ai/`
+- iframe 嵌入入口：`/meta-ai/embed/chat?tenantId=t1&userId=u1&kbId=kb1`
+- API 入口：`/api/meta-ai/v1/**`
+- Spring Boot 内部实际接收路径：`/v1/**`
+
+下面示例假设网关可以通过服务名访问 `service-meta-ai`。如果网关部署在 Compose 外部，也可以把 `proxy_pass` 替换为
+`http://127.0.0.1:18000`
+
+SSE 流式接口的 location 必须放在普通 API location 前面，避免被 `/api/meta-ai/` 提前匹配
+
+Spring Boot 只为明确的前端 History 路由配置 `index.html` 回退，例如 `/chat`、`/documents` 和 `/embed/chat`。不要在后端使用
+`/{path:[^\\.]*}` 或 `/**/{path:[^\\.]*}` 这类全局通配回退，否则写错的 `/v1/**`、`/internal/**` 或文档接口路径可能被误转成前端页面，破坏
+API 404 语义
+
+```nginx
+# MetaAI 前端页面
+location /meta-ai/ {
+    proxy_pass http://service-meta-ai/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+
+# MetaAI 普通聊天 SSE
+location /api/meta-ai/v1/chat {
+    rewrite ^/api/meta-ai/(.*)$ /$1 break;
+    proxy_pass http://service-meta-ai;
+    proxy_http_version 1.1;
+    proxy_buffering off;
+    proxy_cache off;
+    proxy_set_header Connection "";
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+
+# MetaAI RAG 聊天 SSE
+location /api/meta-ai/v1/rag {
+    rewrite ^/api/meta-ai/(.*)$ /$1 break;
+    proxy_pass http://service-meta-ai;
+    proxy_http_version 1.1;
+    proxy_buffering off;
+    proxy_cache off;
+    proxy_set_header Connection "";
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+
+# MetaAI 其他 API
+location /api/meta-ai/ {
+    rewrite ^/api/meta-ai/(.*)$ /$1 break;
+    proxy_pass http://service-meta-ai;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
 ## 应用镜像
 
 应用镜像可以手工构建：
@@ -148,6 +215,43 @@ docker build -f meta-ai-agent/Dockerfile -t registry.cn-hangzhou.aliyuncs.com/me
 ```
 
 该命令需要在仓库根目录执行。云效流水线也使用同一个 Dockerfile。仓库根目录当前没有 `settings.xml`，如需 Maven 私服配置，应由流水线注入 Maven settings
+
+本地直接执行 Maven 打包时会调用 PATH 中的 `npm install` 和 `npm run build`，因此本机需要先安装 Node / npm。当前建议使用
+Node 22 和 npm 10，与 Dockerfile 的 Node 构建阶段保持同一主版本
+
+Docker 镜像构建不会在 Maven 阶段再次执行 npm。Dockerfile 会先用 Node 阶段执行 `npm ci` 和 `npm run build`，再通过
+`-Dmeta-ai.console.skip=true` 让 Maven 只复制已有 `dist` 并打包 Spring Boot jar
+
+`spring-boot-maven-plugin` 当前不配置 `<classifier>exec</classifier>`。Spring Boot 默认会把主产物
+`meta-ai-agent-1.0.0.jar` 重打包为可执行 jar，并把原始普通 jar 备份为 `meta-ai-agent-1.0.0.jar.original`
+
+如果配置 `<classifier>exec</classifier>`，插件会保留 `meta-ai-agent-1.0.0.jar` 作为普通 jar，并额外生成
+`meta-ai-agent-1.0.0-exec.jar` 作为可执行 jar。这个模式适合同时发布普通依赖包和可执行包的模块；`meta-ai-agent`
+是应用入口模块，部署只需要一个可执行主产物，因此不使用该配置
+
+本地 Maven 打包命令：
+
+```bash
+mvn -pl :meta-ai-agent -am package -DskipTests
+```
+
+如果前端 `dist` 已经存在，只想跳过 npm 并重新打后端 jar，可以显式跳过前端构建：
+
+```bash
+mvn -pl :meta-ai-agent -am package -DskipTests "-Dmeta-ai.console.skip=true"
+```
+
+PowerShell 中带点号的 Maven 属性建议加引号，例如 `"-Dmeta-ai.console.skip=true"`。不加引号时，某些环境会把后半段误解析成
+Maven lifecycle phase
+
+当前构建约定：
+
+- `exec-maven-plugin` 只负责调用本机 PATH 中的 `npm`，不托管 Node / npm 版本
+- `maven-resources-plugin` 只负责把 `meta-ai-console/dist` 复制到 `target/classes/static`
+- `-pl :meta-ai-agent` 按 artifactId 选择应用入口模块，不依赖目录名
+- `-am` 会同时构建 `meta-ai-agent` 依赖的 reactor 模块，不会漏掉运行所需模块
+- Dockerfile 的 Node 阶段负责镜像内的前端可复现构建，Maven 阶段只负责打 Spring Boot jar
+- 如果团队以后要求 Maven 自动下载并锁定 Node / npm，再考虑切换到 `frontend-maven-plugin`
 
 ## 配置一致性
 

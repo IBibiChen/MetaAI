@@ -566,6 +566,7 @@ import {
   updateChatFlags,
   uploadChatFiles,
 } from '@/api/chat'
+import {apiUrl} from '@/api/base'
 import {fetchStorageDocuments} from '@/api/storage'
 import {useWorkspaceStore} from '@/stores/workspace'
 import type {
@@ -2851,7 +2852,7 @@ function modeClass(value?: string) {
 
 async function downloadReference(reference: RetrievalDocumentReference) {
   try {
-    const response = await fetch(`/api/v1/storage/documents/download/${encodeURIComponent(reference.documentId)}`)
+    const response = await fetch(apiUrl(`/v1/storage/documents/download/${encodeURIComponent(reference.documentId)}`))
     if (!response.ok) {
       throw new Error(`下载失败：${response.status}`)
     }

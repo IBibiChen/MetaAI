@@ -1,5 +1,6 @@
 import {fetchEventSource} from '@microsoft/fetch-event-source'
 
+import {apiUrl} from './base'
 import {request, unwrapResult} from './request'
 
 import type {
@@ -17,8 +18,8 @@ import type {
     RetrievalChatResponse,
 } from '@/types/api'
 
-// 本地开发期 API Key，必须与后端 metax.ai.security.api-key 保持一致
-const METAX_API_TOKEN = 'sk-metax-123456'
+// 前端环境变量会进入构建产物，只能用于开发期或内网轻量鉴权
+const METAX_API_TOKEN = import.meta.env.VITE_METAX_API_TOKEN
 const METAX_AUTHORIZATION = `Bearer ${METAX_API_TOKEN}`
 
 export interface ChatStreamHandlers {
@@ -134,7 +135,7 @@ export function streamPlainChat(
     handlers: ChatStreamHandlers,
     fileIds: string[] = [],
 ) {
-    return openChatStream('/api/v1/chat', {
+    return openChatStream(apiUrl('/v1/chat'), {
         chatId,
         tenantId,
         userId,
@@ -154,7 +155,7 @@ export function streamPlainChat(
  * 适合带 fileIds 或需要鉴权 Header 的复杂流式问答
  */
 export function streamPlainChatJson(options: ChatOptions, fileIds: string[], handlers: ChatStreamHandlers) {
-    return openJsonChatStream('/api/v1/chat', {
+    return openJsonChatStream(apiUrl('/v1/chat'), {
         chatId: options.chatId,
         tenantId: options.tenantId,
         userId: options.userId,
@@ -228,7 +229,7 @@ export async function sendRagChatJson(options: ChatOptions, fileIds: string[] = 
  * done 事件返回完整 answer 和 references
  */
 export function streamRagChat(options: ChatOptions, handlers: ChatStreamHandlers) {
-    return openChatStream('/api/v1/rag', {
+    return openChatStream(apiUrl('/v1/rag'), {
         chatId: options.chatId,
         msg: options.msg,
         tenantId: options.tenantId,
@@ -252,7 +253,7 @@ export function streamRagChat(options: ChatOptions, handlers: ChatStreamHandlers
  * references 来自知识库检索，files 来自会话文件上下文
  */
 export function streamRagChatJson(options: ChatOptions, fileIds: string[], handlers: ChatStreamHandlers) {
-    return openJsonChatStream('/api/v1/rag', {
+    return openJsonChatStream(apiUrl('/v1/rag'), {
         chatId: options.chatId,
         msg: options.msg,
         tenantId: options.tenantId,

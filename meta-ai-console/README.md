@@ -46,16 +46,48 @@ http://localhost:5173
 
 ## 后端代理
 
-前端请求统一写成：
+开发期 API 前缀由 `.env.development` 配置：
 
 ```text
-/api/v1/xxx
+VITE_API_BASE_URL=/api
 ```
 
-Vite 会代理到：
+前端代码统一使用内部接口路径，例如：
+
+```text
+/v1/xxx
+```
+
+开发期 Vite 会把 `/api/v1/xxx` 代理到：
 
 ```text
 http://localhost:8008/v1/xxx
+```
+
+生产期 API 前缀由 `.env.production` 配置：
+
+```text
+VITE_APP_BASE_PATH=/meta-ai/
+VITE_API_BASE_URL=/api/meta-ai
+```
+
+老系统 iframe 嵌入入口：
+
+```text
+/meta-ai/embed/chat?tenantId=t1&userId=u1&kbId=kb1
+```
+
+URL query 只作为嵌入上下文入口，不作为可信身份凭证
+
+生产网关会把 `/meta-ai/` 页面请求代理到后端应用根路径，因此 Spring Boot 实际接收的前端路由是 `/chat`、`/documents` 和
+`/embed/chat`
+
+后端只对这些明确页面路由回退到 `index.html`。不要改成全局通配 SPA fallback，否则后端 API 的 404 会被前端页面吞掉
+
+完整 Nginx 网关示例见：
+
+```text
+docker/compose/README.md
 ```
 
 代理配置在：

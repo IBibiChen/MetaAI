@@ -15,6 +15,10 @@
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <exec-maven-plugin.version>3.6.3</exec-maven-plugin.version>
+        <maven-resources-plugin.version>3.5.0</maven-resources-plugin.version>
+        <meta-ai.console.directory>${project.basedir}/../meta-ai-console</meta-ai.console.directory>
+        <meta-ai.console.skip>false</meta-ai.console.skip>
     </properties>
 
     <dependencies>
@@ -150,12 +154,82 @@
 
     <build>
         <plugins>
+            <!--
+                前端构建：本地 Maven 直接调用 PATH 中的 npm
+                Docker 已有独立 Node 阶段，打包 jar 时用 meta-ai.console.skip 跳过 npm
+            -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>${exec-maven-plugin.version}</version>
+                <executions>
+                    <!-- generate-resources 阶段同步前端依赖 -->
+                    <execution>
+                        <id>npm-install-console</id>
+                        <phase>generate-resources</phase>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                        <configuration>
+                            <skip>${meta-ai.console.skip}</skip>
+                            <workingDirectory>${meta-ai.console.directory}</workingDirectory>
+                            <executable>npm</executable>
+                            <arguments>
+                                <argument>install</argument>
+                            </arguments>
+                        </configuration>
+                    </execution>
+                    <!-- generate-resources 阶段执行生产构建，输出 meta-ai-console/dist -->
+                    <execution>
+                        <id>npm-build-console</id>
+                        <phase>generate-resources</phase>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                        <configuration>
+                            <skip>${meta-ai.console.skip}</skip>
+                            <workingDirectory>${meta-ai.console.directory}</workingDirectory>
+                            <executable>npm</executable>
+                            <arguments>
+                                <argument>run</argument>
+                                <argument>build</argument>
+                            </arguments>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <!--
+                前端资源复制：将 meta-ai-console/dist 放入 Spring Boot static 目录
+                复制结果进入 target/classes/static，并最终随可执行 jar 发布
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-resources-plugin</artifactId>
+                <version>${maven-resources-plugin.version}</version>
+                <executions>
+                    <!-- process-resources 阶段复制前端 dist 到后端静态资源目录 -->
+                    <execution>
+                        <id>copy-console-dist</id>
+                        <phase>process-resources</phase>
+                        <goals>
+                            <goal>copy-resources</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${project.build.outputDirectory}/static</outputDirectory>
+                            <resources>
+                                <resource>
+                                    <directory>${meta-ai.console.directory}/dist</directory>
+                                    <filtering>false</filtering>
+                                </resource>
+                            </resources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <!-- Spring Boot 打包：默认将主 jar 重打包为可执行 jar -->
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
-                <configuration>
-                    <classifier>exec</classifier>
-                </configuration>
                 <executions>
                     <execution>
                         <goals>

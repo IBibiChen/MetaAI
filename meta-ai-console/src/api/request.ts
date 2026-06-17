@@ -1,19 +1,21 @@
 import axios, {AxiosError} from 'axios'
 
+import {API_BASE_URL} from './base'
+
 import type {CommonResult} from '@/types/api'
 
 /**
  * 全局 Axios 实例
  *
  * <p>
- * 开发期 baseURL = /api
- * Vite 会把 /api/v1 转发到后端 /v1
+ * 开发期默认 baseURL = /api，由 Vite 转发到后端 /v1
+ * 生产期通过 VITE_API_BASE_URL 绑定 Nginx 网关前缀
  *
  * @example
  * request.get('/v1/storage/documents/page')
  */
 export const request = axios.create({
-    baseURL: '/api',
+    baseURL: API_BASE_URL,
     timeout: 120_000,
 })
 
