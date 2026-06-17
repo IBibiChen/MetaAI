@@ -20,6 +20,11 @@
     <dependencies>
         <dependency>
             <groupId>com.metax</groupId>
+            <artifactId>meta-ai-tool</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.metax</groupId>
             <artifactId>meta-ai-rag</artifactId>
             <version>${project.version}</version>
         </dependency>

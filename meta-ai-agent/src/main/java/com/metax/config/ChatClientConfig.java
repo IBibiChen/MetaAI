@@ -3,7 +3,6 @@ package com.metax.config;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -35,15 +34,15 @@ public class ChatClientConfig {
      * 当前上下文存在 Redis / JDBC 两个 ChatMemory Bean，因此这里必须显式绑定 redisChatMemory
      *
      * @param model             当前配置选中的 ChatModel
-     * @param chatMemory        Redis ChatMemory
+     * @param redisChatMemory   Redis ChatMemory
      * @param chatClientFactory ChatClient 工厂
      * @return ChatClient
      */
     @Bean
     public ChatClient chatClient(ChatModel model,
-                                 @Qualifier("redisChatMemory") ChatMemory chatMemory,
+                                 ChatMemory redisChatMemory,
                                  ChatClientFactory chatClientFactory) {
-        return chatClientFactory.buildChatClient(model, chatMemory);
+        return chatClientFactory.buildChatClient(model, redisChatMemory);
     }
 
     /**
@@ -54,14 +53,33 @@ public class ChatClientConfig {
      * RetrievalAugmentationAdvisor 在请求阶段动态追加，再使用当前配置选中的 VectorStore 做检索
      *
      * @param model             当前配置选中的 ChatModel
-     * @param chatMemory        Redis ChatMemory
+     * @param redisChatMemory   Redis ChatMemory
      * @param chatClientFactory ChatClient 工厂
      * @return RAG ChatClient
      */
     @Bean
     public ChatClient ragChatClient(ChatModel model,
-                                    @Qualifier("redisChatMemory") ChatMemory chatMemory,
+                                    ChatMemory redisChatMemory,
                                     ChatClientFactory chatClientFactory) {
-        return chatClientFactory.buildRagChatClient(model, chatMemory);
+        return chatClientFactory.buildRagChatClient(model, redisChatMemory);
+    }
+
+    /**
+     * 请求级工具 ChatClient
+     *
+     * <p>
+     * 绑定 CHAT_GENERAL_SYSTEM、当前配置选中的 ChatModel 和 redisChatMemory，适合显式工具调用问答
+     * 该 Bean 不挂载 defaultTools，业务工具由 ToolChatService 按本轮请求动态绑定 ToolCallAdvisor、ToolCallback 和 ToolContext
+     *
+     * @param model             当前配置选中的 ChatModel
+     * @param redisChatMemory   Redis ChatMemory
+     * @param chatClientFactory ChatClient 工厂
+     * @return 请求级工具 ChatClient
+     */
+    @Bean
+    public ChatClient toolChatClient(ChatModel model,
+                                     ChatMemory redisChatMemory,
+                                     ChatClientFactory chatClientFactory) {
+        return chatClientFactory.buildRequestToolChatClient(model, redisChatMemory);
     }
 }
