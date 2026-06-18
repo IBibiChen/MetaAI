@@ -569,6 +569,7 @@ import {
 import {apiUrl} from '@/api/base'
 import {fetchStorageDocuments} from '@/api/storage'
 import {useWorkspaceStore} from '@/stores/workspace'
+import {formatVoiceInputStartupError} from '@/utils/media-errors'
 import type {
   ChatContextScope,
   ChatOptions,
@@ -1103,7 +1104,7 @@ async function startVoiceInput() {
   } catch (error) {
     if (!isCurrentVoiceRun(runId)) return
     cleanupVoiceInput(true)
-    message.error(error instanceof Error ? error.message : '语音输入启动失败')
+    message.error(formatVoiceInputStartupError(error))
   } finally {
     if (isCurrentVoiceRun(runId)) {
       voiceConnecting.value = false
