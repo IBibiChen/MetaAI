@@ -122,6 +122,13 @@ cp config-template/application-ollama.properties .data/config/application-ollama
 cp -r /path/to/MetaAI/meta-ai-agent/src/main/resources/prompts/* .data/prompts/
 ```
 
+RustFS 镜像默认使用 `10001:10001` 运行，宿主机 bind mount 目录必须允许该用户写入：
+
+```bash
+sudo chown -R 10001:10001 .data/rustfs
+sudo chmod -R u+rwX,g+rwX .data/rustfs
+```
+
 按现场环境修改：
 
 ```bash
@@ -138,6 +145,121 @@ vi .data/config/application-ollama.properties
 - PostgreSQL 地址、用户名、密码
 - `application-ollama.properties` 中 Chat 模型和 Embedding 模型名称
 - `spring.ai.vectorstore.type` 使用 `redis` 还是 `qdrant`
+
+## 第三方文档同步
+
+MetaAI 侧配置写在服务器部署目录的 `.data/config/application.properties`
+
+首次部署时该文件通常由 `config-template/application.properties` 复制生成，如果服务器上已经存在
+`.data/config/application.properties`，需要手动把下面配置同步过去
+
+```properties
+# 第三方系统文档同步适配器
+# 首次联调建议只开启通知入队接口，确认老系统能推送文件 ID 后再开启 Worker 和补偿扫描
+metax.external-adapter.enabled=true
+metax.external-adapter.tenant-id=t1
+metax.external-adapter.kb-id=kb1
+metax.external-adapter.max-attempts=3
+
+# 后台 Worker 负责下载、对象存储归档、提交索引和等待索引终态
+# 首次联调建议先关闭，确认 file-service.download-url 可用后再改为 true
+metax.external-adapter.worker.enabled=false
+metax.external-adapter.worker.idle-interval=5s
+metax.external-adapter.worker.lock-timeout=30m
+metax.external-adapter.worker.index-timeout=30m
+metax.external-adapter.worker.index-poll-initial-interval=2s
+metax.external-adapter.worker.index-poll-max-interval=10s
+metax.external-adapter.worker.index-poll-multiplier=1.5
+
+# 第三方老系统独立文件服务
+# 对应老系统 fsip.config.host，Docker 内优先通过 host.docker.internal 访问宿主机文件服务
+metax.external-adapter.file-service.host=http://host.docker.internal:10086
+metax.external-adapter.file-service.download-url=/v1/download/
+metax.external-adapter.file-service.authorization=123010068
+metax.external-adapter.file-service.timeout=5m
+
+# 调用 MetaAI 自身对象存储文档接口
+metax.external-adapter.storage-api.base-url=http://meta-ai-agent:8008
+metax.external-adapter.storage-api.auto-index=true
+metax.external-adapter.storage-api.upload-timeout=10m
+
+# 补偿扫描会定时扫描历史漏通知文件，确认链路稳定后再开启
+metax.external-adapter.reconcile.enabled=false
+metax.external-adapter.reconcile.batch-size=500
+metax.external-adapter.reconcile.fixed-delay-millis=300000
+```
+
+老系统侧配置由业务系统配置文件维护，MetaAI 仓库不直接修改老系统配置
+
+老系统文件服务配置通常类似：
+
+```yaml
+fsip:
+  config:
+    authorization: 123010068
+    host: http://172.17.0.1:10086
+    uploadUrl: /v1/upload/
+    downloadUrl: /v1/download/
+    mkdirUrl: /v1/mkdir/
+    downPrefix: http://172.17.0.1:10086/v1/download/
+    getFilePrefix: http://172.17.0.1:10086/v1/download/
+```
+
+MetaAI 容器内访问该独立文件服务时，优先使用 `http://host.docker.internal:10086`
+
+当前 `docker-compose-o.yaml` 已给 `meta-ai-agent` 配置 `host.docker.internal:host-gateway`，比直接写死 `172.17.0.1` 更稳
+
+老系统容器和 `meta-ai-agent` 在同一个 Compose `default` 网络内时，老系统访问 MetaAI 必须使用服务名，不能写 `localhost`
+
+```yaml
+meta-ai:
+  external-sync:
+    enabled: true
+    base-url: http://meta-ai-agent:8008
+    read-timeout: 10000
+```
+
+注意：如果现场 Docker 环境中 `host.docker.internal` 不通，可以临时把 `metax.external-adapter.file-service.host` 改为
+`http://172.17.0.1:10086` 验证，但不要把它当成跨环境稳定地址
+
+首次联调建议保持：
+
+```properties
+metax.external-adapter.worker.enabled=false
+metax.external-adapter.reconcile.enabled=false
+```
+
+等老系统能成功调用 MetaAI 入队接口，并确认 `file-service.download-url` 可以下载文件后，再开启 Worker：
+
+```properties
+metax.external-adapter.worker.enabled=true
+```
+
+如需补偿扫描历史漏通知文件，再开启：
+
+```properties
+metax.external-adapter.reconcile.enabled=true
+```
+
+使用 `docker-compose-o.yaml` 部署时，修改配置后重启业务 Java 和 MetaAI：
+
+```bash
+docker compose -f docker-compose-o.yaml up -d --no-deps --force-recreate meta-ai-agent java
+```
+
+验证老系统容器能访问 MetaAI 入队接口：
+
+```bash
+docker compose -f docker-compose-o.yaml exec java sh -c \
+  "wget -S -O- --header='Content-Type: application/json' --post-data='{\"externalFileIds\":[\"实际文件ID\"]}' http://meta-ai-agent:8008/internal/external/documents/sync"
+```
+
+验证 MetaAI 容器能访问独立文件服务：
+
+```bash
+docker compose -f docker-compose-o.yaml exec meta-ai-agent sh -c \
+  "wget -S -O- --header='Authorization: 123010068' http://host.docker.internal:10086/v1/download/实际文件ID"
+```
 
 ## 启动
 
@@ -231,6 +353,17 @@ docker compose logs -f paddlex-ocr
 docker compose logs -f live-asr
 ```
 
+RustFS 报 `Permission denied (os error 13)` 时，优先修复宿主机挂载目录权限：
+
+```bash
+docker compose stop rustfs
+sudo mkdir -p .data/rustfs
+sudo chown -R 10001:10001 .data/rustfs
+sudo chmod -R u+rwX,g+rwX .data/rustfs
+docker compose up -d rustfs
+docker compose logs -f rustfs
+```
+
 停机但保留数据：
 
 ```bash
@@ -242,5 +375,7 @@ docker compose down
 切换 Embedding 模型后必须重建向量库索引并重新入库，否则向量维度或语义空间不一致，会直接破坏检索质量
 
 宿主机 Ollama、容器 Redis Stack、Qdrant、RustFS 的数据分别独立持久化，不要把 Ollama 模型目录放进本 Compose 的 `.data`
+
+RustFS 容器进程不是 root，`.data/rustfs` 不要用 `chmod -R 777` 粗暴处理，也不要为了绕过权限把 RustFS 改成 root 运行
 
 生产环境应替换默认 token、Redis 密码、RustFS 密钥和数据库密码

@@ -1,0 +1,398 @@
+networks:
+  ai:
+    external: true
+  proxy:
+    external: true
+
+  default:
+
+volumes:
+  analytics-pgsql-data:
+
+services:
+  nginx:
+    restart: always
+    image: nginx:alpine
+    volumes:
+      - ./data/gateway/nginx.conf:/etc/nginx/nginx.conf
+    networks:
+      - default
+      - proxy
+    depends_on:
+      java:
+        condition: service_healthy
+      golang:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      # 指定该路由器使用名为 "$PROJECT" 的入口点（对应30030端口）
+      - "traefik.http.routers.$PROJECT.entrypoints=$PROJECT"
+      # 设置路由规则，捕获所有路径的流量
+      - "traefik.http.routers.$PROJECT.rule=PathPrefix(`/`)"
+      # 指定后端服务的容器内部端口
+      - "traefik.http.services.$PROJECT.loadbalancer.server.port=80"
+      # 确保路由优先级最高
+      - "traefik.http.routers.$PROJECT.priority=100"
+
+  web:
+    restart: always
+    labels:
+      com.centurylinklabs.watchtower.enable: 'true'
+    image: registry.cn-hangzhou.aliyuncs.com/kyzhcity/pikb-web-foreground:renshou-latest-2026-06-12-16-26-32
+    networks:
+      - default
+    depends_on:
+      golang:
+        condition: service_healthy
+      java:
+        condition: service_healthy
+
+  golang:
+    restart: always
+    labels:
+      com.centurylinklabs.watchtower.enable: 'true'
+    image: registry.cn-hangzhou.aliyuncs.com/kyzhcity/pikb-service-golang:dev
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ./data/pikb/golang.yaml:/app/config/local.yml
+    command: [ "-c", "/app/config/local.yml" ]
+    networks:
+      - default
+      - ai
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "sh", "-c", "grep -q ':0050 ' /proc/net/tcp || grep -q ':0050' /proc/net/tcp6" ]
+      interval: 10s        # 检查间隔时间
+      timeout: 5s          # 检查超时时间
+      retries: 10          # 最大重试次数
+      start_period: 1m     # 初始延迟时间，给于足够的启动时间
+
+  java:
+    restart: always
+    labels:
+      com.centurylinklabs.watchtower.enable: 'true'
+    image: registry.cn-hangzhou.aliyuncs.com/kyzhcity/pikb-service-java:renshou-latest-2026-06-12-16-26-06
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ./data/pikb/java.yml:/app/application-dev.yml
+      - ./data/pikb/cue-word.yml:/app/cue-word.yml
+    networks:
+      - default
+      - ai
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "sh", "-c", "grep -q ':0050 ' /proc/net/tcp || grep -q ':0050' /proc/net/tcp6" ]
+      interval: 10s        # 检查间隔时间
+      timeout: 5s          # 检查超时时间
+      retries: 10          # 最大重试次数
+      start_period: 1m     # 初始延迟时间，给于足够的启动时间
+  
+  rag:
+    restart: always
+    labels:
+      com.centurylinklabs.watchtower.enable: 'true'
+    image: registry.cn-hangzhou.aliyuncs.com/kyzhcity/knowledgebase-rag-vector:dev
+    volumes:
+      - ./data/pikb/rag.properties:/data/config/rag/application.properties
+    networks:
+      - default
+      - ai
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "sh", "-c", "grep -q ':0050 ' /proc/net/tcp || grep -q ':0050' /proc/net/tcp6" ]
+      interval: 10s        # 检查间隔时间
+      timeout: 5s          # 检查超时时间
+      retries: 10          # 最大重试次数
+      start_period: 1m     # 初始延迟时间，给于足够的启动时间
+  
+  correct:
+    restart: always
+    labels:
+      com.centurylinklabs.watchtower.enable: 'true'
+    image: registry.cn-chengdu.aliyuncs.com/ztzh/pikb:service-correct
+    volumes:
+      - ./data/pikb/correct.yaml:/app/config.yaml
+    networks:
+      - default
+    healthcheck:
+      test: [ "CMD", "sh", "-c", "grep -q ':0050 ' /proc/net/tcp || grep -q ':0050' /proc/net/tcp6" ]
+      interval: 10s        # 检查间隔时间
+      timeout: 5s          # 检查超时时间
+      retries: 10          # 最大重试次数
+      start_period: 1m     # 初始延迟时间，给于足够的启动时间
+
+  postgres:
+    restart: always
+    # image: postgres:16
+    image: abcfy2/zhparser:16
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ./data/pgdata:/var/lib/postgresql/data/pgdata
+    environment:
+      - POSTGRES_PASSWORD=$POSTGRES_PASSWORD
+      - POSTGRES_USER=$POSTGRES_USER
+      - POSTGRES_DB=$POSTGRES_DB
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    networks:
+      - default
+    ports:
+      - 33296:5432
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" ]
+      interval: 10s        # 检查间隔时间
+      timeout: 5s          # 检查超时时间
+      retries: 10          # 最大重试次数
+      start_period: 1m     # 初始延迟时间，给于足够的启动时间
+
+  redis:
+    image: redis:alpine  # 使用官方Alpine镜像，轻量且包含所需工具
+    restart: always
+    networks:
+      - default
+    ports:
+      - 32780:6379
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}  # 设置Redis密码[citation:2]
+    volumes:
+      - ./data/rdb:/data
+    command: >
+      redis-server
+      --appendonly yes
+      --requirepass $REDIS_PASSWORD
+    healthcheck:
+      test: [ "CMD", "redis-cli", "-a", "$REDIS_PASSWORD", "ping" ]
+      interval: 10s        # 检查间隔时间
+      timeout: 5s          # 检查超时时间
+      retries: 10          # 最大重试次数
+      start_period: 1m     # 初始延迟时间，给于足够的启动时间
+
+  qdrant:
+    restart: unless-stopped
+    image: ${QDRANT_IMAGE:-qdrant/qdrant:v1.18}
+    networks:
+      - default
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+    ports:
+      - "${QDRANT_HTTP_HOST_PORT:-18005}:6333"
+      - "${QDRANT_GRPC_HOST_PORT:-18006}:6334"
+    volumes:
+      - ./.data/qdrant:/qdrant/storage  # 移除 :z 后缀以避免潜在的 SELinux 问题
+      - /etc/localtime:/etc/localtime:ro
+    # 添加权限配置，解决无法创建工作线程的问题
+    privileged: true
+    environment:
+      TZ: Asia/Shanghai
+      # 关闭 Qdrant 匿名遥测
+      QDRANT__TELEMETRY_DISABLED: ${QDRANT_TELEMETRY_DISABLED:-true}
+      # Qdrant 服务日志级别
+      QDRANT__LOG_LEVEL: ${QDRANT_LOG_LEVEL:-INFO}
+    # 添加健康检查配置，确保其他服务能够正确识别 qdrant 服务状态
+    healthcheck:
+      test: [ "CMD", "bash", "-c", "timeout 5 bash -c 'cat < /dev/null > /dev/tcp/localhost/6333'" ]
+      interval: 10s        # 检查间隔时间
+      timeout: 5s          # 检查超时时间
+      retries: 10          # 最大重试次数
+      start_period: 1m     # 初始延迟时间，给于足够的启动时间
+
+  neo4j:
+    restart: always
+    image: neo4j:latest  # 指定版本标签以确保稳定性
+    networks:
+      - default
+    ports:
+      - 7474  # HTTP API 端口
+      - 7687  # Bolt 协议端口
+    volumes:
+      - ./data/neo4j:/data
+      - /etc/localtime:/etc/localtime:ro  # 同步主机时间
+    # 添加就绪检查配置
+    healthcheck:
+      test: [ "CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:7474 || exit 1" ]
+      interval: 10s        # 检查间隔时间
+      timeout: 5s          # 检查超时时间
+      retries: 10          # 最大重试次数
+      start_period: 1m     # 初始延迟时间，给于足够的启动时间
+
+  # 大数据分析模型
+  analytics-server:
+    image: registry.cn-hangzhou.aliyuncs.com/kyzhcity/pikb-analytics-model:${APP_IMAGE_TAG:-latest}
+    depends_on:
+      analytics-pgsql:
+        condition: service_healthy
+    environment:
+      # Spring Boot 应用程序的环境变量
+      SERVER_PORT: "80"
+      SPRING_APPLICATION_NAME: "AnalyticsModel"
+      SPRING_SERVLET_MULTIPART_MAX_FILE_SIZE: 100MB
+      SPRING_SERVLET_MULTIPART_MAX_REQUEST_SIZE: 120MB
+      SPRING_DATASOURCE_URL: jdbc:postgresql://analytics-pgsql:5432/analytics
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-root}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-123456}
+      SPRING_JPA_HIBERNATE_DDL_AUTO: "update"
+      SPRING_JPA_SHOW_SQL: "true"
+      SPRING_JPA_OPEN_IN_VIEW: "false"
+      SPRING_JPA_PROPERTIES_HIBERNATE_FORMAT_SQL: "true"
+      SPRING_JPA_PROPERTIES_HIBERNATE_USE_SQL_COMMENTS: "true"
+      FILE_UPLOAD_BASE_DIR: /app/uploads
+      LOGGING_FILE_PATH: /app/logs
+    volumes:
+      - ./data/analytics/uploads:/app/uploads
+      - ./data/analytics/logs:/app/logs
+    restart: unless-stopped
+    networks:
+      - default
+
+  # PostgreSQL 数据库服务
+  analytics-pgsql:
+    image: registry.cn-hangzhou.aliyuncs.com/xother/postgres:16
+    # container_name: analytics-pgsql
+    restart: unless-stopped
+    ports:
+      - "${POSTGRES_PORT:-3340}:5432"
+    environment:
+      TZ: Asia/Shanghai
+      POSTGRES_DB: analytics
+      # POSTGRES_DB: ${POSTGRES_DB:-analytics}
+      POSTGRES_USER: ${POSTGRES_USER:-root}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-123456}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - analytics-pgsql-data:/var/lib/postgresql/data/pgdata
+    #  - ./data/analytics/pgdata:/var/lib/postgresql/data/pgdata
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-root} -d analytics" ]
+      # test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-root} -d ${POSTGRES_DB:-analytics}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - default
+
+  # Java 应用容器只负责运行 meta-ai-agent
+  meta-ai-agent:
+    image: ${META_AI_IMAGE}
+    container_name: meta-ai-agent-host-ollama
+    restart: unless-stopped
+    ports:
+      - "${META_AI_AGENT_HOST_PORT:-18000}:8008"
+    volumes:
+      - ./.data/config/application.properties:/app/application.properties
+      - ./.data/config/application-ollama.properties:/app/application-ollama.properties
+      - ./.data/prompts:/app/prompts
+      - ./.data/logs:/root/logs
+    environment:
+      TZ: Asia/Shanghai
+    networks:
+      - default
+      - ai
+    depends_on:
+      redis-stack:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      rustfs:
+        condition: service_healthy
+      paddlex-ocr:
+        condition: service_started
+      live-asr:
+        condition: service_started
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # Redis Stack 不是普通 Redis
+  redis-stack:
+    image: ${REDIS_IMAGE:-redis/redis-stack:7.4.0-v8}
+    container_name: meta-ai-redis-stack-host-ollama
+    restart: unless-stopped
+    ports:
+      - "${REDIS_HOST_PORT:-18003}:6379"
+      - "${REDIS_STACK_BROWSER_HOST_PORT:-18004}:8001"
+    volumes:
+      - ./.data/redis:/data
+    environment:
+      TZ: Asia/Shanghai
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-123456}
+      REDIS_ARGS: --requirepass ${REDIS_PASSWORD:-123456} --appendonly yes --appendfsync everysec
+    healthcheck:
+      test: [ "CMD-SHELL", "redis-cli --no-auth-warning -a \"$${REDIS_PASSWORD}\" ping | grep -q PONG" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - default
+
+  # RustFS 提供 S3 兼容对象存储
+  rustfs:
+    image: ${RUSTFS_IMAGE:-rustfs/rustfs:1.0.0-beta.6}
+    container_name: meta-ai-rustfs-host-ollama
+    restart: unless-stopped
+    ports:
+      - "${RUSTFS_API_HOST_PORT:-18007}:9000"
+      - "${RUSTFS_CONSOLE_HOST_PORT:-18008}:9001"
+    volumes:
+      - ./.data/rustfs:/data
+    environment:
+      TZ: Asia/Shanghai
+      RUSTFS_ADDRESS: :9000
+      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:-admin}
+      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY:-Xc.123456}
+      RUSTFS_CONSOLE_ENABLE: "true"
+      RUSTFS_CONSOLE_ADDRESS: :9001
+    command:
+      - /data
+    networks:
+      - default
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -fsS http://localhost:9000/health >/dev/null" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # PaddleX OCR 负责扫描版 PDF 和图片识别
+  paddlex-ocr:
+    image: ${PADDLEX_OCR_IMAGE:-registry.cn-hangzhou.aliyuncs.com/metax/paddlex-ocr:v1.0.0}
+    container_name: meta-ai-paddlex-ocr-host-ollama
+    restart: unless-stopped
+    ports:
+      - "${PADDLEX_OCR_HOST_PORT:-18009}:8080"
+    environment:
+      TZ: Asia/Shanghai
+    networks:
+      - default
+
+  # live-asr 提供 WebSocket 实时语音识别
+  live-asr:
+    image: ${LIVE_ASR_IMAGE:-registry.cn-hangzhou.aliyuncs.com/metax/live-asr:v1.0.0}
+    container_name: meta-ai-live-asr-host-ollama
+    restart: unless-stopped
+    ports:
+      - "${LIVE_ASR_HOST_PORT:-18010}:10095"
+    environment:
+      TZ: Asia/Shanghai
+    networks:
+      - default
