@@ -15,6 +15,14 @@
 const DEFAULT_API_BASE_URL = '/api'
 
 /**
+ * 生产 ASR 默认网关路径
+ *
+ * <p>
+ * WebSocket 地址运行时基于当前页面 origin 推导，避免本地单机部署时把服务器地址写死进构建产物
+ */
+const DEFAULT_ASR_WS_PATH = '/asr/ws'
+
+/**
  * 规范化 API 基路径
  *
  * <p>
@@ -49,4 +57,25 @@ export const API_BASE_URL = normalizeApiBaseUrl(import.meta.env.VITE_API_BASE_UR
 export function apiUrl(path: string) {
     const normalizedPath = path.startsWith('/') ? path : `/${path}`
     return `${API_BASE_URL}${normalizedPath}`
+}
+
+/**
+ * 解析 ASR WebSocket 地址
+ *
+ * <p>
+ * VITE_ASR_WS_URL 支持显式 ws:// / wss:// 地址，也支持 /asr/ws 这类同源网关路径
+ * 同源路径会根据当前页面协议自动转换为 ws 或 wss
+ *
+ * @return 可直接传给 WebSocket 构造器的地址
+ */
+export function resolveAsrWebSocketUrl() {
+    const configuredUrl = import.meta.env.VITE_ASR_WS_URL?.trim()
+    if (configuredUrl?.startsWith('ws://') || configuredUrl?.startsWith('wss://')) {
+        return configuredUrl
+    }
+
+    const configuredPath = configuredUrl || DEFAULT_ASR_WS_PATH
+    const normalizedPath = configuredPath.startsWith('/') ? configuredPath : `/${configuredPath}`
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    return `${protocol}//${window.location.host}${normalizedPath}`
 }

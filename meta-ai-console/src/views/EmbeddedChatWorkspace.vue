@@ -569,7 +569,7 @@ import {
   updateChatFlags,
   uploadChatFiles,
 } from '@/api/chat'
-import {apiUrl} from '@/api/base'
+import {apiUrl, resolveAsrWebSocketUrl} from '@/api/base'
 import {fetchStorageDocuments} from '@/api/storage'
 import {useWorkspaceStore} from '@/stores/workspace'
 import {formatVoiceInputStartupError} from '@/utils/media-errors'
@@ -718,7 +718,7 @@ const MESSAGE_SCROLLBAR_MIN_THUMB_HEIGHT = 38
 const MESSAGE_SCROLLBAR_HIDE_DELAY_MS = 1200
 const MESSAGE_ARROW_REPEAT_DELAY_MS = 240
 const MESSAGE_ARROW_REPEAT_INTERVAL_MS = 80
-const ASR_WS_URL = import.meta.env.VITE_ASR_WS_URL || 'ws://localhost:10096'
+const ASR_WS_URL = resolveAsrWebSocketUrl()
 const FUNASR_TARGET_SAMPLE_RATE = 16000
 const FUNASR_CHUNK_SAMPLE_SIZE = 960
 const VOICE_ACTIVE_LEVEL_THRESHOLD = 0.045

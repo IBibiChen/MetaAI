@@ -147,13 +147,20 @@ server: {
 
 聊天输入区的麦克风按钮通过 FunASR Runtime WebSocket service 进行实时语音转文字
 
-本地默认连接：
+生产构建默认使用同源网关路径：
 
-```text
-ws://localhost:10096
+```env
+VITE_ASR_WS_URL=/asr/ws
 ```
 
-如需覆盖 ASR WebSocket 地址，在前端环境变量中配置：
+前端运行时会根据当前页面地址自动推导 WebSocket 地址：
+
+```text
+http://服务器 IP:端口/meta-ai/ -> ws://服务器 IP:端口/asr/ws
+https://服务器 IP:端口/meta-ai/ -> wss://服务器 IP:端口/asr/ws
+```
+
+如需绕过网关直连 ASR 服务，可在前端环境变量中配置显式地址：
 
 ```env
 VITE_ASR_WS_URL=ws://localhost:10096
