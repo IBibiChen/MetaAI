@@ -16,7 +16,7 @@ import org.springframework.stereotype.Service;
  * 模型 provider、ChatMemory、VectorStore、Advisor 顺序仍由 ChatClient 配置层负责
  * 业务代码只引用 PromptTemplateId，不直接引用 prompt 文件路径
  * prompt 文件路径只在 PromptTemplateId 中维护，新增模板必须先确定 scene、purpose、role
- * 当前服务委托 PromptTemplates 静态工具执行 classpath 模板解析，避免静态入口和 Bean 入口出现两套实现
+ * 当前服务委托 PromptTemplateResolver 执行模板资源定位，再使用 PromptTemplates 完成模板渲染
  * 保留 Spring Bean 是为了后续动态 prompt、租户 prompt、灰度 prompt、热更新 prompt 演进
  *
  * <p>
@@ -47,6 +47,17 @@ import org.springframework.stereotype.Service;
 @Service
 public class PromptTemplateService {
 
+    private final PromptTemplateResolver resolver;
+
+    /**
+     * 创建支持多位置 prompt 解析的 PromptTemplateService
+     *
+     * @param resolver prompt 模板解析器
+     */
+    public PromptTemplateService(PromptTemplateResolver resolver) {
+        this.resolver = resolver;
+    }
+
     /**
      * 渲染 prompt 纯文本
      *
@@ -57,7 +68,7 @@ public class PromptTemplateService {
      * @return 渲染后的 prompt 文本
      */
     public String render(PromptTemplateId templateId) {
-        return PromptTemplates.render(templateId);
+        return render(PromptTemplateRequest.of(templateId));
     }
 
     /**
@@ -70,7 +81,7 @@ public class PromptTemplateService {
      * @return 渲染后的 prompt 文本
      */
     public String render(PromptTemplateRequest request) {
-        return PromptTemplates.render(request);
+        return PromptTemplates.render(request, resolver.resolve(request.templateId()));
     }
 
     /**
@@ -83,7 +94,7 @@ public class PromptTemplateService {
      * @return system message
      */
     public Message createSystemMessage(PromptTemplateRequest request) {
-        return PromptTemplates.createSystemMessage(request);
+        return PromptTemplates.createSystemMessage(request, resolver.resolve(request.templateId()));
     }
 
     /**
@@ -96,7 +107,7 @@ public class PromptTemplateService {
      * @return Spring AI Prompt
      */
     public Prompt create(PromptTemplateRequest request) {
-        return PromptTemplates.create(request);
+        return PromptTemplates.create(request, resolver.resolve(request.templateId()));
     }
 
     /**
@@ -109,7 +120,7 @@ public class PromptTemplateService {
      * @return 渲染后的 prompt 文本
      */
     public String renderWithAngleBrackets(PromptTemplateRequest request) {
-        return PromptTemplates.renderWithAngleBrackets(request);
+        return PromptTemplates.renderWithAngleBrackets(request, resolver.resolve(request.templateId()));
     }
 
 }

@@ -19,8 +19,8 @@ import java.util.Set;
  * PromptTemplates .
  *
  * <p>
- * classpath 静态 prompt 模板工具类，适用于配置类、测试和简单调用场景
- * 当前项目 prompt 文件由 Git 管理版本，短期不做数据库动态 prompt，因此静态工具可以减少不必要的 Bean 依赖
+ * prompt 模板渲染工具类，适用于配置类、测试和简单调用场景
+ * Spring Bean 入口由 PromptTemplateResolver 负责资源定位，当前类只保留模板渲染和 classpath 默认兜底能力
  *
  * <p>
  * 当前类不是动态 prompt 的最终形态
@@ -151,6 +151,63 @@ public final class PromptTemplates {
         } catch (IOException ex) {
             throw new IllegalStateException("Failed to read prompt template: " + templateId.path(), ex);
         }
+    }
+
+    /**
+     * 渲染指定模板内容
+     *
+     * @param request         prompt 模板请求
+     * @param templateContent prompt 模板内容
+     * @return 渲染后的 prompt 文本
+     */
+    public static String render(PromptTemplateRequest request, String templateContent) {
+        validateVariables(request.templateId(), request.variables());
+        return new PromptTemplate(templateContent).render(request.variables());
+    }
+
+    /**
+     * 基于指定模板内容创建 system prompt Message
+     *
+     * @param request         prompt 模板请求
+     * @param templateContent prompt 模板内容
+     * @return system message
+     */
+    public static Message createSystemMessage(PromptTemplateRequest request, String templateContent) {
+        validateVariables(request.templateId(), request.variables());
+        return new SystemPromptTemplate(templateContent).createMessage(request.variables());
+    }
+
+    /**
+     * 基于指定模板内容创建 Spring AI Prompt
+     *
+     * @param request         prompt 模板请求
+     * @param templateContent prompt 模板内容
+     * @return Spring AI Prompt
+     */
+    public static Prompt create(PromptTemplateRequest request, String templateContent) {
+        validateVariables(request.templateId(), request.variables());
+        PromptTemplate template = new PromptTemplate(templateContent);
+        if (request.chatOptions() == null) {
+            return template.create(request.variables());
+        }
+        return template.create(request.variables(), request.chatOptions());
+    }
+
+    /**
+     * 使用尖括号分隔符渲染指定模板内容
+     *
+     * @param request         prompt 模板请求
+     * @param templateContent prompt 模板内容
+     * @return 渲染后的 prompt 文本
+     */
+    public static String renderWithAngleBrackets(PromptTemplateRequest request, String templateContent) {
+        validateVariables(request.templateId(), request.variables());
+        return PromptTemplate.builder()
+                .template(templateContent)
+                .variables(request.variables())
+                .renderer(ANGLE_BRACKET_RENDERER)
+                .build()
+                .render();
     }
 
     /**

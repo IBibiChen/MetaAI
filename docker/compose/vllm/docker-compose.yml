@@ -12,6 +12,8 @@ services:
       # 应用配置由挂载文件统一管理，Compose 不再注入 Spring 配置
       - ./.data/config/application.properties:/app/application.properties
       - ./.data/config/application-openai.properties:/app/application-openai.properties
+      # 外部 prompt 用于现场覆盖 jar 内置模板，文件缺失时应用自动回退
+      - ./.data/prompts:/app/prompts
       # 应用日志落到 Compose 同级 .data/logs，便于按部署栈隔离排查
       - ./.data/logs:/root/logs
     environment:

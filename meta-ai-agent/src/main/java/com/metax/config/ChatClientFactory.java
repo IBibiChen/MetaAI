@@ -1,7 +1,7 @@
 package com.metax.config;
 
 import com.metax.prompt.PromptTemplateId;
-import com.metax.prompt.PromptTemplates;
+import com.metax.prompt.PromptTemplateService;
 import com.metax.tool.foundation.DateTimeTools;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.client.ChatClient;
@@ -29,6 +29,8 @@ import org.springframework.stereotype.Component;
 public class ChatClientFactory {
 
     private final DateTimeTools dateTimeTools;
+
+    private final PromptTemplateService promptTemplateService;
 
     /**
      * 构造基础记忆对话 client
@@ -95,7 +97,7 @@ public class ChatClientFactory {
                                    boolean defaultFoundationTools) {
         // 系统提示词在构造阶段绑定，保证同一个 ChatClient 的角色边界稳定
         ChatClient.Builder builder = ChatClient.builder(model)
-                .defaultSystem(PromptTemplates.render(systemPrompt))
+                .defaultSystem(promptTemplateService.render(systemPrompt))
                 // Advisor 顺序固定为 Memory -> Logger，避免各入口重复声明导致顺序漂移
                 .defaultAdvisors(
                         MessageChatMemoryAdvisor.builder(chatMemory).build(),

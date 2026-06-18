@@ -25,6 +25,8 @@ vLLM 栈初始化应用配置文件：
 mkdir -p .data/config
 cp config-template/application.properties .data/config/application.properties
 cp config-template/application-openai.properties .data/config/application-openai.properties
+mkdir -p .data/prompts
+cp -r ../../../meta-ai-agent/src/main/resources/prompts/* .data/prompts/
 ```
 
 Ollama 栈初始化应用配置文件：
@@ -33,6 +35,8 @@ Ollama 栈初始化应用配置文件：
 mkdir -p .data/config
 cp config-template/application.properties .data/config/application.properties
 cp config-template/application-ollama.properties .data/config/application-ollama.properties
+mkdir -p .data/prompts
+cp -r ../../../meta-ai-agent/src/main/resources/prompts/* .data/prompts/
 ```
 
 按现场环境修改 `.env` 和 `.data/config/*.properties`，然后启动：
@@ -87,6 +91,7 @@ docker compose up ollama-init
 - `.data/ollama`
 - `.data/huggingface`
 - `.data/config`
+- `.data/prompts`
 - `.data/logs`
 
 `vllm` 栈使用 `.data/huggingface` 缓存 Hugging Face 模型
@@ -96,6 +101,9 @@ docker compose up ollama-init
 live-asr 和 PaddleX OCR 镜像已经在构建期预置模型缓存，默认不挂载模型目录，避免空目录覆盖镜像内模型
 
 不要在未创建 `.data/config/application.properties` 和对应 profile 配置文件的情况下启动 Compose。Docker 会把缺失的挂载源当目录创建，导致 Spring Boot 无法按文件加载配置
+
+`.data/prompts` 用于覆盖 jar 内置 prompt，目录或单个文件缺失时应用会自动回退到内置模板。修改该目录下的系统提示词后，需要重启
+`meta-ai-agent`，因为 ChatClient 会在 Bean 构造阶段绑定系统提示词
 
 ## 端口规划
 
@@ -227,6 +235,10 @@ Dockerfile 会显式使用 `-Pdocker`。该 Maven profile 会排除 `meta-ai-age
 
 容器运行时必须通过外部配置文件或环境变量提供 Spring Boot 配置。推荐把配置挂载到 `/app/config/`，让 Spring Boot
 默认外部配置优先级自动读取，例如 `/app/config/application.properties`
+
+prompt 模板默认随 jar 一起发布，Docker 部署可通过 `.data/prompts:/app/prompts` 覆盖。外部目录结构必须与
+`src/main/resources/prompts` 内部保持一致，例如 `/app/prompts/chat/chat-general-system.st`。查找顺序由
+`metax.ai.prompt.locations=file:/app/prompts/,classpath:/prompts/` 控制，前面的 location 优先
 
 本地 Maven 打包默认使用 `dev` profile，会保留 `application*.properties`。这样 `java -jar` 快速验证时不需要额外挂载配置文件
 
