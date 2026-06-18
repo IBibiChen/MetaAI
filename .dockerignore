@@ -12,6 +12,7 @@ meta-ai-console/dist
 .data
 **/.data
 docker/compose/**/.env
+service-java
 *.iml
 *.iws
 *.ipr

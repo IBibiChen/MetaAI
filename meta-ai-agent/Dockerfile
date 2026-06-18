@@ -30,7 +30,9 @@ COPY --from=console-build /build/meta-ai-console/dist /build/meta-ai-console/dis
 # -Pdocker 用于排除 application*.properties，镜像运行时改由外部配置注入
 # 当前仓库根目录没有 settings.xml
 # 如需私服配置，由流水线注入 Maven settings 或在构建上下文中显式提供
-RUN mvn -pl :meta-ai-agent -am clean package -DskipTests -Dmeta-ai.console.skip=true -Pdocker -B
+# BuildKit cache mount 持久化 Maven 本地仓库，避免源码变更导致依赖重复下载
+RUN --mount=type=cache,target=/root/.m2/repository \
+    mvn -pl :meta-ai-agent -am clean package -DskipTests -Dmeta-ai.console.skip=true -Pdocker -B
 
 # ==================================================
 # 阶段 3：运行时
