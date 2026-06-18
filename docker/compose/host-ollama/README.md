@@ -76,6 +76,8 @@ docker run --rm --add-host=host.docker.internal:host-gateway curlimages/curl:lat
 
 ```bash
 docker build -f meta-ai-agent/Dockerfile -t meta-ai-agent:local .
+docker tag meta-ai-agent:local registry.cn-hangzhou.aliyuncs.com/metax/meta-ai-agent:2026-06-18
+docker push registry.cn-hangzhou.aliyuncs.com/metax/meta-ai-agent:2026-06-18
 ```
 
 检查镜像：

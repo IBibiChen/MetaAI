@@ -162,15 +162,16 @@ Ollama 栈入口：
 
 ## Nginx 网关配置
 
-MetaAI 前端已经打入 `meta-ai-agent` 可执行 jar，生产网关需要同时暴露页面路径和 API 路径：
+MetaAI 前端已经打入 `meta-ai-agent` 可执行 jar，生产网关需要同时暴露页面路径、API 路径和 ASR WebSocket 路径：
 
 - 页面入口：`/meta-ai/`
 - iframe 嵌入入口：`/meta-ai/embed/chat?tenantId=t1&userId=u1&kbId=kb1`
 - API 入口：`/api/meta-ai/v1/**`
 - Spring Boot 内部实际接收路径：`/v1/**`
+- ASR WebSocket 入口：`/asr/ws`
 
-下面示例假设网关可以通过服务名访问 `service-meta-ai`。如果网关部署在 Compose 外部，也可以把 `proxy_pass` 替换为
-`http://127.0.0.1:18000`
+下面示例假设 Nginx 与 `meta-ai-agent`、`live-asr` 处于同一个 Compose `default` 网络。如果网关部署在 Compose 外部，
+可以把 `meta-ai-agent:8008` 和 `live-asr:10095` 替换为宿主机实际地址
 
 SSE 流式接口的 location 必须放在普通 API location 前面，避免被 `/api/meta-ai/` 提前匹配
 
@@ -181,7 +182,7 @@ API 404 语义
 ```nginx
 # MetaAI 前端页面
 location /meta-ai/ {
-    proxy_pass http://service-meta-ai/;
+    proxy_pass http://meta-ai-agent:8008/;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -191,10 +192,12 @@ location /meta-ai/ {
 # MetaAI 普通聊天 SSE
 location /api/meta-ai/v1/chat {
     rewrite ^/api/meta-ai/(.*)$ /$1 break;
-    proxy_pass http://service-meta-ai;
+    proxy_pass http://meta-ai-agent:8008;
     proxy_http_version 1.1;
     proxy_buffering off;
     proxy_cache off;
+    proxy_read_timeout 3600s;
+    proxy_send_timeout 3600s;
     proxy_set_header Connection "";
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
@@ -205,10 +208,12 @@ location /api/meta-ai/v1/chat {
 # MetaAI RAG 聊天 SSE
 location /api/meta-ai/v1/rag {
     rewrite ^/api/meta-ai/(.*)$ /$1 break;
-    proxy_pass http://service-meta-ai;
+    proxy_pass http://meta-ai-agent:8008;
     proxy_http_version 1.1;
     proxy_buffering off;
     proxy_cache off;
+    proxy_read_timeout 3600s;
+    proxy_send_timeout 3600s;
     proxy_set_header Connection "";
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
@@ -219,7 +224,21 @@ location /api/meta-ai/v1/rag {
 # MetaAI 其他 API
 location /api/meta-ai/ {
     rewrite ^/api/meta-ai/(.*)$ /$1 break;
-    proxy_pass http://service-meta-ai;
+    proxy_pass http://meta-ai-agent:8008;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+
+# MetaAI ASR WebSocket
+location /asr/ws {
+    proxy_pass http://live-asr:10095/;
+    proxy_http_version 1.1;
+    proxy_read_timeout 3600s;
+    proxy_send_timeout 3600s;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -232,6 +251,10 @@ location /api/meta-ai/ {
 应用镜像可以手工构建：
 
 ```bash
+docker build -f meta-ai-agent/Dockerfile -t meta-ai-agent:local .
+docker tag meta-ai-agent:local registry.cn-hangzhou.aliyuncs.com/metax/meta-ai-agent:2026-06-18
+docker push registry.cn-hangzhou.aliyuncs.com/metax/meta-ai-agent:2026-06-18
+
 docker build -f meta-ai-agent/Dockerfile -t registry.cn-hangzhou.aliyuncs.com/metax/meta-ai-agent:latest .
 ```
 
