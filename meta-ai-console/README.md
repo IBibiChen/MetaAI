@@ -147,6 +147,20 @@ server: {
 
 聊天输入区的麦克风按钮通过 FunASR Runtime WebSocket service 进行实时语音转文字
 
+浏览器麦克风权限只能在安全上下文中使用：
+
+```text
+http://localhost
+http://127.0.0.1
+https://局域网 IP 或域名
+```
+
+`http://局域网 IP:端口` 不属于安全上下文，例如 `http://192.168.0.98:83/meta-ai/embed/chat` 会被浏览器拒绝麦克风权限。局域网其他电脑访问并使用语音输入时，需要通过 HTTPS 入口访问，例如：
+
+```text
+https://192.168.0.98:8443/meta-ai/embed/chat
+```
+
 生产构建默认使用同源网关路径：
 
 ```env
@@ -160,11 +174,31 @@ http://服务器 IP:端口/meta-ai/ -> ws://服务器 IP:端口/asr/ws
 https://服务器 IP:端口/meta-ai/ -> wss://服务器 IP:端口/asr/ws
 ```
 
+因此页面通过 `https://192.168.0.98:8443/meta-ai/embed/chat` 访问时，ASR WebSocket 会自动使用：
+
+```text
+wss://192.168.0.98:8443/asr/ws
+```
+
 如需绕过网关直连 ASR 服务，可在前端环境变量中配置显式地址：
 
 ```env
 VITE_ASR_WS_URL=ws://localhost:10096
 ```
+
+开发临时调试可以在当前 Chrome 浏览器中把局域网 HTTP 地址加入安全来源白名单：
+
+```text
+chrome://flags/#unsafely-treat-insecure-origin-as-secure
+```
+
+加入：
+
+```text
+http://192.168.0.98:83
+```
+
+重启 Chrome 后只影响当前浏览器，不影响服务器和其他用户。正式部署不要依赖该方案
 
 FunASR 服务镜像和离线部署文档位于：
 

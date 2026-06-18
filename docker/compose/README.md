@@ -246,6 +246,134 @@ location /asr/ws {
 }
 ```
 
+## 局域网 IP 语音输入 HTTPS
+
+浏览器麦克风权限要求安全上下文，`http://localhost` 和 `http://127.0.0.1` 可以申请麦克风权限，但 `http://局域网 IP:端口` 不属于安全上下文
+
+本地单机或局域网部署时，不要把现有 HTTP 入口直接改成 HTTPS。例如现有老系统入口继续保持：
+
+```text
+http://192.168.0.98:83/meta-ai/embed/chat
+```
+
+需要语音输入时，新增一个独立 HTTPS 端口，例如：
+
+```text
+https://192.168.0.98:8443/meta-ai/embed/chat
+```
+
+这样不会影响老系统和已有 `83` 端口访问地址。不要把现有 `listen 83` 改成 `listen 83 ssl`
+
+生成包含局域网 IP SAN 的自签证书：
+
+```bash
+mkdir -p certs
+openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
+  -keyout certs/meta-ai-ip.key \
+  -out certs/meta-ai-ip.crt \
+  -subj "/CN=192.168.0.98" \
+  -addext "subjectAltName=IP:192.168.0.98"
+```
+
+Nginx 新增 HTTPS server 示例：
+
+```nginx
+server {
+    listen 8443 ssl;
+    server_name 192.168.0.98;
+
+    ssl_certificate /etc/nginx/certs/meta-ai-ip.crt;
+    ssl_certificate_key /etc/nginx/certs/meta-ai-ip.key;
+
+    client_max_body_size 3000m;
+
+    # MetaAI 前端页面
+    location /meta-ai/ {
+        proxy_pass http://meta-ai-agent:8008/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+
+    # MetaAI 普通聊天 SSE
+    location /api/meta-ai/v1/chat {
+        rewrite ^/api/meta-ai/(.*)$ /$1 break;
+        proxy_pass http://meta-ai-agent:8008;
+        proxy_http_version 1.1;
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+        proxy_set_header Connection "";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+
+    # MetaAI RAG 聊天 SSE
+    location /api/meta-ai/v1/rag {
+        rewrite ^/api/meta-ai/(.*)$ /$1 break;
+        proxy_pass http://meta-ai-agent:8008;
+        proxy_http_version 1.1;
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+        proxy_set_header Connection "";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+
+    # MetaAI 其他 API
+    location /api/meta-ai/ {
+        rewrite ^/api/meta-ai/(.*)$ /$1 break;
+        proxy_pass http://meta-ai-agent:8008;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+
+    # MetaAI ASR WebSocket
+    location /asr/ws {
+        proxy_pass http://live-asr:10095/;
+        proxy_http_version 1.1;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+
+    location / {
+        return 404;
+    }
+}
+```
+
+使用自签证书时，访问端浏览器或操作系统需要信任该证书，否则浏览器仍可能拒绝麦克风权限。Chrome 可以先打开 `https://192.168.0.98:8443/meta-ai/embed/chat`，按浏览器提示信任后再测试麦克风
+
+开发临时调试可以只修改当前 Chrome 浏览器白名单，不改服务器配置：
+
+```text
+chrome://flags/#unsafely-treat-insecure-origin-as-secure
+```
+
+加入：
+
+```text
+http://192.168.0.98:83
+```
+
+重启 Chrome 后，当前浏览器会把该 HTTP 地址临时视为安全来源。该方案只影响当前浏览器，不影响服务器和其他用户，不作为生产方案
+
 ## 应用镜像
 
 应用镜像可以手工构建：

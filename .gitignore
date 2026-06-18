@@ -44,3 +44,5 @@ build/
 ### Docker Compose local data ###
 /docker/compose/**/.data/
 /docker/compose/**/.env
+/docker/compose/**/certs/
+/docker/compose/host-ollama/server/

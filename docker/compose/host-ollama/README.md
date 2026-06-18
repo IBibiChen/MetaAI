@@ -290,6 +290,144 @@ docker compose logs -f meta-ai-agent
 curl http://127.0.0.1:18000/v3/api-docs
 ```
 
+当前业务系统网关访问 MetaAI 前端时，页面入口通常走老系统现有 HTTP 端口：
+
+```text
+http://192.168.0.98:83/meta-ai/embed/chat
+```
+
+该入口不影响老服务，但浏览器会把 `http://局域网 IP:端口` 判定为非安全上下文，麦克风权限会被拒绝
+
+如果局域网其他电脑需要使用语音输入，不要把现有 `83` 端口改成 HTTPS。应新增独立 HTTPS 端口，例如：
+
+```text
+https://192.168.0.98:8443/meta-ai/embed/chat
+```
+
+`83` 继续服务老系统和原有访问地址，`8443` 只作为需要麦克风权限的 MetaAI HTTPS 入口。完整 Nginx 自签证书示例见 `docker/compose/README.md`
+
+当前 `docker-compose-host.yaml` 已为 Nginx 增加独立 HTTPS 端口和证书挂载：
+
+```yaml
+ports:
+  - "8443:8443"
+volumes:
+  - ./data/gateway/nginx.conf:/etc/nginx/nginx.conf
+  - ./data/gateway/certs:/etc/nginx/certs:ro
+```
+
+把证书放到服务器部署目录：
+
+```bash
+mkdir -p ./data/gateway/certs
+cp meta-ai-ip.crt ./data/gateway/certs/
+cp meta-ai-ip.key ./data/gateway/certs/
+```
+
+在现有 `./data/gateway/nginx.conf` 中保留原来的 `server { listen 80; ... }` 不变，在它后面、`http {}` 结束前追加：
+
+```nginx
+server {
+    listen 8443 ssl;
+    server_name 192.168.0.98;
+
+    ssl_certificate /etc/nginx/certs/meta-ai-ip.crt;
+    ssl_certificate_key /etc/nginx/certs/meta-ai-ip.key;
+
+    client_max_body_size 3000m;
+
+    # MetaAI 前端页面
+    location /meta-ai/ {
+        proxy_pass http://meta-ai-agent:8008/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+
+    # MetaAI 普通聊天 SSE
+    location /api/meta-ai/v1/chat {
+        rewrite ^/api/meta-ai/(.*)$ /$1 break;
+        proxy_pass http://meta-ai-agent:8008;
+        proxy_http_version 1.1;
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+        proxy_set_header Connection "";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+
+    # MetaAI RAG 聊天 SSE
+    location /api/meta-ai/v1/rag {
+        rewrite ^/api/meta-ai/(.*)$ /$1 break;
+        proxy_pass http://meta-ai-agent:8008;
+        proxy_http_version 1.1;
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+        proxy_set_header Connection "";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+
+    # MetaAI 其他 API
+    location /api/meta-ai/ {
+        rewrite ^/api/meta-ai/(.*)$ /$1 break;
+        proxy_pass http://meta-ai-agent:8008;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+
+    # MetaAI ASR WebSocket
+    location /asr/ws {
+        proxy_pass http://live-asr:10095/;
+        proxy_http_version 1.1;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+
+    location / {
+        return 404;
+    }
+}
+```
+
+检查并重启 Nginx：
+
+```bash
+docker compose exec nginx nginx -t
+docker compose up -d --no-deps --force-recreate nginx
+```
+
+开发临时调试可在当前 Chrome 浏览器中打开：
+
+```text
+chrome://flags/#unsafely-treat-insecure-origin-as-secure
+```
+
+加入：
+
+```text
+http://192.168.0.98:83
+```
+
+该方案只影响当前浏览器，不影响服务器和其他用户，不作为生产方案
+
 验证容器网络访问宿主机 Ollama：
 
 ```bash

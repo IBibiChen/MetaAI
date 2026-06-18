@@ -15,6 +15,9 @@ services:
     image: nginx:alpine
     volumes:
       - ./data/gateway/nginx.conf:/etc/nginx/nginx.conf
+      - ./data/gateway/certs:/etc/nginx/certs:ro
+    ports:
+      - "8443:8443"
     networks:
       - default
       - proxy
