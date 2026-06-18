@@ -222,11 +222,13 @@ Node 22 和 npm 10，与 Dockerfile 的 Node 构建阶段保持同一主版本
 Docker 镜像构建不会在 Maven 阶段再次执行 npm。Dockerfile 会先用 Node 阶段执行 `npm ci` 和 `npm run build`，再通过
 `-Dmeta-ai.console.skip=true` 让 Maven 只复制已有 `dist` 并打包 Spring Boot jar
 
-Maven 打包会排除 `meta-ai-agent/src/main/resources/application*.properties`，避免把本地模型地址、Token、Redis 密码等环境配置打进
-jar
+Dockerfile 会显式使用 `-Pdocker`。该 Maven profile 会排除 `meta-ai-agent/src/main/resources/application*.properties`，
+避免把本地模型地址、Token、Redis 密码等环境配置打进镜像
 
 容器运行时必须通过外部配置文件或环境变量提供 Spring Boot 配置。推荐把配置挂载到 `/app/config/`，让 Spring Boot
 默认外部配置优先级自动读取，例如 `/app/config/application.properties`
+
+本地 Maven 打包默认使用 `dev` profile，会保留 `application*.properties`。这样 `java -jar` 快速验证时不需要额外挂载配置文件
 
 `spring-boot-maven-plugin` 当前不配置 `<classifier>exec</classifier>`。Spring Boot 默认会把主产物
 `meta-ai-agent-1.0.0.jar` 重打包为可执行 jar，并把原始普通 jar 备份为 `meta-ai-agent-1.0.0.jar.original`
@@ -244,7 +246,7 @@ mvn -pl :meta-ai-agent -am package -DskipTests
 如果前端 `dist` 已经存在，只想跳过 npm 并重新打后端 jar，可以显式跳过前端构建：
 
 ```bash
-mvn -pl :meta-ai-agent -am package -DskipTests "-Dmeta-ai.console.skip=true"
+mvn -pl :meta-ai-agent -am package -DskipTests -Dmeta-ai.console.skip=true
 ```
 
 本地直接 `java -jar` 验证时，前端需要使用 `.env.boot` 生成根路径版本的 `dist`，否则生产构建中的 `/meta-ai/assets/**`
@@ -252,14 +254,16 @@ mvn -pl :meta-ai-agent -am package -DskipTests "-Dmeta-ai.console.skip=true"
 
 ```bash
 cd meta-ai-console
-npm run build:local
+npm run build:boot
 cd ..
-mvn -pl :meta-ai-agent -am clean package -DskipTests "-Dmeta-ai.console.skip=true"
-java -jar meta-ai-agent/target/meta-ai-agent-1.0.0.jar --spring.config.additional-location=file:meta-ai-agent/src/main/resources/
+mvn -pl :meta-ai-agent -am clean package -DskipTests -Dmeta-ai.console.skip=true
+java -jar meta-ai-agent/target/meta-ai-agent-1.0.0.jar
 ```
 
+本地默认 `dev` profile 会把 `application*.properties` 打进 jar。只有 Docker 镜像构建或显式执行 `-Pdocker` 时才会排除这些配置文件
+
 PowerShell 中带点号的 Maven 属性建议加引号，例如 `"-Dmeta-ai.console.skip=true"`。不加引号时，某些环境会把后半段误解析成
-Maven lifecycle phase
+Maven lifecycle phase。Docker profile 可以直接写 `-Pdocker`
 
 当前构建约定：
 
@@ -267,6 +271,7 @@ Maven lifecycle phase
 - `maven-resources-plugin` 只负责把 `meta-ai-console/dist` 复制到 `target/classes/static`
 - `-pl :meta-ai-agent` 按 artifactId 选择应用入口模块，不依赖目录名
 - `-am` 会同时构建 `meta-ai-agent` 依赖的 reactor 模块，不会漏掉运行所需模块
+- 默认 `dev` profile 保留后端配置文件，`docker` profile 排除 `application*.properties`
 - Dockerfile 的 Node 阶段负责镜像内的前端可复现构建，Maven 阶段只负责打 Spring Boot jar
 - 如果团队以后要求 Maven 自动下载并锁定 Node / npm，再考虑切换到 `frontend-maven-plugin`
 

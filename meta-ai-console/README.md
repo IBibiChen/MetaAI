@@ -55,13 +55,29 @@ npm run build
 本地 `java -jar` 直连验证使用 `.env.boot`，前端资源和 API 都从 Spring Boot 根路径访问：
 
 ```bash
-npm run build:local
+npm run build:boot
 ```
 
 `.env.boot` 的 API 前缀应为 `/`，这样浏览器会直接请求 `/v1/**`，不再依赖 Vite proxy 或 Nginx rewrite
 
-如果先执行 `npm run build:local` 生成本地直连版 `dist`，后端重新打 jar 时必须使用 `-Dmeta-ai.console.skip=true`，避免
+如果先执行 `npm run build:boot` 生成本地直连版 `dist`，后端重新打 jar 时必须使用 `-Dmeta-ai.console.skip=true`，避免
 Maven 再次执行默认生产构建覆盖 `dist`
+
+后端本地 Maven 打包默认使用 `dev` profile，会保留 `application*.properties`，方便直接 `java -jar` 验证。Docker 镜像构建使用
+`-Pdocker`，会排除这些环境配置文件，运行时必须通过外部挂载或环境变量注入
+
+## 环境变量总览
+
+前端只读取 `VITE_` 前缀的构建时变量，修改后必须重新构建才会进入浏览器产物：
+
+```text
+VITE_APP_BASE_PATH      页面基路径和 Vue Router history base
+VITE_API_BASE_URL       后端 API 网关前缀
+VITE_METAX_API_TOKEN    开发期轻量 API Token
+VITE_ASR_WS_URL         ASR WebSocket 地址
+```
+
+`VITE_` 变量会进入浏览器构建产物，不能把 `VITE_METAX_API_TOKEN` 当作生产安全凭证
 
 ## 后端代理
 
@@ -117,12 +133,10 @@ vite.config.ts
 
 如果后端端口不是 8008，修改这里：
 
-```ts
+```
 server: {
     proxy: {
-        '/api'
-    :
-        {
+        '/api': {
             target: 'http://localhost:8008'
         }
     }
@@ -139,10 +153,10 @@ server: {
 ws://localhost:10096
 ```
 
-如需覆盖地址，在前端环境变量中配置：
+如需覆盖 ASR WebSocket 地址，在前端环境变量中配置：
 
 ```env
-VITE_FUNASR_WS_URL=ws://localhost:10096
+VITE_ASR_WS_URL=ws://localhost:10096
 ```
 
 FunASR 服务镜像和离线部署文档位于：

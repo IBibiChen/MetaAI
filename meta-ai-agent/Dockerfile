@@ -27,9 +27,10 @@ COPY --from=console-build /build/meta-ai-console/dist /build/meta-ai-console/dis
 
 # 前端 dist 已由 console-build 阶段生成
 # meta-ai.console.skip=true 用于跳过 pom 中的 npm install / build
+# -Pdocker 用于排除 application*.properties，镜像运行时改由外部配置注入
 # 当前仓库根目录没有 settings.xml
 # 如需私服配置，由流水线注入 Maven settings 或在构建上下文中显式提供
-RUN mvn -pl :meta-ai-agent -am clean package -DskipTests -Dmeta-ai.console.skip=true -B
+RUN mvn -pl :meta-ai-agent -am clean package -DskipTests -Dmeta-ai.console.skip=true -Pdocker -B
 
 # ==================================================
 # 阶段 3：运行时

@@ -7,3 +7,6 @@ VITE_API_BASE_URL=/
 # 本地直连轻量 API Token，必须与后端 metax.ai.security.api-token 保持一致
 # VITE_ 变量会进入浏览器构建产物，不能作为生产安全凭证
 VITE_METAX_API_TOKEN=sk-metax-123456
+
+# 本地 java -jar 直连验证 ASR WebSocket 地址
+VITE_ASR_WS_URL=ws://localhost:10096

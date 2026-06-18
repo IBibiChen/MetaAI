@@ -5,7 +5,7 @@ import {defineConfig, loadEnv} from 'vite'
 
 export default defineConfig(({mode}) => {
     // npm run dev 默认 mode = development，npm run build 默认 mode = production
-    // 按 mode 读取对应 .env 配置，build:local 使用 .env.boot
+    // 按 mode 读取对应 .env 配置，build:boot 使用 .env.boot
     const env = loadEnv(mode, process.cwd(), '')
     return {
         // 页面基路径控制静态资源 URL 和 Vue Router history base，生产环境挂在 /meta-ai/

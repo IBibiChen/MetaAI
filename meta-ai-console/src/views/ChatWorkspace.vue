@@ -713,7 +713,7 @@ const MESSAGE_SCROLLBAR_MIN_THUMB_HEIGHT = 38
 const MESSAGE_SCROLLBAR_HIDE_DELAY_MS = 1200
 const MESSAGE_ARROW_REPEAT_DELAY_MS = 240
 const MESSAGE_ARROW_REPEAT_INTERVAL_MS = 80
-const FUNASR_WS_URL = import.meta.env.VITE_FUNASR_WS_URL || 'ws://localhost:10096'
+const ASR_WS_URL = import.meta.env.VITE_ASR_WS_URL || 'ws://localhost:10096'
 const FUNASR_TARGET_SAMPLE_RATE = 16000
 const FUNASR_CHUNK_SAMPLE_SIZE = 960
 const VOICE_ACTIVE_LEVEL_THRESHOLD = 0.045
@@ -1134,7 +1134,7 @@ function isCurrentVoiceRun(runId: number) {
  */
 function openVoiceSocket(runId: number) {
   return new Promise<WebSocket>((resolve, reject) => {
-    const socket = new WebSocket(FUNASR_WS_URL)
+    const socket = new WebSocket(ASR_WS_URL)
     let opened = false
     let settled = false
     const safeResolve = () => {

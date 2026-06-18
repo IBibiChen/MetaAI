@@ -18,6 +18,14 @@ interface ImportMetaEnv {
      */
     readonly VITE_API_BASE_URL?: string
     /**
+     * ASR WebSocket 地址
+     *
+     * <p>
+     * 用于语音输入实时转写，默认连接本地 FunASR Runtime
+     * 这是构建时变量，修改后必须重新构建前端
+     */
+    readonly VITE_ASR_WS_URL?: string
+    /**
      * 开发期 API Token
      *
      * <p>
