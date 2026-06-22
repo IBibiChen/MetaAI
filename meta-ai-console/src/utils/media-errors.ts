@@ -22,7 +22,7 @@ const MEDIA_ERROR_MESSAGES: Record<string, string> = {
  * @param error 语音输入启动链路抛出的异常
  * @return 用户可读中文错误提示
  */
-export function formatVoiceInputStartupError(error: unknown) {
+export function formatVoiceInputStartupError(error: unknown): string {
     if (!(error instanceof Error)) {
         return VOICE_INPUT_STARTUP_FALLBACK
     }
@@ -34,16 +34,16 @@ export function formatVoiceInputStartupError(error: unknown) {
 
     const lowerMessage = error.message.toLowerCase()
     if (lowerMessage.includes('requested device not found') || lowerMessage.includes('device not found')) {
-        return MEDIA_ERROR_MESSAGES.NotFoundError
+        return MEDIA_ERROR_MESSAGES.NotFoundError || VOICE_INPUT_STARTUP_FALLBACK
     }
     if (lowerMessage.includes('permission denied') || lowerMessage.includes('permission dismissed')) {
-        return MEDIA_ERROR_MESSAGES.NotAllowedError
+        return MEDIA_ERROR_MESSAGES.NotAllowedError || VOICE_INPUT_STARTUP_FALLBACK
     }
     if (lowerMessage.includes('could not start') || lowerMessage.includes('not readable')) {
-        return MEDIA_ERROR_MESSAGES.NotReadableError
+        return MEDIA_ERROR_MESSAGES.NotReadableError || VOICE_INPUT_STARTUP_FALLBACK
     }
     if (lowerMessage.includes('constraint')) {
-        return MEDIA_ERROR_MESSAGES.OverconstrainedError
+        return MEDIA_ERROR_MESSAGES.OverconstrainedError || VOICE_INPUT_STARTUP_FALLBACK
     }
 
     return /[\u4e00-\u9fa5]/.test(error.message) ? error.message : VOICE_INPUT_STARTUP_FALLBACK

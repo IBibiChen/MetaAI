@@ -733,22 +733,28 @@ const defaultLinkOpenRenderer = markdown.renderer.rules.link_open
 const defaultFenceRenderer = markdown.renderer.rules.fence
 markdown.renderer.rules.link_open = (tokens, idx, options, env, self) => {
   const token = tokens[idx]
+  if (!token) {
+    return self.renderToken(tokens, idx, options)
+  }
   const targetIndex = token.attrIndex('target')
   const relIndex = token.attrIndex('rel')
   if (targetIndex < 0) {
     token.attrPush(['target', '_blank'])
-  } else {
-    token.attrs![targetIndex][1] = '_blank'
+  } else if (token.attrs?.[targetIndex]) {
+    token.attrs[targetIndex][1] = '_blank'
   }
   if (relIndex < 0) {
     token.attrPush(['rel', 'noopener noreferrer'])
-  } else {
-    token.attrs![relIndex][1] = 'noopener noreferrer'
+  } else if (token.attrs?.[relIndex]) {
+    token.attrs[relIndex][1] = 'noopener noreferrer'
   }
   return defaultLinkOpenRenderer ? defaultLinkOpenRenderer(tokens, idx, options, env, self) : self.renderToken(tokens, idx, options)
 }
 markdown.renderer.rules.fence = (tokens, idx, options, env, self) => {
   const token = tokens[idx]
+  if (!token) {
+    return self.renderToken(tokens, idx, options)
+  }
   const language = token.info.trim().split(/\s+/)[0] || 'code'
   const renderedCode = defaultFenceRenderer
       ? defaultFenceRenderer(tokens, idx, options, env, self)
@@ -1283,7 +1289,8 @@ function handleVoiceAudioProcess(event: AudioProcessingEvent) {
 function updateVoiceActivity(input: Float32Array) {
   let sum = 0
   for (let i = 0; i < input.length; i++) {
-    sum += input[i] * input[i]
+    const sample = input[i] ?? 0
+    sum += sample * sample
   }
   const rms = Math.sqrt(sum / Math.max(1, input.length))
   const nextLevel = Math.min(1, rms * 9)
@@ -1338,7 +1345,7 @@ function resampleToPcm16(input: Float32Array, sourceSampleRate: number) {
     let sum = 0
     const count = Math.max(1, end - start)
     for (let j = start; j < end; j++) {
-      sum += input[j]
+      sum += input[j] ?? 0
     }
     const sample = Math.max(-1, Math.min(1, sum / count))
     output[i] = sample < 0 ? sample * 0x8000 : sample * 0x7fff
@@ -2664,7 +2671,6 @@ function createTypingRenderer(assistantMessage: ChatMessage, onComplete: () => P
   let timer: number | null = null
   let streamDoneAt = 0
   let lastScrollAt = 0
-  let renderer: TypingRenderer
 
   const stop = () => {
     stopped = true
@@ -2744,7 +2750,7 @@ function createTypingRenderer(assistantMessage: ChatMessage, onComplete: () => P
     }
   }
 
-  renderer = {
+  const renderer: TypingRenderer = {
     enqueue(text: string) {
       if (!text || stopped || completed) return
       pendingText += text
