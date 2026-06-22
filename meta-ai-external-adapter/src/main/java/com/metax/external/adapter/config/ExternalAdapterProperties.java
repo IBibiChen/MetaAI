@@ -3,6 +3,7 @@ package com.metax.external.adapter.config;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.util.unit.DataSize;
 
 /**
  * ExternalAdapterProperties .
@@ -157,6 +158,16 @@ public class ExternalAdapterProperties {
          * 外部文件服务下载超时时间
          */
         private java.time.Duration timeout = java.time.Duration.ofMinutes(5);
+
+        /**
+         * 外部文件下载 WebClient 单文件内存缓冲上限
+         */
+        private DataSize maxInMemorySize = DataSize.ofMegabytes(100);
+
+        /**
+         * 外部文件最大学习大小
+         */
+        private DataSize maxFileSize = DataSize.ofMegabytes(100);
     }
 
     @Getter

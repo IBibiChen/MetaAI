@@ -5,6 +5,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.web.reactive.function.client.ExchangeStrategies;
 import org.springframework.web.reactive.function.client.WebClient;
 
 /**
@@ -35,7 +36,13 @@ public class ExternalAdapterAutoConfig {
      */
     @Bean
     public WebClient externalFileWebClient(WebClient.Builder builder, ExternalAdapterProperties properties) {
-        return builder.baseUrl(properties.getFileService().getHost()).build();
+        ExchangeStrategies strategies = ExchangeStrategies.builder()
+                .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(
+                        Math.toIntExact(properties.getFileService().getMaxInMemorySize().toBytes())))
+                .build();
+        return builder.baseUrl(properties.getFileService().getHost())
+                .exchangeStrategies(strategies)
+                .build();
     }
 
     /**
