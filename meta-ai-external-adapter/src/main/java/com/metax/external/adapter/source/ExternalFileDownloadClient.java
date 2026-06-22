@@ -13,8 +13,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import java.io.ByteArrayInputStream;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
+import java.net.URI;
 
 /**
  * ExternalFileDownloadClient .
@@ -46,11 +45,12 @@ public class ExternalFileDownloadClient {
         String path = normalizePath(file.getFilePath());
         String url = properties.getFileService().getDownloadUrl() + path;
         String requestUrl = buildRequestUrl(url);
+        URI requestUri = URI.create(requestUrl);
         String authorization = properties.getFileService().getAuthorization();
         log.info("开始下载第三方系统文件：externalFileId = {}，filePath = {}，requestUrl = {}，authorization = {}，timeout = {}",
                 file.getId(), file.getFilePath(), requestUrl, authorization, properties.getFileService().getTimeout());
         byte[] bytes = externalFileWebClient.get()
-                .uri(url)
+                .uri(requestUri)
                 .header(HttpHeaders.AUTHORIZATION, authorization)
                 .retrieve()
                 .bodyToMono(byte[].class)
@@ -69,8 +69,8 @@ public class ExternalFileDownloadClient {
      * 构造下载请求完整 URL
      *
      * <p>
-     * WebClient 实际请求使用 baseUrl + 相对路径
-     * 这里单独拼完整 URL 只用于日志排查，不改变真实请求行为
+     * 下载请求使用完整 URI 发起，避免 WebClient 对已编码的 filePath 再次编码
+     * 这里仍复用 file-service.host 和 download-url 的拼接规则，保持配置语义不变
      *
      * @param url 下载相对路径
      * @return 下载请求完整 URL
@@ -92,15 +92,18 @@ public class ExternalFileDownloadClient {
     /**
      * 规范化外部文件路径
      *
+     * <p>
+     * 老系统上传 FSIP 时已经对文件名做了 URL 编码，数据库中的 filePath 是可直接拼接到下载 URL 的路径
+     * 这里不能再次 URLEncoder.encode，否则 %E4 会被重复编码为 %25E4，文件服务会返回 400
+     *
      * @param filePath 第三方系统文件路径
-     * @return URL 安全的相对路径
+     * @return 可直接拼接到下载 URL 的相对路径
      */
     private String normalizePath(String filePath) {
         if (!StringUtils.hasText(filePath)) {
             throw new IllegalArgumentException("外部文件路径不能为空");
         }
-        String normalized = filePath.startsWith("/") ? filePath.substring(1) : filePath;
-        return URLEncoder.encode(normalized, StandardCharsets.UTF_8).replace("%2F", "/");
+        return filePath.startsWith("/") ? filePath.substring(1) : filePath;
     }
 
     /**
