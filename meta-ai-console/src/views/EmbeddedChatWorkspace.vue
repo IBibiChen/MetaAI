@@ -402,6 +402,7 @@
           </div>
         </div>
         <button
+          v-if="embeddedVoiceEnabled"
           type="button"
           :class="['composer-button', 'voice-button', { recording: voiceSessionActive }]"
           :style="voiceButtonStyle"
@@ -698,6 +699,9 @@ const deleteSubmitting = ref(false)
 const deleteForm = reactive({
   chat: null as MetaChat | null,
 })
+
+// 嵌入页暂不开放语音入口，保留语音逻辑便于后续通过配置灰度开启
+const embeddedVoiceEnabled = false
 
 const modeOptions = [
   { label: '知识问答', value: 'rag' },
