@@ -2,6 +2,7 @@ package com.metax.chat.response;
 
 import com.metax.rag.retrieval.advisor.MetaContextFile;
 
+import java.time.Instant;
 import java.util.List;
 
 /**
@@ -14,6 +15,7 @@ import java.util.List;
  * @param answer 模型回答
  * @param chatId 会话 ID
  * @param files  本次参与上下文增强的会话文件
+ * @param assistantCreatedAt 助手消息历史创建时间
  * @author IBibiChen
  * @version v1.0
  * @since 2026/6/9
@@ -21,6 +23,11 @@ import java.util.List;
 public record ChatMessageResponse(
         String answer,
         String chatId,
-        List<MetaContextFile> files
+        List<MetaContextFile> files,
+        Instant assistantCreatedAt
 ) {
+
+    public ChatMessageResponse(String answer, String chatId, List<MetaContextFile> files) {
+        this(answer, chatId, files, null);
+    }
 }

@@ -4,6 +4,7 @@ import com.metax.rag.retrieval.advisor.MetaContextFile;
 import com.metax.rag.retrieval.model.RetrievalDocumentReference;
 import io.swagger.v3.oas.annotations.media.Schema;
 
+import java.time.Instant;
 import java.util.List;
 
 /**
@@ -16,6 +17,7 @@ import java.util.List;
  * @param chatId     会话 ID
  * @param references 回答引用的来源文档
  * @param files      本次参与文件上下文的临时文件列表
+ * @param assistantCreatedAt 助手消息历史创建时间
  * @author IBibiChen
  * @version v1.0
  * @since 2026/6/8
@@ -41,10 +43,22 @@ public record ChatStreamDone(
          * 本次参与文件上下文的临时文件列表
          */
         @Schema(description = "本次参与文件上下文的临时文件列表")
-        List<MetaContextFile> files
+        List<MetaContextFile> files,
+        /**
+         * 助手消息历史创建时间
+         */
+        @Schema(description = "助手消息历史创建时间")
+        Instant assistantCreatedAt
 ) {
 
     public ChatStreamDone(String answer, String chatId, List<RetrievalDocumentReference> references) {
-        this(answer, chatId, references, List.of());
+        this(answer, chatId, references, List.of(), null);
+    }
+
+    public ChatStreamDone(String answer,
+                          String chatId,
+                          List<RetrievalDocumentReference> references,
+                          List<MetaContextFile> files) {
+        this(answer, chatId, references, files, null);
     }
 }

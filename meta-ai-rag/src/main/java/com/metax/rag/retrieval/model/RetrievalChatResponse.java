@@ -3,6 +3,7 @@ package com.metax.rag.retrieval.model;
 import com.metax.rag.retrieval.advisor.MetaContextFile;
 import io.swagger.v3.oas.annotations.media.Schema;
 
+import java.time.Instant;
 import java.util.List;
 
 /**
@@ -63,10 +64,22 @@ public record RetrievalChatResponse(
          * 本次参与文件上下文的临时文件列表
          */
         @Schema(description = "本次参与文件上下文的临时文件列表")
-        List<MetaContextFile> files
+        List<MetaContextFile> files,
+        /**
+         * 助手消息历史创建时间
+         */
+        @Schema(description = "助手消息历史创建时间")
+        Instant assistantCreatedAt
 ) {
 
     public RetrievalChatResponse(String answer, String chatId, List<RetrievalDocumentReference> references) {
-        this(answer, chatId, references, List.of());
+        this(answer, chatId, references, List.of(), null);
+    }
+
+    public RetrievalChatResponse(String answer,
+                                 String chatId,
+                                 List<RetrievalDocumentReference> references,
+                                 List<MetaContextFile> files) {
+        this(answer, chatId, references, files, null);
     }
 }

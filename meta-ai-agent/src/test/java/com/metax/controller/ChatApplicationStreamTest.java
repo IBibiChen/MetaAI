@@ -3,6 +3,7 @@ package com.metax.controller;
 import com.metax.chat.ChatMessageService;
 import com.metax.chat.file.MetaChatFileService;
 import com.metax.chat.history.MetaChatHistoryRole;
+import com.metax.chat.history.MetaChatHistoryDO;
 import com.metax.chat.history.MetaChatHistoryService;
 import com.metax.chat.history.MetaChatHistoryType;
 import com.metax.chat.session.MetaChatDO;
@@ -44,6 +45,7 @@ import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.http.codec.ServerSentEvent;
 import reactor.core.publisher.Flux;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
@@ -68,6 +70,8 @@ import static org.mockito.Mockito.when;
  */
 class ChatApplicationStreamTest {
 
+    private static final Instant ASSISTANT_CREATED_AT = Instant.parse("2026-06-22T09:35:40Z");
+
     @Test
     void chatStreamShouldReturnMetaDeltaAndDoneEvents() {
         MetaChatHistoryService metaChatHistoryService = mock(MetaChatHistoryService.class);
@@ -87,7 +91,8 @@ class ChatApplicationStreamTest {
         assertThat(result.get(2).event()).isEqualTo("delta");
         assertThat(result.get(2).data()).isEqualTo(new ChatStreamDelta("好"));
         assertThat(result.get(3).event()).isEqualTo("done");
-        assertThat(result.get(3).data()).isEqualTo(new ChatStreamDone("你好", "c1", List.of()));
+        assertThat(result.get(3).data()).isEqualTo(new ChatStreamDone("你好", "c1", List.of(), List.of(),
+                ASSISTANT_CREATED_AT));
         verify(metaChatHistoryService).saveUserMessage(argThat(chat -> persistedChat(chat, "c1")),
                 eq(MetaChatHistoryType.CHAT), eq("你好"), eq(List.of()));
         verify(metaChatHistoryService).saveAssistantMessage(argThat(chat -> persistedChat(chat, "c1")),
@@ -115,7 +120,8 @@ class ChatApplicationStreamTest {
         assertThat(result.get(1).event()).isEqualTo("delta");
         assertThat(result.get(2).event()).isEqualTo("delta");
         assertThat(result.get(3).event()).isEqualTo("done");
-        assertThat(result.get(3).data()).isEqualTo(new ChatStreamDone("回答", "c1", List.of()));
+        assertThat(result.get(3).data()).isEqualTo(new ChatStreamDone("回答", "c1", List.of(), List.of(),
+                ASSISTANT_CREATED_AT));
         verify(metaChatHistoryService).saveUserMessage(argThat(chat -> persistedChat(chat, "c1")),
                 eq(MetaChatHistoryType.RAG), eq("你是谁"), eq(List.of()));
         verify(metaChatHistoryService).saveAssistantMessage(argThat(chat -> persistedChat(chat, "c1")),
@@ -144,7 +150,8 @@ class ChatApplicationStreamTest {
 
         assertThat(result).hasSize(4);
         assertThat(result.get(3).event()).isEqualTo("done");
-        assertThat(result.get(3).data()).isEqualTo(new ChatStreamDone("文件", "c1", List.of(), List.of(file)));
+        assertThat(result.get(3).data()).isEqualTo(new ChatStreamDone("文件", "c1", List.of(), List.of(file),
+                ASSISTANT_CREATED_AT));
         verify(fileService).readyFiles("t1", "u1", "c1", List.of("file-1"));
         verify(fileService).retrieve("t1", "u1", "c1", List.of(file), "总结文件");
     }
@@ -172,7 +179,7 @@ class ChatApplicationStreamTest {
         assertThat(result).hasSize(4);
         assertThat(result.get(3).event()).isEqualTo("done");
         assertThat(result.get(3).data()).isEqualTo(new ChatStreamDone("文件", "c1", List.of(),
-                List.of(first, second)));
+                List.of(first, second), ASSISTANT_CREATED_AT));
         verify(fileService).readyFiles("t1", "u1", "c1", List.of("file-1", "file-2"));
     }
 
@@ -191,7 +198,8 @@ class ChatApplicationStreamTest {
 
         assertThat(result).hasSize(4);
         assertThat(result.get(3).event()).isEqualTo("done");
-        assertThat(result.get(3).data()).isEqualTo(new ChatStreamDone("回答", "c1", List.of(), List.of()));
+        assertThat(result.get(3).data()).isEqualTo(new ChatStreamDone("回答", "c1", List.of(), List.of(),
+                ASSISTANT_CREATED_AT));
         verify(fileService, never()).readyFiles("t1", "u1", "c1");
         verify(fileService, never()).retrieve(eq("t1"), eq("u1"), eq("c1"), any(), eq("继续总结"));
     }
@@ -218,7 +226,8 @@ class ChatApplicationStreamTest {
 
         assertThat(result).hasSize(4);
         assertThat(result.get(3).event()).isEqualTo("done");
-        assertThat(result.get(3).data()).isEqualTo(new ChatStreamDone("回答", "c1", List.of(), List.of(file)));
+        assertThat(result.get(3).data()).isEqualTo(new ChatStreamDone("回答", "c1", List.of(), List.of(file),
+                ASSISTANT_CREATED_AT));
         verify(fileService).readyFiles("t1", "u1", "c1", List.of("file-1"));
     }
 
@@ -243,6 +252,7 @@ class ChatApplicationStreamTest {
         assertThat(response.answer()).isEqualTo("文件回答");
         assertThat(response.chatId()).isEqualTo("c1");
         assertThat(response.files()).containsExactly(file);
+        assertThat(response.assistantCreatedAt()).isEqualTo(ASSISTANT_CREATED_AT);
         verify(fileService).readyFiles("t1", "u1", "c1", List.of("file-1"));
         verify(fileService).retrieve("t1", "u1", "c1", List.of(file), "总结文件");
         verify(metaChatHistoryService).saveUserMessage(argThat(chat -> persistedChat(chat, "c1")),
@@ -268,6 +278,7 @@ class ChatApplicationStreamTest {
         assertThat(response.chatId()).isEqualTo("c1");
         assertThat(response.references()).isEmpty();
         assertThat(response.files()).isEmpty();
+        assertThat(response.assistantCreatedAt()).isEqualTo(ASSISTANT_CREATED_AT);
         verify(fileService, never()).readyFiles("t1", "u1", "c1");
         verify(fileService, never()).retrieve(eq("t1"), eq("u1"), eq("c1"), any(), eq("继续总结"));
         verify(metaChatHistoryService).saveUserMessage(argThat(chat -> persistedChat(chat, "c1")),
@@ -289,6 +300,7 @@ class ChatApplicationStreamTest {
         assertThat(response.chatId()).isEqualTo("c1");
         assertThat(response.references()).isEmpty();
         assertThat(response.files()).isEmpty();
+        assertThat(response.assistantCreatedAt()).isEqualTo(ASSISTANT_CREATED_AT);
         verify(metaChatHistoryService).saveUserMessage(argThat(chat -> persistedChat(chat, "c1")),
                 eq(MetaChatHistoryType.RAG), eq("你是谁"), eq(List.of()));
         verify(metaChatHistoryService).saveAssistantMessage(argThat(chat -> persistedChat(chat, "c1")),
@@ -306,6 +318,7 @@ class ChatApplicationStreamTest {
                                                   MetaChatHistoryService metaChatHistoryService,
                                                   MetaChatService metaChatService,
                                                   MetaChatFileService fileService) {
+        stubAssistantHistory(metaChatHistoryService);
         ChatClient chatClient = memoryChatClient(chatModel);
         ChatScopeResolver chatScopeResolver = new ChatScopeResolver();
         ChatHistoryRecorder chatHistoryRecorder = new ChatHistoryRecorder(metaChatService, metaChatHistoryService,
@@ -332,6 +345,7 @@ class ChatApplicationStreamTest {
                                                       MetaChatService metaChatService,
                                                       RetrievalDecisionService decisionService,
                                                       MetaChatFileService fileService) {
+        stubAssistantHistory(metaChatHistoryService);
         ChatClient chatClient = memoryChatClient(chatModel);
         ChatScopeResolver chatScopeResolver = new ChatScopeResolver();
         ChatHistoryRecorder chatHistoryRecorder = new ChatHistoryRecorder(metaChatService, metaChatHistoryService,
@@ -372,6 +386,20 @@ class ChatApplicationStreamTest {
         chat.setChatId("c1");
         when(metaChatService.getOrCreate(any())).thenReturn(chat);
         return metaChatService;
+    }
+
+    private void stubAssistantHistory(MetaChatHistoryService metaChatHistoryService) {
+        when(metaChatHistoryService.saveAssistantMessage(any(), any(), any()))
+                .thenAnswer(invocation -> assistantHistory(invocation.getArgument(0), invocation.getArgument(1),
+                        invocation.getArgument(2)));
+        when(metaChatHistoryService.saveAssistantMessage(any(), any(), any(), any()))
+                .thenAnswer(invocation -> assistantHistory(invocation.getArgument(0), invocation.getArgument(1),
+                        invocation.getArgument(2)));
+    }
+
+    private MetaChatHistoryDO assistantHistory(MetaChatDO chat, MetaChatHistoryType historyType, String answer) {
+        return new MetaChatHistoryDO(2L, chat.getId(), chat.getChatId(), historyType.value(),
+                MetaChatHistoryRole.ASSISTANT.value(), answer, null, null, ASSISTANT_CREATED_AT);
     }
 
     /**

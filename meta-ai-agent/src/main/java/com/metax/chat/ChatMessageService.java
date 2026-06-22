@@ -1,6 +1,7 @@
 package com.metax.chat;
 
 import com.metax.chat.history.MetaChatHistoryType;
+import com.metax.chat.history.MetaChatHistoryDO;
 import com.metax.chat.request.ChatRequest;
 import com.metax.chat.response.ChatMessageResponse;
 import com.metax.chat.session.MetaChatDO;
@@ -140,9 +141,9 @@ public class ChatMessageService {
                     scope.userId(), resolvedChatId, msg, resolvedFiles));
         }
         String answer = requestSpec.user(msg).call().content();
-        chatHistoryRecorder.saveAssistantMessage(chat, historyType, answer);
+        MetaChatHistoryDO assistantHistory = chatHistoryRecorder.saveAssistantMessage(chat, historyType, answer);
         // 非流式响应也返回本轮实际使用的文件，方便前端展示和排查 fileIds 是否生效
-        return new ChatMessageResponse(answer, resolvedChatId, resolvedFiles);
+        return new ChatMessageResponse(answer, resolvedChatId, resolvedFiles, assistantHistory.getCreatedAt());
     }
 
     /**

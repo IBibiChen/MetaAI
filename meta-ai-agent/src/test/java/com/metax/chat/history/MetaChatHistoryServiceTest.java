@@ -53,6 +53,23 @@ class MetaChatHistoryServiceTest {
     }
 
     /**
+     * 保存助手消息应返回已写入的历史实体
+     */
+    @Test
+    void shouldReturnSavedAssistantHistoryMessage() {
+        MetaChatHistoryMapper mapper = mock(MetaChatHistoryMapper.class);
+        MetaChatHistoryServiceImpl service = service(mapper);
+
+        MetaChatHistoryDO history = service.saveAssistantMessage(chat(), MetaChatHistoryType.CHAT, "你好");
+
+        assertThat(history.getRole()).isEqualTo(MetaChatHistoryRole.ASSISTANT.value());
+        assertThat(history.getCreatedAt()).isNotNull();
+        ArgumentCaptor<MetaChatHistoryDO> captor = forClass(MetaChatHistoryDO.class);
+        verify(mapper).insert(captor.capture());
+        assertThat(history).isSameAs(captor.getValue());
+    }
+
+    /**
      * 完整历史应使用 MyBatis-Plus Page 分页查询
      */
     @Test

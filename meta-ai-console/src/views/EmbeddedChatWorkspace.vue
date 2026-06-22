@@ -615,6 +615,7 @@ interface ChatMessage {
   id: string
   role: 'user' | 'assistant'
   content: string
+  createdAt?: string
   time: string
   typing?: boolean
   references?: RetrievalDocumentReference[]
@@ -1111,8 +1112,10 @@ async function sendMessageContent(content: string) {
       answer?: string
       references?: RetrievalDocumentReference[]
       files?: MetaContextFile[]
+      assistantCreatedAt?: string
     }) => {
       if (streamStoppedByUser) return
+      applyMessageCreatedAt(assistantMessage, payload.assistantCreatedAt)
       assistantMessage.references = payload.references
       typingRenderer.complete(payload.answer)
     },
@@ -1767,6 +1770,7 @@ async function sendNonStreamingMessage(
     if (response.chatId) {
       workspace.setChatId(response.chatId)
     }
+    applyMessageCreatedAt(assistantMessage, response.assistantCreatedAt)
     typingRenderer.complete(response.answer)
   } catch (error) {
     typingRenderer.stop()
@@ -2597,8 +2601,14 @@ function createMessage(
     references,
     files,
     trace,
+    createdAt,
     time: formatMessageTime(createdAt),
   }
+}
+
+function applyMessageCreatedAt(messageItem: ChatMessage, createdAt?: string) {
+  messageItem.createdAt = createdAt
+  messageItem.time = formatMessageTime(createdAt)
 }
 
 function formatMessageTime(value?: string | Date) {

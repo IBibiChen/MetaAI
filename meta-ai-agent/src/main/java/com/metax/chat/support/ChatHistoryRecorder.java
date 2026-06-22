@@ -1,6 +1,7 @@
 package com.metax.chat.support;
 
 import com.metax.chat.history.MetaChatHistoryRole;
+import com.metax.chat.history.MetaChatHistoryDO;
 import com.metax.chat.history.MetaChatHistoryService;
 import com.metax.chat.history.MetaChatHistoryType;
 import com.metax.chat.session.MetaChatDO;
@@ -94,12 +95,14 @@ public class ChatHistoryRecorder {
      * @param chat        会话主表记录，提供历史表 fkId 和业务 chatId
      * @param historyType 历史类型
      * @param answer      助手回答
+     * @return 已保存的助手历史消息
      */
-    public void saveAssistantMessage(MetaChatDO chat, MetaChatHistoryType historyType, String answer) {
+    public MetaChatHistoryDO saveAssistantMessage(MetaChatDO chat, MetaChatHistoryType historyType, String answer) {
         MetaChatDO resolvedChat = requirePersistedChat(chat);
         // 无知识库引用的普通回答只保存 answer，不写空 references JSON
-        metaChatHistoryService.saveAssistantMessage(resolvedChat, historyType, answer);
+        MetaChatHistoryDO history = metaChatHistoryService.saveAssistantMessage(resolvedChat, historyType, answer);
         metaChatService.updateLastMessage(resolvedChat.getId(), MetaChatHistoryRole.ASSISTANT, answer);
+        return history;
     }
 
     /**
@@ -109,15 +112,18 @@ public class ChatHistoryRecorder {
      * @param historyType 历史类型
      * @param answer      助手回答
      * @param references  引用来源
+     * @return 已保存的助手历史消息
      */
-    public void saveAssistantMessage(MetaChatDO chat,
-                                     MetaChatHistoryType historyType,
-                                     String answer,
-                                     List<RetrievalDocumentReference> references) {
+    public MetaChatHistoryDO saveAssistantMessage(MetaChatDO chat,
+                                                  MetaChatHistoryType historyType,
+                                                  String answer,
+                                                  List<RetrievalDocumentReference> references) {
         MetaChatDO resolvedChat = requirePersistedChat(chat);
         // 助手消息在普通响应完成后或 SSE done 阶段统一保存，避免流式 delta 片段进入历史
-        metaChatHistoryService.saveAssistantMessage(resolvedChat, historyType, answer, references);
+        MetaChatHistoryDO history = metaChatHistoryService.saveAssistantMessage(resolvedChat, historyType, answer,
+                references);
         metaChatService.updateLastMessage(resolvedChat.getId(), MetaChatHistoryRole.ASSISTANT, answer);
+        return history;
     }
 
     /**

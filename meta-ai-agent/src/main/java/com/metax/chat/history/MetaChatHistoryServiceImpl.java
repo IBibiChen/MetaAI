@@ -74,10 +74,11 @@ public class MetaChatHistoryServiceImpl extends ServiceImpl<MetaChatHistoryMappe
      * @param chat    会话主表记录，提供落库 fkId 和业务 chatId
      * @param type    对话类型
      * @param content 消息内容
+     * @return 已保存的历史消息
      */
     @Override
-    public void saveAssistantMessage(MetaChatDO chat, MetaChatHistoryType type, String content) {
-        saveAssistantMessage(chat, type, content, List.of());
+    public MetaChatHistoryDO saveAssistantMessage(MetaChatDO chat, MetaChatHistoryType type, String content) {
+        return saveAssistantMessage(chat, type, content, List.of());
     }
 
     /**
@@ -87,11 +88,12 @@ public class MetaChatHistoryServiceImpl extends ServiceImpl<MetaChatHistoryMappe
      * @param type       对话类型
      * @param content    消息内容
      * @param references 回答引用的来源文档
+     * @return 已保存的历史消息
      */
     @Override
-    public void saveAssistantMessage(MetaChatDO chat, MetaChatHistoryType type, String content,
-                                     List<RetrievalDocumentReference> references) {
-        save(chat, type, MetaChatHistoryRole.ASSISTANT, content, reference(references), null);
+    public MetaChatHistoryDO saveAssistantMessage(MetaChatDO chat, MetaChatHistoryType type, String content,
+                                                  List<RetrievalDocumentReference> references) {
+        return save(chat, type, MetaChatHistoryRole.ASSISTANT, content, reference(references), null);
     }
 
     /**
@@ -121,9 +123,10 @@ public class MetaChatHistoryServiceImpl extends ServiceImpl<MetaChatHistoryMappe
      * @param content   消息内容
      * @param reference 回答引用来源 JSON
      * @param files     用户消息关联文件 JSON
+     * @return 已保存的历史消息
      */
-    private void save(MetaChatDO chat, MetaChatHistoryType type, MetaChatHistoryRole role, String content,
-                      String reference, String files) {
+    private MetaChatHistoryDO save(MetaChatDO chat, MetaChatHistoryType type, MetaChatHistoryRole role, String content,
+                                   String reference, String files) {
         Assert.notNull(chat, "MetaChatDO must not be null");
         Assert.notNull(chat.getId(), "MetaChatDO id must not be null");
         Assert.hasText(chat.getChatId(), "MetaChatDO chatId must not be blank");
@@ -135,6 +138,7 @@ public class MetaChatHistoryServiceImpl extends ServiceImpl<MetaChatHistoryMappe
         MetaChatHistoryDO entity = new MetaChatHistoryDO(null, chat.getId(), chat.getChatId(),
                 type.value(), role.value(), content, reference, files, Instant.now());
         save(entity);
+        return entity;
     }
 
     /**

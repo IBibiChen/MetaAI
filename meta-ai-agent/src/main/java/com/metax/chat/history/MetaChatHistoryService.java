@@ -51,8 +51,9 @@ public interface MetaChatHistoryService extends IService<MetaChatHistoryDO> {
      * @param chat    会话主表记录，提供落库 fkId 和业务 chatId
      * @param type    对话类型
      * @param content 消息内容
+     * @return 已保存的历史消息
      */
-    void saveAssistantMessage(MetaChatDO chat, MetaChatHistoryType type, String content);
+    MetaChatHistoryDO saveAssistantMessage(MetaChatDO chat, MetaChatHistoryType type, String content);
 
     /**
      * 保存模型回答
@@ -61,9 +62,10 @@ public interface MetaChatHistoryService extends IService<MetaChatHistoryDO> {
      * @param type       对话类型
      * @param content    消息内容
      * @param references 回答引用的来源文档
+     * @return 已保存的历史消息
      */
-    void saveAssistantMessage(MetaChatDO chat, MetaChatHistoryType type, String content,
-                              List<RetrievalDocumentReference> references);
+    MetaChatHistoryDO saveAssistantMessage(MetaChatDO chat, MetaChatHistoryType type, String content,
+                                           List<RetrievalDocumentReference> references);
 
     /**
      * 分页查询完整历史

@@ -346,6 +346,8 @@ export interface RetrievalChatResponse {
   references?: RetrievalDocumentReference[]
   /** 本次实际参与上下文增强的会话临时文件 */
   files?: MetaContextFile[]
+  /** 助手消息历史创建时间 */
+  assistantCreatedAt?: string
   /** 检索链路 Trace */
   trace?: RetrievalTrace
 }
@@ -360,6 +362,8 @@ export interface ChatMessageResponse {
   chatId: string
   /** 本次实际参与上下文增强的会话临时文件 */
   files?: MetaContextFile[]
+  /** 助手消息历史创建时间 */
+  assistantCreatedAt?: string
 }
 
 /**
@@ -390,6 +394,8 @@ export interface ChatStreamDone {
   references?: RetrievalDocumentReference[]
   /** 本次实际参与上下文增强的会话临时文件 */
   files?: MetaContextFile[]
+  /** 助手消息历史创建时间 */
+  assistantCreatedAt?: string
 }
 
 /**

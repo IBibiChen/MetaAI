@@ -1,6 +1,7 @@
 package com.metax.retrieval.chat;
 
 import com.metax.chat.history.MetaChatHistoryType;
+import com.metax.chat.history.MetaChatHistoryDO;
 import com.metax.chat.request.ChatContextScope;
 import com.metax.chat.session.MetaChatDO;
 import com.metax.chat.support.*;
@@ -145,7 +146,11 @@ public class KnowledgeChatService {
         };
 
         // 助手完整回答和知识库 references 一起归档，前端历史页不依赖 ChatMemory
-        chatHistoryRecorder.saveAssistantMessage(chat, historyType, response.answer(), response.references());
+        MetaChatHistoryDO assistantHistory = chatHistoryRecorder.saveAssistantMessage(chat, historyType,
+                response.answer(), response.references());
+        // 响应中的 assistantCreatedAt 必须来自 MetaChatHistory，保证前端即时态和历史态使用同一时间源
+        response = new RetrievalChatResponse(response.answer(), response.chatId(), response.references(),
+                response.files(), assistantHistory.getCreatedAt());
         log.info("RAG 非流式问答完成：chatId = {}，tenantId = {}，kbId = {}，contextScope = {}，fileCount = {}，referenceCount = {}，durationMs = {}",
                 resolvedChatId, resolvedOptions.getTenantId(), resolvedOptions.getKbId(), resolvedContextScope,
                 files.size(), response.references() == null ? 0 : response.references().size(),

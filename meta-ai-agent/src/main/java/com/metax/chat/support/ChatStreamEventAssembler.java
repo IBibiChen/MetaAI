@@ -1,6 +1,7 @@
 package com.metax.chat.support;
 
 import com.metax.chat.history.MetaChatHistoryType;
+import com.metax.chat.history.MetaChatHistoryDO;
 import com.metax.chat.session.MetaChatDO;
 import com.metax.rag.retrieval.advisor.MetaContextFile;
 import com.metax.rag.retrieval.advisor.MetaContextFileKeys;
@@ -121,7 +122,6 @@ public class ChatStreamEventAssembler {
                                               ChatClientResponse lastResponse) {
         String chatId = chat.getChatId();
         // done 是流式响应的收口点，统一决定前端收尾数据和后端历史归档内容
-        ChatStreamDone data;
         List<RetrievalDocumentReference> references = List.of();
         List<MetaContextFile> files = files(lastResponse);
         if (includeReferences) {
@@ -130,14 +130,13 @@ public class ChatStreamEventAssembler {
                     chatId);
             references = response.references();
             files = response.files();
-            data = new ChatStreamDone(response.answer(), response.chatId(), response.references(), response.files());
-        } else {
-            // 普通文件流式问答不返回知识库 references，但仍返回文件上下文来源
-            data = new ChatStreamDone(fullAnswer, chatId, List.of(), files);
         }
 
         // 历史归档保存完整 answer 和 references，delta 事件只负责前端实时展示
-        chatHistoryRecorder.saveAssistantMessage(chat, historyType, fullAnswer, references);
+        MetaChatHistoryDO assistantHistory = chatHistoryRecorder.saveAssistantMessage(chat, historyType, fullAnswer,
+                references);
+        ChatStreamDone data = new ChatStreamDone(fullAnswer, chatId, references, files,
+                assistantHistory.getCreatedAt());
         return event("done", data);
     }
 
