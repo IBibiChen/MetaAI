@@ -162,8 +162,8 @@ metax.external-adapter.kb-id=kb1
 metax.external-adapter.max-attempts=3
 
 # 后台 Worker 负责下载、对象存储归档、提交索引和等待索引终态
-# 首次联调建议先关闭，确认 file-service.download-url 可用后再改为 true
-metax.external-adapter.worker.enabled=false
+# 已确认老系统能推送文件 ID 后开启 Worker，继续验证下载、归档、索引和状态回写链路
+metax.external-adapter.worker.enabled=true
 metax.external-adapter.worker.idle-interval=5s
 metax.external-adapter.worker.lock-timeout=30m
 metax.external-adapter.worker.index-timeout=30m
@@ -222,14 +222,14 @@ meta-ai:
 注意：如果现场 Docker 环境中 `host.docker.internal` 不通，可以临时把 `metax.external-adapter.file-service.host` 改为
 `http://172.17.0.1:10086` 验证，但不要把它当成跨环境稳定地址
 
-首次联调建议保持：
+如果还没有确认老系统能成功调用 MetaAI 入队接口，建议保持：
 
 ```properties
 metax.external-adapter.worker.enabled=false
 metax.external-adapter.reconcile.enabled=false
 ```
 
-等老系统能成功调用 MetaAI 入队接口，并确认 `file-service.download-url` 可以下载文件后，再开启 Worker：
+当前如果已经确认老系统能成功推送文件 ID，下一步开启 Worker：
 
 ```properties
 metax.external-adapter.worker.enabled=true
