@@ -9,7 +9,11 @@
     "build:boot": "vue-tsc -b && vite build --mode boot",
     "build:prod": "vue-tsc -b && vite build --mode production",
     "preview": "vite preview --host 0.0.0.0",
-    "typecheck": "vue-tsc -b"
+    "typecheck": "vue-tsc -b",
+    "lint": "npm run lint:oxlint && npm run lint:eslint",
+    "lint:oxlint": "oxlint . --fix",
+    "lint:eslint": "eslint . --fix --cache",
+    "format": "prettier --write src/"
   },
   "dependencies": {
     "@microsoft/fetch-event-source": "^2.0.1",
@@ -27,8 +31,17 @@
     "@types/markdown-it": "^14.1.2",
     "@types/node": "^22.10.2",
     "@vitejs/plugin-vue": "^5.2.1",
+    "@vue/eslint-config-typescript": "^14.9.0",
+    "eslint": "^10.5.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-oxlint": "^1.70.0",
+    "eslint-plugin-vue": "~10.9.2",
+    "jiti": "^2.7.0",
+    "oxlint": "^1.70.0",
+    "prettier": "3.8.4",
     "typescript": "~5.7.2",
     "vite": "^6.0.7",
+    "vue-eslint-parser": "^10.4.1",
     "vue-tsc": "^2.2.0"
   }
 }
