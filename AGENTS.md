@@ -3,8 +3,10 @@
 ## 项目结构与模块组织
 
 本仓库是 Java 17 + Spring Boot + Spring AI 的 Maven 多模块项目，父工程负责统一版本和模块聚合。`meta-ai-agent` 是应用入口模块，包含
-REST 接口、配置类、业务服务、Prompt 模板和 `MetaAIApplication`。`meta-ai-rag` 承载 RAG、ETL、索引、检索、文档读取和对象存储抽象。
-`meta-ai-chat` 与 `meta-ai-common` 当前主要是模块骨架，新增代码前先确认是否已有更合适的职责边界。
+REST 接口、配置类、业务服务、Prompt 模板和 `MetaAIApplication`。聊天会话、完整历史、会话文件、工具对话和统一响应模型当前也在该模块内。
+`meta-ai-rag` 承载 RAG、ETL、索引、检索、文档读取和对象存储抽象。`meta-ai-tool` 承载工具调用相关抽象，
+`meta-ai-external-adapter`
+承载外部系统同步适配能力。新增跨模块公共能力前，先确认是否已有清晰复用边界，不要提前创建空模块骨架。
 
 源码位于各模块的 `src/main/java`，测试位于 `src/test/java`，资源和 Prompt 位于 `src/main/resources`，例如
 `meta-ai-agent/src/main/resources/prompts`。

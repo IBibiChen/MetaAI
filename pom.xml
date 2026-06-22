@@ -11,11 +11,9 @@
     <name>父工程 POM 配置</name>
 
     <modules>
-        <module>meta-ai-common</module>
+        <module>meta-ai-agent</module>
         <module>meta-ai-tool</module>
         <module>meta-ai-rag</module>
-        <module>meta-ai-chat</module>
-        <module>meta-ai-agent</module>
         <module>meta-ai-external-adapter</module>
     </modules>
 
