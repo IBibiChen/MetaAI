@@ -1,15 +1,20 @@
 <template>
-  <n-config-provider :theme="appTheme" :theme-overrides="themeOverrides" :locale="zhCN" :date-locale="dateZhCN">
+  <n-config-provider
+    :theme="appTheme"
+    :theme-overrides="themeOverrides"
+    :locale="zhCN"
+    :date-locale="dateZhCN"
+  >
     <n-message-provider container-class="center-message-container">
       <n-dialog-provider>
-        <router-view v-if="embeddedRoute"/>
+        <router-view v-if="embeddedRoute" />
         <n-layout v-else class="app-shell" has-sider>
           <n-layout-sider
-              bordered
-              collapse-mode="width"
-              :collapsed-width="72"
-              :width="232"
-              class="app-sider"
+            bordered
+            collapse-mode="width"
+            :collapsed-width="72"
+            :width="232"
+            class="app-sider"
           >
             <div class="brand">
               <div class="brand-mark">M</div>
@@ -18,11 +23,7 @@
                 <span>Console</span>
               </div>
             </div>
-            <n-menu
-                :value="activeMenu"
-                :options="menuOptions"
-                @update:value="handleNavigate"
-            />
+            <n-menu :value="activeMenu" :options="menuOptions" @update:value="handleNavigate" />
           </n-layout-sider>
 
           <n-layout>
@@ -33,28 +34,28 @@
               </div>
               <div class="workspace-bar">
                 <n-input
-                    v-model:value="workspace.tenantId"
-                    placeholder="租户 ID"
-                    size="small"
-                    @blur="workspace.persist"
+                  v-model:value="workspace.tenantId"
+                  placeholder="租户 ID"
+                  size="small"
+                  @blur="workspace.persist"
                 />
                 <n-input
-                    v-model:value="workspace.userId"
-                    placeholder="用户 ID"
-                    size="small"
-                    @blur="workspace.persist"
+                  v-model:value="workspace.userId"
+                  placeholder="用户 ID"
+                  size="small"
+                  @blur="workspace.persist"
                 />
                 <n-input
-                    v-model:value="workspace.deptIds"
-                    placeholder="部门 ID，多个用英文逗号分隔"
-                    size="small"
-                    @blur="workspace.persist"
+                  v-model:value="workspace.deptIds"
+                  placeholder="部门 ID，多个用英文逗号分隔"
+                  size="small"
+                  @blur="workspace.persist"
                 />
                 <n-input
-                    v-model:value="workspace.kbId"
-                    placeholder="知识库 ID"
-                    size="small"
-                    @blur="workspace.persist"
+                  v-model:value="workspace.kbId"
+                  placeholder="知识库 ID"
+                  size="small"
+                  @blur="workspace.persist"
                 />
                 <n-button size="small" secondary @click="workspace.applyContext">
                   应用配置
@@ -65,7 +66,7 @@
               </div>
             </n-layout-header>
             <n-layout-content class="app-content">
-              <router-view/>
+              <router-view />
             </n-layout-content>
           </n-layout>
         </n-layout>
@@ -75,9 +76,9 @@
 </template>
 
 <script setup lang="ts">
-import {computed, h} from 'vue'
-import {RouterLink, useRoute, useRouter} from 'vue-router'
-import {Bot, Database} from 'lucide-vue-next'
+import { computed, h } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { Bot, Database } from 'lucide-vue-next'
 import {
   darkTheme,
   dateZhCN,
@@ -87,26 +88,26 @@ import {
   type GlobalThemeOverrides,
 } from 'naive-ui'
 
-import {useWorkspaceStore} from '@/stores/workspace'
+import { useWorkspaceStore } from '@/stores/workspace'
 
 const route = useRoute()
 const router = useRouter()
 const workspace = useWorkspaceStore()
 const embeddedRoute = computed(() => route.meta.embedded === true)
-const appTheme = computed(() => embeddedRoute.value ? null : darkTheme)
+const appTheme = computed(() => (embeddedRoute.value ? null : darkTheme))
 
 function renderIcon(icon: typeof Bot) {
-  return () => h(NIcon, null, {default: () => h(icon)})
+  return () => h(NIcon, null, { default: () => h(icon) })
 }
 
 const menuOptions: MenuOption[] = [
   {
-    label: () => h(RouterLink, {to: '/chat'}, {default: () => '聊天工作台'}),
+    label: () => h(RouterLink, { to: '/chat' }, { default: () => '聊天工作台' }),
     key: 'chat',
     icon: renderIcon(Bot),
   },
   {
-    label: () => h(RouterLink, {to: '/documents'}, {default: () => '知识库文件'}),
+    label: () => h(RouterLink, { to: '/documents' }, { default: () => '知识库文件' }),
     key: 'documents',
     icon: renderIcon(Database),
   },
@@ -143,7 +144,9 @@ const embeddedThemeOverrides: GlobalThemeOverrides = {
   },
 }
 
-const themeOverrides = computed(() => embeddedRoute.value ? embeddedThemeOverrides : consoleThemeOverrides)
+const themeOverrides = computed(() =>
+  embeddedRoute.value ? embeddedThemeOverrides : consoleThemeOverrides,
+)
 </script>
 
 <style>

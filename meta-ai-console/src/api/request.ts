@@ -1,8 +1,8 @@
-import axios, {AxiosError} from 'axios'
+import axios, { AxiosError } from 'axios'
 
-import {API_BASE_URL} from './base'
+import { API_BASE_URL } from './base'
 
-import type {CommonResult} from '@/types/api'
+import type { CommonResult } from '@/types/api'
 
 /**
  * 全局 Axios 实例
@@ -15,8 +15,8 @@ import type {CommonResult} from '@/types/api'
  * request.get('/v1/storage/documents/page')
  */
 export const request = axios.create({
-    baseURL: API_BASE_URL,
-    timeout: 120_000,
+  baseURL: API_BASE_URL,
+  timeout: 120_000,
 })
 
 /**
@@ -27,11 +27,11 @@ export const request = axios.create({
  * 网络错误、超时和 500 这类错误在这里处理
  */
 request.interceptors.response.use(
-    (response) => response,
-    (error: AxiosError<{ message?: string }>) => {
-        const message = error.response?.data?.message || error.message || '请求失败'
-        return Promise.reject(new Error(message))
-    },
+  (response) => response,
+  (error: AxiosError<{ message?: string }>) => {
+    const message = error.response?.data?.message || error.message || '请求失败'
+    return Promise.reject(new Error(message))
+  },
 )
 
 /**
@@ -45,8 +45,8 @@ request.interceptors.response.use(
  * const data = unwrapResult(response.data)
  */
 export function unwrapResult<T>(payload: CommonResult<T>): T {
-    if (payload.code !== 200) {
-        throw new Error(payload.message || '请求失败')
-    }
-    return payload.data
+  if (payload.code !== 200) {
+    throw new Error(payload.message || '请求失败')
+  }
+  return payload.data
 }

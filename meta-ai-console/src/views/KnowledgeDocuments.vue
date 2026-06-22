@@ -3,32 +3,28 @@
     <div class="toolbar">
       <div class="toolbar-main">
         <n-input
-            v-model:value="query.keyword"
-            clearable
-            placeholder="文件名关键字"
-            style="width: 220px"
-            @keyup.enter="loadDocuments"
+          v-model:value="query.keyword"
+          clearable
+          placeholder="文件名关键字"
+          style="width: 220px"
+          @keyup.enter="loadDocuments"
         />
         <n-select
-            v-model:value="query.indexStatus"
-            clearable
-            placeholder="索引状态"
-            :options="indexStatusOptions"
-            style="width: 150px"
+          v-model:value="query.indexStatus"
+          clearable
+          placeholder="索引状态"
+          :options="indexStatusOptions"
+          style="width: 150px"
         />
         <n-select
-            v-model:value="query.visibility"
-            clearable
-            placeholder="可见性"
-            :options="visibilityOptions"
-            style="width: 140px"
+          v-model:value="query.visibility"
+          clearable
+          placeholder="可见性"
+          :options="visibilityOptions"
+          style="width: 140px"
         />
-        <n-button type="primary" :loading="loading" @click="loadDocuments">
-          查询
-        </n-button>
-        <n-button secondary @click="resetQuery">
-          重置
-        </n-button>
+        <n-button type="primary" :loading="loading" @click="loadDocuments"> 查询 </n-button>
+        <n-button secondary @click="resetQuery"> 重置 </n-button>
       </div>
       <div class="upload-actions">
         <n-button class="upload-toolbar-button" secondary @click="uploadPanelVisible = true">
@@ -36,7 +32,7 @@
         </n-button>
         <n-button class="upload-toolbar-button" type="primary" @click="openUploadDialog">
           <template #icon>
-            <FileUp/>
+            <FileUp />
           </template>
           上传文件
         </n-button>
@@ -44,15 +40,15 @@
     </div>
 
     <n-data-table
-        class="surface"
-        :columns="columns"
-        :data="documents"
-        :loading="loading"
-        :pagination="pagination"
-        :bordered="false"
-        remote
-        @update:page="handlePageChange"
-        @update:page-size="handlePageSizeChange"
+      class="surface"
+      :columns="columns"
+      :data="documents"
+      :loading="loading"
+      :pagination="pagination"
+      :bordered="false"
+      remote
+      @update:page="handlePageChange"
+      @update:page-size="handlePageSizeChange"
     />
 
     <n-drawer v-model:show="uploadPanelVisible" :width="420">
@@ -60,22 +56,22 @@
         <n-form class="upload-form" label-placement="top">
           <div class="upload-form-grid upload-settings-grid">
             <n-form-item label="租户 ID">
-              <n-input v-model:value="uploadDefaults.tenantId" placeholder="上传默认租户 ID"/>
+              <n-input v-model:value="uploadDefaults.tenantId" placeholder="上传默认租户 ID" />
             </n-form-item>
             <n-form-item label="知识库 ID">
-              <n-input v-model:value="uploadDefaults.kbId" placeholder="上传默认知识库 ID"/>
+              <n-input v-model:value="uploadDefaults.kbId" placeholder="上传默认知识库 ID" />
             </n-form-item>
             <n-form-item label="可见性">
-              <n-select v-model:value="uploadDefaults.visibility" :options="visibilityOptions"/>
+              <n-select v-model:value="uploadDefaults.visibility" :options="visibilityOptions" />
             </n-form-item>
             <n-form-item label="部门 ID">
-              <n-input v-model:value="uploadDefaults.deptId" placeholder="DEPT 时填写"/>
+              <n-input v-model:value="uploadDefaults.deptId" placeholder="DEPT 时填写" />
             </n-form-item>
             <n-form-item label="用户 ID">
-              <n-input v-model:value="uploadDefaults.userId" placeholder="USER 时填写"/>
+              <n-input v-model:value="uploadDefaults.userId" placeholder="USER 时填写" />
             </n-form-item>
             <n-form-item label="文档类型">
-              <n-input v-model:value="uploadDefaults.documentType" placeholder="自动识别"/>
+              <n-input v-model:value="uploadDefaults.documentType" placeholder="自动识别" />
             </n-form-item>
           </div>
           <label class="upload-index-card">
@@ -83,7 +79,7 @@
               <strong>上传后自动索引</strong>
               <small>上传成功后立即提交索引任务</small>
             </span>
-            <n-switch v-model:value="uploadDefaults.autoIndex"/>
+            <n-switch v-model:value="uploadDefaults.autoIndex" />
           </label>
         </n-form>
         <template #footer>
@@ -93,33 +89,57 @@
     </n-drawer>
 
     <n-modal
-        v-model:show="uploadDialogVisible"
-        preset="card"
-        title="上传文件"
-        :bordered="false"
-        :segmented="{ content: true, action: true }"
-        :style="{ width: '520px', maxWidth: 'calc(100vw - 32px)' }"
-        @after-leave="resetUploadDialog"
+      v-model:show="uploadDialogVisible"
+      preset="card"
+      title="上传文件"
+      :bordered="false"
+      :segmented="{ content: true, action: true }"
+      :style="{ width: '520px', maxWidth: 'calc(100vw - 32px)' }"
+      @after-leave="resetUploadDialog"
     >
       <n-form class="upload-form" label-placement="top">
         <div class="upload-form-grid">
           <n-form-item label="租户 ID">
-            <n-input v-model:value="uploadDraft.tenantId" :disabled="uploading" placeholder="上传租户 ID"/>
+            <n-input
+              v-model:value="uploadDraft.tenantId"
+              :disabled="uploading"
+              placeholder="上传租户 ID"
+            />
           </n-form-item>
           <n-form-item label="知识库 ID">
-            <n-input v-model:value="uploadDraft.kbId" :disabled="uploading" placeholder="上传知识库 ID"/>
+            <n-input
+              v-model:value="uploadDraft.kbId"
+              :disabled="uploading"
+              placeholder="上传知识库 ID"
+            />
           </n-form-item>
           <n-form-item label="可见性">
-            <n-select v-model:value="uploadDraft.visibility" :disabled="uploading" :options="visibilityOptions"/>
+            <n-select
+              v-model:value="uploadDraft.visibility"
+              :disabled="uploading"
+              :options="visibilityOptions"
+            />
           </n-form-item>
           <n-form-item label="部门 ID">
-            <n-input v-model:value="uploadDraft.deptId" :disabled="uploading" placeholder="DEPT 时填写"/>
+            <n-input
+              v-model:value="uploadDraft.deptId"
+              :disabled="uploading"
+              placeholder="DEPT 时填写"
+            />
           </n-form-item>
           <n-form-item label="用户 ID">
-            <n-input v-model:value="uploadDraft.userId" :disabled="uploading" placeholder="USER 时填写"/>
+            <n-input
+              v-model:value="uploadDraft.userId"
+              :disabled="uploading"
+              placeholder="USER 时填写"
+            />
           </n-form-item>
           <n-form-item label="文档类型">
-            <n-input v-model:value="uploadDraft.documentType" :disabled="uploading" placeholder="自动识别"/>
+            <n-input
+              v-model:value="uploadDraft.documentType"
+              :disabled="uploading"
+              placeholder="自动识别"
+            />
           </n-form-item>
         </div>
         <label class="upload-index-card">
@@ -127,7 +147,7 @@
             <strong>上传后自动索引</strong>
             <small>上传成功后立即提交索引任务</small>
           </span>
-          <n-switch v-model:value="uploadDraft.autoIndex" :disabled="uploading"/>
+          <n-switch v-model:value="uploadDraft.autoIndex" :disabled="uploading" />
         </label>
         <div class="upload-file-card">
           <div class="upload-file-head">
@@ -135,24 +155,29 @@
             <span>单次上传 1 个文件</span>
           </div>
           <input
-              ref="uploadFileInput"
-              class="upload-native-input"
-              type="file"
-              :accept="uploadAccept"
-              :disabled="uploading"
-              @change="handleUploadFileChange"
-          >
+            ref="uploadFileInput"
+            class="upload-native-input"
+            type="file"
+            :accept="uploadAccept"
+            :disabled="uploading"
+            @change="handleUploadFileChange"
+          />
           <div class="upload-file-body">
             <n-button secondary :disabled="uploading" @click="openUploadFilePicker">
               <template #icon>
-                <FileUp/>
+                <FileUp />
               </template>
               选择文件
             </n-button>
             <div v-if="selectedUploadFile" class="upload-file-selected">
               <span>{{ selectedUploadFile.name }}</span>
               <small>{{ formatBytes(selectedUploadFile.size) }}</small>
-              <n-button quaternary size="tiny" :disabled="uploading" @click="clearSelectedUploadFile">
+              <n-button
+                quaternary
+                size="tiny"
+                :disabled="uploading"
+                @click="clearSelectedUploadFile"
+              >
                 移除
               </n-button>
             </div>
@@ -165,7 +190,12 @@
           <n-button tertiary :disabled="uploading" @click="uploadDialogVisible = false">
             取消
           </n-button>
-          <n-button type="primary" :loading="uploading" :disabled="!canUpload" @click="submitUpload">
+          <n-button
+            type="primary"
+            :loading="uploading"
+            :disabled="!canUpload"
+            @click="submitUpload"
+          >
             上传
           </n-button>
         </div>
@@ -173,17 +203,17 @@
     </n-modal>
 
     <n-modal
-        v-model:show="deleteDialogVisible"
-        preset="dialog"
-        type="warning"
-        title="删除文件"
-        positive-text="删除"
-        negative-text="取消"
-        :positive-button-props="{ type: 'error', loading: deleting, disabled: deleting }"
-        :negative-button-props="{ disabled: deleting }"
-        @positive-click="submitDelete"
-        @negative-click="deleteDialogVisible = false"
-        @after-leave="resetDeleteDialog"
+      v-model:show="deleteDialogVisible"
+      preset="dialog"
+      type="warning"
+      title="删除文件"
+      positive-text="删除"
+      negative-text="取消"
+      :positive-button-props="{ type: 'error', loading: deleting, disabled: deleting }"
+      :negative-button-props="{ disabled: deleting }"
+      @positive-click="submitDelete"
+      @negative-click="deleteDialogVisible = false"
+      @after-leave="resetDeleteDialog"
     >
       <div class="delete-dialog-content">
         <p>删除后文件会从列表和检索索引中移除</p>
@@ -194,15 +224,9 @@
 </template>
 
 <script setup lang="ts">
-import {computed, h, onMounted, reactive, ref} from 'vue'
-import {
-  NButton,
-  NTag,
-  NSpace,
-  type DataTableColumns,
-  useMessage,
-} from 'naive-ui'
-import {FileUp} from 'lucide-vue-next'
+import { computed, h, onMounted, reactive, ref } from 'vue'
+import { NButton, NTag, NSpace, type DataTableColumns, useMessage } from 'naive-ui'
+import { FileUp } from 'lucide-vue-next'
 
 import {
   deleteDocument,
@@ -211,8 +235,8 @@ import {
   indexDocument,
   uploadDocument,
 } from '@/api/storage'
-import {useWorkspaceStore} from '@/stores/workspace'
-import type {StorageDocument} from '@/types/api'
+import { useWorkspaceStore } from '@/stores/workspace'
+import type { StorageDocument } from '@/types/api'
 
 const message = useMessage()
 const workspace = useWorkspaceStore()
@@ -258,16 +282,16 @@ const uploadDraft = reactive({
 })
 
 const indexStatusOptions = [
-  {label: '已上传', value: 'UPLOADED'},
-  {label: '索引中', value: 'INDEXING'},
-  {label: '已索引', value: 'INDEXED'},
-  {label: '索引失败', value: 'INDEX_FAILED'},
+  { label: '已上传', value: 'UPLOADED' },
+  { label: '索引中', value: 'INDEXING' },
+  { label: '已索引', value: 'INDEXED' },
+  { label: '索引失败', value: 'INDEX_FAILED' },
 ]
 
 const visibilityOptions = [
-  {label: '公开', value: 'PUBLIC'},
-  {label: '部门', value: 'DEPT'},
-  {label: '用户', value: 'USER'},
+  { label: '公开', value: 'PUBLIC' },
+  { label: '部门', value: 'DEPT' },
+  { label: '用户', value: 'USER' },
 ]
 
 /**
@@ -283,21 +307,23 @@ const pagination = computed(() => ({
   itemCount: total.value,
   showSizePicker: true,
   pageSizes: [
-    {label: '10 条/页', value: 10},
-    {label: '20 条/页', value: 20},
-    {label: '50 条/页', value: 50},
-    {label: '100 条/页', value: 100},
+    { label: '10 条/页', value: 10 },
+    { label: '20 条/页', value: 20 },
+    { label: '50 条/页', value: 50 },
+    { label: '100 条/页', value: 100 },
   ],
   prev: () => '上一页',
   next: () => '下一页',
 }))
 
-const canUpload = computed(() => Boolean(
+const canUpload = computed(() =>
+  Boolean(
     selectedUploadFile.value &&
     uploadDraft.tenantId.trim() &&
     uploadDraft.kbId.trim() &&
     !uploading.value,
-))
+  ),
+)
 
 /**
  * 文件表格列定义
@@ -334,7 +360,12 @@ const columns: DataTableColumns<StorageDocument> = [
     key: 'visibility',
     width: 100,
     align: 'center',
-    render: (row) => h(NTag, {size: 'small', bordered: false}, {default: () => formatVisibility(row.visibility)}),
+    render: (row) =>
+      h(
+        NTag,
+        { size: 'small', bordered: false },
+        { default: () => formatVisibility(row.visibility) },
+      ),
   },
   {
     title: '索引状态',
@@ -342,14 +373,14 @@ const columns: DataTableColumns<StorageDocument> = [
     width: 130,
     align: 'center',
     render: (row) =>
-        h(
-            NTag,
-            {
-              size: 'small',
-              color: statusColor(row.indexStatus),
-            },
-            {default: () => formatIndexStatus(row.indexStatus)},
-        ),
+      h(
+        NTag,
+        {
+          size: 'small',
+          color: statusColor(row.indexStatus),
+        },
+        { default: () => formatIndexStatus(row.indexStatus) },
+      ),
   },
   {
     title: '分片数',
@@ -371,11 +402,16 @@ const columns: DataTableColumns<StorageDocument> = [
     fixed: 'right',
     align: 'center',
     render: (row) =>
-        h(NSpace, {size: 8, wrap: false, justify: 'center'}, () => [
-          actionButton('下载', 'download', () => handleDownload(row)),
-          actionButton('索引', 'index', () => handleIndex(row)),
-          actionButton('删除', 'delete', () => openDeleteDialog(row), deletingDocument.value?.documentId === row.documentId && deleting.value),
-        ]),
+      h(NSpace, { size: 8, wrap: false, justify: 'center' }, () => [
+        actionButton('下载', 'download', () => handleDownload(row)),
+        actionButton('索引', 'index', () => handleIndex(row)),
+        actionButton(
+          '删除',
+          'delete',
+          () => openDeleteDialog(row),
+          deletingDocument.value?.documentId === row.documentId && deleting.value,
+        ),
+      ]),
   },
 ]
 
@@ -613,22 +649,22 @@ function handlePageSizeChange(pageSize: number) {
  * actionButton('下载', 'download', () => handleDownload(row))
  */
 function actionButton(
-    label: string,
-    variant: 'download' | 'index' | 'delete',
-    onClick?: () => void,
-    disabled = false,
+  label: string,
+  variant: 'download' | 'index' | 'delete',
+  onClick?: () => void,
+  disabled = false,
 ) {
   return h(
-      NButton,
-      {
-        size: 'small',
-        secondary: true,
-        type: actionButtonType(variant),
-        class: ['document-action-button', `document-action-button--${variant}`],
-        disabled,
-        onClick,
-      },
-      {default: () => label},
+    NButton,
+    {
+      size: 'small',
+      secondary: true,
+      type: actionButtonType(variant),
+      class: ['document-action-button', `document-action-button--${variant}`],
+      disabled,
+      onClick,
+    },
+    { default: () => label },
   )
 }
 
@@ -662,10 +698,10 @@ function formatIndexStatus(value: string) {
  * INDEX_FAILED 红色
  */
 function statusColor(status: string) {
-  if (status === 'INDEXED') return {color: '#143c35', textColor: '#72f1d4'}
-  if (status === 'INDEX_FAILED') return {color: '#4a1d24', textColor: '#ff8f9c'}
-  if (status === 'INDEXING') return {color: '#3c3214', textColor: '#ffd36a'}
-  return {color: '#243142', textColor: '#a9bad0'}
+  if (status === 'INDEXED') return { color: '#143c35', textColor: '#72f1d4' }
+  if (status === 'INDEX_FAILED') return { color: '#4a1d24', textColor: '#ff8f9c' }
+  if (status === 'INDEXING') return { color: '#3c3214', textColor: '#ffd36a' }
+  return { color: '#243142', textColor: '#a9bad0' }
 }
 
 /**

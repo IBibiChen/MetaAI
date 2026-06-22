@@ -1,6 +1,6 @@
-import {createPinia} from 'pinia'
+import { createPinia } from 'pinia'
 import naive from 'naive-ui'
-import {createApp} from 'vue'
+import { createApp } from 'vue'
 
 import App from './App.vue'
 import router from './router'
@@ -14,5 +14,5 @@ app.use(router)
 
 // 首屏等待路由解析完成，避免嵌入页短暂渲染普通控制台外壳
 router.isReady().then(() => {
-    app.mount('#app')
+  app.mount('#app')
 })

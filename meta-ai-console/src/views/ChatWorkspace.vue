@@ -9,69 +9,81 @@
       <div class="panel-head">
         <strong>历史对话</strong>
         <n-button
-            class="history-refresh-button"
-            size="tiny"
-            tertiary
-            circle
-            title="刷新历史对话"
-            aria-label="刷新历史对话"
-            :loading="chatListLoading"
-            @click="loadChats"
+          class="history-refresh-button"
+          size="tiny"
+          tertiary
+          circle
+          title="刷新历史对话"
+          aria-label="刷新历史对话"
+          :loading="chatListLoading"
+          @click="loadChats"
         >
           <template #icon>
             <n-icon>
-              <RefreshCw/>
+              <RefreshCw />
             </n-icon>
           </template>
         </n-button>
       </div>
       <div class="history-list">
         <div
-            v-for="item in chats"
-            :key="item.id"
-            :class="['history-item', { active: item.id === activeMetaChatId, pinned: item.pinned }]"
-            role="button"
-            tabindex="0"
-            @click="selectChat(item)"
-            @keydown.enter.prevent="selectChat(item)"
-            @keydown.space.prevent="selectChat(item)"
+          v-for="item in chats"
+          :key="item.id"
+          :class="['history-item', { active: item.id === activeMetaChatId, pinned: item.pinned }]"
+          role="button"
+          tabindex="0"
+          @click="selectChat(item)"
+          @keydown.enter.prevent="selectChat(item)"
+          @keydown.space.prevent="selectChat(item)"
         >
-          <span :class="['history-mode', modeClass(item.chatMode)]">{{ formatChatMode(item.chatMode) }}</span>
+          <span :class="['history-mode', modeClass(item.chatMode)]">{{
+            formatChatMode(item.chatMode)
+          }}</span>
           <strong>{{ item.title }}</strong>
           <p>{{ item.lastMessage || '暂无消息' }}</p>
           <div class="history-meta">
             <time>{{ formatTime(item.lastMessageAt) }}</time>
             <div class="history-actions" @click.stop>
               <button
-                  type="button"
-                  :class="['history-action-button', { 'is-active': item.pinned }]"
-                  :aria-pressed="item.pinned"
-                  :title="item.pinned ? '取消置顶' : '置顶'"
-                  @click="togglePinned(item)"
+                type="button"
+                :class="['history-action-button', { 'is-active': item.pinned }]"
+                :aria-pressed="item.pinned"
+                :title="item.pinned ? '取消置顶' : '置顶'"
+                @click="togglePinned(item)"
               >
                 <n-icon>
-                  <Pin/>
+                  <Pin />
                 </n-icon>
               </button>
               <button
-                  type="button"
-                  :class="['history-action-button', { 'is-active': item.favorite }]"
-                  :aria-pressed="item.favorite"
-                  :title="item.favorite ? '取消收藏' : '收藏'"
-                  @click="toggleFavorite(item)"
+                type="button"
+                :class="['history-action-button', { 'is-active': item.favorite }]"
+                :aria-pressed="item.favorite"
+                :title="item.favorite ? '取消收藏' : '收藏'"
+                @click="toggleFavorite(item)"
               >
                 <n-icon>
-                  <Star/>
+                  <Star />
                 </n-icon>
               </button>
-              <button class="history-action-button" type="button" title="重命名" @click="renameSelectedChat(item)">
+              <button
+                class="history-action-button"
+                type="button"
+                title="重命名"
+                @click="renameSelectedChat(item)"
+              >
                 <n-icon>
-                  <Pencil/>
+                  <Pencil />
                 </n-icon>
               </button>
-              <button class="history-action-button" type="button" title="删除" @click="deleteSelectedChat(item)">
+              <button
+                class="history-action-button"
+                type="button"
+                title="删除"
+                @click="deleteSelectedChat(item)"
+              >
                 <n-icon>
-                  <Trash2/>
+                  <Trash2 />
                 </n-icon>
               </button>
             </div>
@@ -82,15 +94,8 @@
 
     <main class="chat-surface surface">
       <div class="chat-toolbar">
-        <n-radio-group
-            v-model:value="chatMode"
-            size="small"
-        >
-          <n-radio-button
-              v-for="option in modeOptions"
-              :key="option.value"
-              :value="option.value"
-          >
+        <n-radio-group v-model:value="chatMode" size="small">
+          <n-radio-button v-for="option in modeOptions" :key="option.value" :value="option.value">
             {{ option.label }}
           </n-radio-button>
         </n-radio-group>
@@ -98,31 +103,27 @@
           <n-button class="mobile-new-session" size="small" tertiary @click="handleNewSession">
             <template #icon>
               <n-icon>
-                <SquarePen/>
+                <SquarePen />
               </n-icon>
             </template>
             新建对话
           </n-button>
           <n-switch
-              v-model:value="segmentedStreamMode"
-              class="stream-mode-switch"
-              size="small"
-              :disabled="sending"
-              :round="false"
-              :rail-style="streamSwitchRailStyle"
-              :style="streamSwitchCssVars"
+            v-model:value="segmentedStreamMode"
+            class="stream-mode-switch"
+            size="small"
+            :disabled="sending"
+            :round="false"
+            :rail-style="streamSwitchRailStyle"
+            :style="streamSwitchCssVars"
           >
-            <template #checked>
-              整段出
-            </template>
-            <template #unchecked>
-              打字机
-            </template>
+            <template #checked> 整段出 </template>
+            <template #unchecked> 打字机 </template>
           </n-switch>
           <n-button size="small" tertiary @click="openRetrievalScope">
             <template #icon>
               <n-icon>
-                <ListFilter/>
+                <ListFilter />
               </n-icon>
             </template>
             检索范围
@@ -130,7 +131,7 @@
           <n-button size="small" tertiary @click="clearMessages">
             <template #icon>
               <n-icon>
-                <Eraser/>
+                <Eraser />
               </n-icon>
             </template>
             清屏
@@ -140,15 +141,15 @@
 
       <div class="message-scroll-shell" @mouseenter="revealMessageScrollbar">
         <section
-            ref="messageViewport"
-            :class="['message-viewport', { transitioning: messageTransitioning }]"
-            @scroll="handleMessageScroll"
+          ref="messageViewport"
+          :class="['message-viewport', { transitioning: messageTransitioning }]"
+          @scroll="handleMessageScroll"
         >
           <div v-if="historyLoading" class="history-loading">加载对话中...</div>
           <div v-if="messages.length === 0" class="empty-state">
             <div class="empty-mark">
               <n-icon>
-                <Bot/>
+                <Bot />
               </n-icon>
             </div>
             <h2>MetaAI 知识工作台</h2>
@@ -156,45 +157,45 @@
           </div>
 
           <article
-              v-for="messageItem in messages"
-              :key="messageItem.id"
-              :class="['message-row', messageItem.role]"
+            v-for="messageItem in messages"
+            :key="messageItem.id"
+            :class="['message-row', messageItem.role]"
           >
             <div v-if="messageItem.role === 'user'" class="message-actions">
               <button
-                  class="message-action-button"
-                  type="button"
-                  title="编辑消息"
-                  aria-label="编辑消息"
-                  :disabled="sending || !messageItem.content"
-                  @click.stop="editUserMessage(messageItem)"
+                class="message-action-button"
+                type="button"
+                title="编辑消息"
+                aria-label="编辑消息"
+                :disabled="sending || !messageItem.content"
+                @click.stop="editUserMessage(messageItem)"
               >
                 <n-icon>
-                  <Pencil/>
+                  <Pencil />
                 </n-icon>
               </button>
               <button
-                  class="message-action-button"
-                  type="button"
-                  title="复制消息"
-                  aria-label="复制消息"
-                  :disabled="!messageItem.content"
-                  @click.stop="copyMessage(messageItem)"
+                class="message-action-button"
+                type="button"
+                title="复制消息"
+                aria-label="复制消息"
+                :disabled="!messageItem.content"
+                @click.stop="copyMessage(messageItem)"
               >
                 <n-icon>
-                  <Copy/>
+                  <Copy />
                 </n-icon>
               </button>
               <button
-                  class="message-action-button"
-                  type="button"
-                  title="重新发送"
-                  aria-label="重新发送"
-                  :disabled="sending || !messageItem.content"
-                  @click.stop="resendUserMessage(messageItem)"
+                class="message-action-button"
+                type="button"
+                title="重新发送"
+                aria-label="重新发送"
+                :disabled="sending || !messageItem.content"
+                @click.stop="resendUserMessage(messageItem)"
               >
                 <n-icon>
-                  <RotateCcw/>
+                  <RotateCcw />
                 </n-icon>
               </button>
             </div>
@@ -202,19 +203,27 @@
               <div class="message-meta">
                 <span :class="['message-avatar', messageItem.role]">
                   <n-icon>
-                    <CircleUserRound v-if="messageItem.role === 'user'"/>
-                    <Sparkles v-else/>
+                    <CircleUserRound v-if="messageItem.role === 'user'" />
+                    <Sparkles v-else />
                   </n-icon>
                 </span>
                 <time>{{ messageItem.time }}</time>
               </div>
               <div
-                  v-if="messageItem.role === 'assistant' && messageItem.content"
-                  class="message-content markdown-body"
-                  v-html="renderMarkdown(messageItem.content, messageItem.typing)"
+                v-if="messageItem.role === 'assistant' && messageItem.content"
+                class="message-content markdown-body"
+                v-html="renderMarkdown(messageItem.content, messageItem.typing)"
               />
-              <div v-else
-                   :class="['message-content', { typing: messageItem.typing, waiting: messageItem.typing && !messageItem.content }]">
+              <div
+                v-else
+                :class="[
+                  'message-content',
+                  {
+                    typing: messageItem.typing,
+                    waiting: messageItem.typing && !messageItem.content,
+                  },
+                ]"
+              >
                 {{ messageItem.content || (messageItem.typing ? '思考中...' : '') }}
               </div>
 
@@ -222,24 +231,27 @@
                 <div class="section-label">知识库引用</div>
                 <div class="citation-list">
                   <button
-                      v-for="reference in messageItem.references"
-                      :key="reference.documentId"
-                      class="citation-item"
-                      type="button"
-                      @click="downloadReference(reference)"
+                    v-for="reference in messageItem.references"
+                    :key="reference.documentId"
+                    class="citation-item"
+                    type="button"
+                    @click="downloadReference(reference)"
                   >
                     {{ reference.documentName }}
                   </button>
                 </div>
               </div>
 
-              <div v-if="messageItem.role === 'user' && messageItem.files?.length" class="references session-files">
+              <div
+                v-if="messageItem.role === 'user' && messageItem.files?.length"
+                class="references session-files"
+              >
                 <div class="section-label">附件</div>
                 <div class="citation-list">
                   <span
-                      v-for="file in messageItem.files"
-                      :key="file.fileId"
-                      class="citation-item file-source"
+                    v-for="file in messageItem.files"
+                    :key="file.fileId"
+                    class="citation-item file-source"
                   >
                     {{ file.fileName }}
                   </span>
@@ -249,23 +261,23 @@
               <div v-if="messageItem.trace" class="trace-block">
                 <div class="section-label">检索 Trace</div>
                 <n-code
-                    :code="JSON.stringify(messageItem.trace, null, 2)"
-                    language="json"
-                    word-wrap
+                  :code="JSON.stringify(messageItem.trace, null, 2)"
+                  language="json"
+                  word-wrap
                 />
               </div>
             </div>
             <div v-if="messageItem.role === 'assistant'" class="message-actions">
               <button
-                  class="message-action-button"
-                  type="button"
-                  title="复制消息"
-                  aria-label="复制消息"
-                  :disabled="!messageItem.content"
-                  @click.stop="copyMessage(messageItem)"
+                class="message-action-button"
+                type="button"
+                title="复制消息"
+                aria-label="复制消息"
+                :disabled="!messageItem.content"
+                @click.stop="copyMessage(messageItem)"
               >
                 <n-icon>
-                  <Copy/>
+                  <Copy />
                 </n-icon>
               </button>
             </div>
@@ -273,37 +285,44 @@
         </section>
 
         <div
-            v-if="messageScrollbarVisible"
-            :class="['message-scrollbar', { active: messageScrollbarActive }]"
-            aria-hidden="true"
-            @mouseenter="revealMessageScrollbar"
+          v-if="messageScrollbarVisible"
+          :class="['message-scrollbar', { active: messageScrollbarActive }]"
+          aria-hidden="true"
+          @mouseenter="revealMessageScrollbar"
         >
           <button
-              class="message-scrollbar-button"
-              type="button"
-              tabindex="-1"
-              @mousedown.prevent="startArrowScroll(-1)"
-              @mouseup="stopArrowScroll"
-              @mouseleave="stopArrowScroll"
+            class="message-scrollbar-button"
+            type="button"
+            tabindex="-1"
+            @mousedown.prevent="startArrowScroll(-1)"
+            @mouseup="stopArrowScroll"
+            @mouseleave="stopArrowScroll"
           >
             <span class="message-scrollbar-arrow up"></span>
           </button>
-          <div ref="messageScrollbarTrack" class="message-scrollbar-track" @mousedown.prevent="handleTrackMouseDown">
+          <div
+            ref="messageScrollbarTrack"
+            class="message-scrollbar-track"
+            @mousedown.prevent="handleTrackMouseDown"
+          >
             <button
-                class="message-scrollbar-thumb"
-                type="button"
-                tabindex="-1"
-                :style="{ height: `${messageScrollbarThumbHeight}px`, transform: `translateY(${messageScrollbarThumbTop}px)` }"
-                @mousedown.prevent.stop="startThumbDrag"
+              class="message-scrollbar-thumb"
+              type="button"
+              tabindex="-1"
+              :style="{
+                height: `${messageScrollbarThumbHeight}px`,
+                transform: `translateY(${messageScrollbarThumbTop}px)`,
+              }"
+              @mousedown.prevent.stop="startThumbDrag"
             ></button>
           </div>
           <button
-              class="message-scrollbar-button"
-              type="button"
-              tabindex="-1"
-              @mousedown.prevent="startArrowScroll(1)"
-              @mouseup="stopArrowScroll"
-              @mouseleave="stopArrowScroll"
+            class="message-scrollbar-button"
+            type="button"
+            tabindex="-1"
+            @mousedown.prevent="startArrowScroll(1)"
+            @mouseup="stopArrowScroll"
+            @mouseleave="stopArrowScroll"
           >
             <span class="message-scrollbar-arrow down"></span>
           </button>
@@ -312,24 +331,28 @@
 
       <footer :class="['composer', { 'voice-active': voiceSessionActive }]">
         <input
-            ref="chatFileInputRef"
-            class="chat-file-input"
-            type="file"
-            multiple
-            @change="handleChatFileChange"
+          ref="chatFileInputRef"
+          class="chat-file-input"
+          type="file"
+          multiple
+          @change="handleChatFileChange"
         />
         <div v-if="visibleChatFiles.length || showRagContextScope" class="composer-context-row">
           <div v-if="visibleChatFiles.length" class="chat-file-strip">
             <span
-                v-for="file in visibleChatFiles"
-                :key="file.key"
-                :class="['chat-file-chip', `is-${file.status}`, { selected: file.selected, selectable: file.selectable }]"
-                :title="fileDisplayTitle(file)"
-                role="button"
-                tabindex="0"
-                @click="toggleChatFileSelection(file)"
-                @keydown.enter.prevent="toggleChatFileSelection(file)"
-                @keydown.space.prevent="toggleChatFileSelection(file)"
+              v-for="file in visibleChatFiles"
+              :key="file.key"
+              :class="[
+                'chat-file-chip',
+                `is-${file.status}`,
+                { selected: file.selected, selectable: file.selectable },
+              ]"
+              :title="fileDisplayTitle(file)"
+              role="button"
+              tabindex="0"
+              @click="toggleChatFileSelection(file)"
+              @keydown.enter.prevent="toggleChatFileSelection(file)"
+              @keydown.space.prevent="toggleChatFileSelection(file)"
             >
               <span class="chat-file-indicator" aria-hidden="true"></span>
               <span class="chat-file-name">{{ file.fileName }}</span>
@@ -340,18 +363,18 @@
             <span class="context-scope-label">回答范围</span>
             <div ref="contextScopeToggleRef" class="context-scope-toggle">
               <span
-                  :class="['context-scope-pill', { animated: contextScopePillAnimated }]"
-                  :style="contextScopePillStyle"
-                  aria-hidden="true"
+                :class="['context-scope-pill', { animated: contextScopePillAnimated }]"
+                :style="contextScopePillStyle"
+                aria-hidden="true"
               ></span>
               <button
-                  v-for="(option, index) in contextScopeOptions"
-                  :key="option.value"
-                  :ref="(el) => setContextScopeButtonRef(el, index)"
-                  type="button"
-                  :class="['context-scope-option', { active: ragContextScope === option.value }]"
-                  :aria-pressed="ragContextScope === option.value"
-                  @click="selectRagContextScope(option.value)"
+                v-for="(option, index) in contextScopeOptions"
+                :key="option.value"
+                :ref="(el) => setContextScopeButtonRef(el, index)"
+                type="button"
+                :class="['context-scope-option', { active: ragContextScope === option.value }]"
+                :aria-pressed="ragContextScope === option.value"
+                @click="selectRagContextScope(option.value)"
               >
                 {{ option.label }}
               </button>
@@ -360,13 +383,13 @@
         </div>
         <div class="composer-input-shell">
           <n-input
-              ref="composerInputRef"
-              class="composer-input"
-              v-model:value="draft"
-              type="textarea"
-              :placeholder="composerPlaceholder"
-              :autosize="{ minRows: 2, maxRows: 5 }"
-              @keydown.enter="handleEnter"
+            ref="composerInputRef"
+            class="composer-input"
+            v-model:value="draft"
+            type="textarea"
+            :placeholder="composerPlaceholder"
+            :autosize="{ minRows: 2, maxRows: 5 }"
+            @keydown.enter="handleEnter"
           />
           <div v-if="voiceSessionActive" class="composer-voice-chip" aria-hidden="true">
             <span>{{ voiceStatusTitle }}</span>
@@ -376,45 +399,45 @@
           </div>
         </div>
         <button
-            type="button"
-            :class="['composer-button', 'voice-button', { recording: voiceSessionActive }]"
-            :style="voiceButtonStyle"
-            :disabled="voiceButtonDisabled"
-            :title="voiceButtonTitle"
-            :aria-label="voiceButtonTitle"
-            @click="toggleVoiceInput"
+          type="button"
+          :class="['composer-button', 'voice-button', { recording: voiceSessionActive }]"
+          :style="voiceButtonStyle"
+          :disabled="voiceButtonDisabled"
+          :title="voiceButtonTitle"
+          :aria-label="voiceButtonTitle"
+          @click="toggleVoiceInput"
         >
           <span class="voice-mic-visual" aria-hidden="true">
             <span class="voice-idle-mark">
               <i v-for="index in 4" :key="index"></i>
             </span>
             <span class="voice-mic-core">
-              <Mic class="voice-mic-icon"/>
+              <Mic class="voice-mic-icon" />
             </span>
           </span>
         </button>
         <n-button
-            class="composer-button attachment-button"
-            secondary
-            :loading="chatFileUploading"
-            :disabled="attachmentDisabled"
-            :title="attachmentButtonTitle"
-            :aria-label="attachmentButtonTitle"
-            @click="openChatFilePicker"
+          class="composer-button attachment-button"
+          secondary
+          :loading="chatFileUploading"
+          :disabled="attachmentDisabled"
+          :title="attachmentButtonTitle"
+          :aria-label="attachmentButtonTitle"
+          @click="openChatFilePicker"
         >
           <template #icon>
             <n-icon>
-              <FileUp/>
+              <FileUp />
             </n-icon>
           </template>
           附件
         </n-button>
         <n-button
-            v-if="sending && streamEnabled"
-            class="composer-button streaming-stop-button"
-            type="warning"
-            secondary
-            @click="stopStreaming"
+          v-if="sending && streamEnabled"
+          class="composer-button streaming-stop-button"
+          type="warning"
+          secondary
+          @click="stopStreaming"
         >
           <template #icon>
             <span class="stop-indicator" aria-hidden="true"></span>
@@ -422,15 +445,15 @@
           停止
         </n-button>
         <n-button
-            v-else
-            class="composer-button"
-            type="primary"
-            :disabled="!canSend"
-            @click="sendMessage"
+          v-else
+          class="composer-button"
+          type="primary"
+          :disabled="!canSend"
+          @click="sendMessage"
         >
           <template #icon>
             <n-icon>
-              <Send/>
+              <Send />
             </n-icon>
           </template>
           {{ sendButtonText }}
@@ -443,52 +466,50 @@
         <n-form label-placement="top">
           <n-form-item label="指定文件">
             <n-select
-                v-model:value="ragForm.documentId"
-                :options="scopeDocumentOptions"
-                :loading="scopeDocumentsLoading"
-                clearable
-                filterable
-                placeholder="全部文件，不限定"
-                @focus="loadScopeDocuments"
+              v-model:value="ragForm.documentId"
+              :options="scopeDocumentOptions"
+              :loading="scopeDocumentsLoading"
+              clearable
+              filterable
+              placeholder="全部文件，不限定"
+              @focus="loadScopeDocuments"
             />
           </n-form-item>
           <n-form-item label="文档类型">
             <n-select
-                v-model:value="ragForm.documentType"
-                :options="documentTypeOptions"
-                clearable
-                placeholder="全部类型，不限定"
+              v-model:value="ragForm.documentType"
+              :options="documentTypeOptions"
+              clearable
+              placeholder="全部类型，不限定"
             />
           </n-form-item>
         </n-form>
         <template #footer>
           <div class="scope-drawer-actions">
-            <n-button tertiary @click="clearRetrievalScope">
-              清除范围
-            </n-button>
+            <n-button tertiary @click="clearRetrievalScope"> 清除范围 </n-button>
           </div>
         </template>
       </n-drawer-content>
     </n-drawer>
 
     <n-modal
-        v-model:show="renameModalVisible"
-        preset="card"
-        title="重命名对话"
-        :style="{ width: '420px', maxWidth: 'calc(100vw - 32px)' }"
-        :bordered="false"
-        :segmented="{ content: true, action: true }"
-        @after-leave="resetRenameForm"
+      v-model:show="renameModalVisible"
+      preset="card"
+      title="重命名对话"
+      :style="{ width: '420px', maxWidth: 'calc(100vw - 32px)' }"
+      :bordered="false"
+      :segmented="{ content: true, action: true }"
+      @after-leave="resetRenameForm"
     >
       <n-form label-placement="top" @submit.prevent="submitRename">
         <n-form-item label="对话标题">
           <n-input
-              ref="renameInputRef"
-              v-model:value="renameForm.title"
-              maxlength="80"
-              show-count
-              placeholder="输入新的对话标题"
-              @keydown.enter.prevent="submitRename"
+            ref="renameInputRef"
+            v-model:value="renameForm.title"
+            maxlength="80"
+            show-count
+            placeholder="输入新的对话标题"
+            @keydown.enter.prevent="submitRename"
           />
         </n-form-item>
       </n-form>
@@ -497,8 +518,12 @@
           <n-button tertiary :disabled="renameSubmitting" @click="renameModalVisible = false">
             取消
           </n-button>
-          <n-button type="primary" :loading="renameSubmitting" :disabled="!renameForm.title.trim()"
-                    @click="submitRename">
+          <n-button
+            type="primary"
+            :loading="renameSubmitting"
+            :disabled="!renameForm.title.trim()"
+            @click="submitRename"
+          >
             保存
           </n-button>
         </div>
@@ -506,18 +531,18 @@
     </n-modal>
 
     <n-modal
-        v-model:show="deleteModalVisible"
-        preset="dialog"
-        type="warning"
-        title="删除对话"
-        positive-text="删除"
-        negative-text="取消"
-        :style="{ width: '380px', maxWidth: 'calc(100vw - 32px)' }"
-        :positive-button-props="{ loading: deleteSubmitting, type: 'error' }"
-        :negative-button-props="{ disabled: deleteSubmitting }"
-        @positive-click="submitDelete"
-        @negative-click="deleteModalVisible = false"
-        @after-leave="resetDeleteForm"
+      v-model:show="deleteModalVisible"
+      preset="dialog"
+      type="warning"
+      title="删除对话"
+      positive-text="删除"
+      negative-text="取消"
+      :style="{ width: '380px', maxWidth: 'calc(100vw - 32px)' }"
+      :positive-button-props="{ loading: deleteSubmitting, type: 'error' }"
+      :negative-button-props="{ disabled: deleteSubmitting }"
+      @positive-click="submitDelete"
+      @negative-click="deleteModalVisible = false"
+      @after-leave="resetDeleteForm"
     >
       <div class="delete-dialog-content">
         <p>删除后该对话会从历史列表中移除</p>
@@ -530,10 +555,10 @@
 <script setup lang="ts">
 import DOMPurify from 'dompurify'
 import MarkdownIt from 'markdown-it'
-import {computed, nextTick, onMounted, onUnmounted, reactive, ref, watch} from 'vue'
-import type {ComponentPublicInstance} from 'vue'
-import {useMessage} from 'naive-ui'
-import type {InputInst} from 'naive-ui'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import type { ComponentPublicInstance } from 'vue'
+import { useMessage } from 'naive-ui'
+import type { InputInst } from 'naive-ui'
 import {
   Bot,
   CircleUserRound,
@@ -550,7 +575,7 @@ import {
   Sparkles,
   SquarePen,
   Star,
-  Trash2
+  Trash2,
 } from 'lucide-vue-next'
 
 import {
@@ -566,10 +591,10 @@ import {
   updateChatFlags,
   uploadChatFiles,
 } from '@/api/chat'
-import {apiUrl, resolveAsrWebSocketUrl} from '@/api/base'
-import {fetchStorageDocuments} from '@/api/storage'
-import {useWorkspaceStore} from '@/stores/workspace'
-import {formatVoiceInputStartupError} from '@/utils/media-errors'
+import { apiUrl, resolveAsrWebSocketUrl } from '@/api/base'
+import { fetchStorageDocuments } from '@/api/storage'
+import { useWorkspaceStore } from '@/stores/workspace'
+import { formatVoiceInputStartupError } from '@/utils/media-errors'
 import type {
   ChatContextScope,
   ChatOptions,
@@ -579,9 +604,9 @@ import type {
   MetaContextFile,
   RetrievalDocumentReference,
   RetrievalTrace,
-  StorageDocument
+  StorageDocument,
 } from '@/types/api'
-import type {ChatStreamHandle} from '@/api/chat'
+import type { ChatStreamHandle } from '@/api/chat'
 
 interface ChatMessage {
   id: string
@@ -670,19 +695,19 @@ const deleteForm = reactive({
 })
 
 const modeOptions = [
-  {label: '知识问答', value: 'rag'},
-  {label: '普通聊天', value: 'plain'},
+  { label: '知识问答', value: 'rag' },
+  { label: '普通聊天', value: 'plain' },
 ]
 
 const documentTypeOptions = [
-  {label: 'Markdown', value: 'markdown'},
-  {label: 'PDF', value: 'pdf'},
-  {label: '文本', value: 'txt'},
-  {label: 'JSON', value: 'json'},
-  {label: 'Word', value: 'docx'},
-  {label: 'Excel', value: 'xlsx'},
-  {label: 'CSV', value: 'csv'},
-  {label: '通用解析', value: 'tika'},
+  { label: 'Markdown', value: 'markdown' },
+  { label: 'PDF', value: 'pdf' },
+  { label: '文本', value: 'txt' },
+  { label: 'JSON', value: 'json' },
+  { label: 'Word', value: 'docx' },
+  { label: 'Excel', value: 'xlsx' },
+  { label: 'CSV', value: 'csv' },
+  { label: '通用解析', value: 'tika' },
 ]
 
 const scopeDocumentOptions = computed(() => {
@@ -744,7 +769,9 @@ markdown.renderer.rules.link_open = (tokens, idx, options, env, self) => {
   } else if (token.attrs?.[relIndex]) {
     token.attrs[relIndex][1] = 'noopener noreferrer'
   }
-  return defaultLinkOpenRenderer ? defaultLinkOpenRenderer(tokens, idx, options, env, self) : self.renderToken(tokens, idx, options)
+  return defaultLinkOpenRenderer
+    ? defaultLinkOpenRenderer(tokens, idx, options, env, self)
+    : self.renderToken(tokens, idx, options)
 }
 markdown.renderer.rules.fence = (tokens, idx, options, env, self) => {
   const token = tokens[idx]
@@ -753,8 +780,8 @@ markdown.renderer.rules.fence = (tokens, idx, options, env, self) => {
   }
   const language = token.info.trim().split(/\s+/)[0] || 'code'
   const renderedCode = defaultFenceRenderer
-      ? defaultFenceRenderer(tokens, idx, options, env, self)
-      : `<pre><code>${markdown.utils.escapeHtml(token.content)}</code></pre>`
+    ? defaultFenceRenderer(tokens, idx, options, env, self)
+    : `<pre><code>${markdown.utils.escapeHtml(token.content)}</code></pre>`
   return `<div class="code-block"><div class="code-block-head"><span>${markdown.utils.escapeHtml(language)}</span><button type="button" data-copy-code>复制代码</button></div>${renderedCode}</div>`
 }
 
@@ -762,12 +789,14 @@ const ragForm = reactive({
   documentId: null as string | null,
   documentType: null as string | null,
 })
-const contextScopeOptions: Array<{ value: ChatContextScope, label: string }> = [
-  {value: 'FILES_ONLY', label: '附件'},
-  {value: 'FILES_AND_KNOWLEDGE', label: '附件+知识库'},
+const contextScopeOptions: Array<{ value: ChatContextScope; label: string }> = [
+  { value: 'FILES_ONLY', label: '附件' },
+  { value: 'FILES_AND_KNOWLEDGE', label: '附件+知识库' },
 ]
 
-const activeChat = computed(() => chats.value.find((item) => item.id === activeMetaChatId.value) || null)
+const activeChat = computed(
+  () => chats.value.find((item) => item.id === activeMetaChatId.value) || null,
+)
 const visibleChatFiles = computed<ChatFileItem[]>(() => [
   ...pendingChatFilePlaceholders.value,
   ...chatFiles.value.map((file) => ({
@@ -780,23 +809,40 @@ const visibleChatFiles = computed<ChatFileItem[]>(() => [
     selectable: file.parseStatus === 'READY',
   })),
 ])
-const currentFileScopeKey = computed(() => fileScopeKey({
-  chatId: workspace.chatId,
-  tenantId: workspace.tenantId,
-  userId: workspace.userId,
-}))
-const chatFileUploading = computed(() => uploadingChatFileScopeKey.value === currentFileScopeKey.value)
-const fileContextBusy = computed(() => chatFileUploading.value || visibleChatFiles.value.some((file) =>
-    file.status === 'uploading' || file.status === 'parsing'))
+const currentFileScopeKey = computed(() =>
+  fileScopeKey({
+    chatId: workspace.chatId,
+    tenantId: workspace.tenantId,
+    userId: workspace.userId,
+  }),
+)
+const chatFileUploading = computed(
+  () => uploadingChatFileScopeKey.value === currentFileScopeKey.value,
+)
+const fileContextBusy = computed(
+  () =>
+    chatFileUploading.value ||
+    visibleChatFiles.value.some((file) => file.status === 'uploading' || file.status === 'parsing'),
+)
 const selectedReadyFileCount = computed(() => selectedReadyChatFiles().length)
-const voiceSessionActive = computed(() => voiceRecording.value || voiceConnecting.value || voiceUiState.value !== 'idle')
-const showRagContextScope = computed(() => chatMode.value === 'rag' && selectedReadyFileCount.value > 0)
-const canSend = computed(() => Boolean(draft.value.trim()) && !sending.value && !fileContextBusy.value)
-const sendButtonText = computed(() => fileContextBusy.value ? '处理中' : '发送')
-const composerPlaceholder = computed(() => voiceSessionActive.value ? '' : '输入问题，Enter 发送，Shift + Enter 换行')
+const voiceSessionActive = computed(
+  () => voiceRecording.value || voiceConnecting.value || voiceUiState.value !== 'idle',
+)
+const showRagContextScope = computed(
+  () => chatMode.value === 'rag' && selectedReadyFileCount.value > 0,
+)
+const canSend = computed(
+  () => Boolean(draft.value.trim()) && !sending.value && !fileContextBusy.value,
+)
+const sendButtonText = computed(() => (fileContextBusy.value ? '处理中' : '发送'))
+const composerPlaceholder = computed(() =>
+  voiceSessionActive.value ? '' : '输入问题，Enter 发送，Shift + Enter 换行',
+)
 const attachmentDisabled = computed(() => sending.value || fileContextBusy.value)
 const attachmentButtonTitle = computed(() => '添加附件')
-const voiceButtonDisabled = computed(() => !voiceSessionActive.value && (sending.value || fileContextBusy.value))
+const voiceButtonDisabled = computed(
+  () => !voiceSessionActive.value && (sending.value || fileContextBusy.value),
+)
 const voiceStatusTitle = computed(() => {
   switch (voiceUiState.value) {
     case 'connecting':
@@ -828,8 +874,8 @@ const voiceButtonStyle = computed(() => {
   return {
     '--voice-core-scale': `${1 + level * 0.08}`,
     '--voice-level-glow': `${28 + level * 20}px`,
-    '--voice-level-opacity': `${0.16 + level * 0.20}`,
-    '--voice-level-ring-opacity': `${0.14 + level * 0.20}`,
+    '--voice-level-opacity': `${0.16 + level * 0.2}`,
+    '--voice-level-ring-opacity': `${0.14 + level * 0.2}`,
   }
 })
 const segmentedStreamMode = computed({
@@ -860,13 +906,13 @@ const streamSwitchCssVars = {
  * @param checked 是否选中右侧整段出模式
  * @return 开关轨道样式
  */
-function streamSwitchRailStyle({checked}: { checked: boolean }) {
+function streamSwitchRailStyle({ checked }: { checked: boolean }) {
   const streamMode = !checked
   return {
     background: streamMode ? 'rgba(20, 184, 166, 0.34)' : 'rgba(59, 130, 246, 0.30)',
     boxShadow: streamMode
-        ? 'inset 0 0 0 1px rgba(45, 212, 191, 0.34)'
-        : 'inset 0 0 0 1px rgba(96, 165, 250, 0.34)',
+      ? 'inset 0 0 0 1px rgba(45, 212, 191, 0.34)'
+      : 'inset 0 0 0 1px rgba(96, 165, 250, 0.34)',
   }
 }
 
@@ -916,26 +962,33 @@ onUnmounted(() => {
   window.removeEventListener('resize', handleContextScopeResize)
 })
 
-watch(() => workspace.contextVersion, async () => {
-  stopStreaming()
-  cleanupVoiceInput(true)
-  activeMetaChatId.value = null
-  messages.value = []
-  chatFiles.value = []
-  pendingChatFilePlaceholders.value = []
-  selectedChatFileIds.value = []
-  resetRagContextScope()
-  uploadingChatFileScopeKey.value = null
-  stopChatFilePolling()
-  scopeDocuments.value = []
-  clearRetrievalScope()
-  await loadChats()
-})
+watch(
+  () => workspace.contextVersion,
+  async () => {
+    stopStreaming()
+    cleanupVoiceInput(true)
+    activeMetaChatId.value = null
+    messages.value = []
+    chatFiles.value = []
+    pendingChatFilePlaceholders.value = []
+    selectedChatFileIds.value = []
+    resetRagContextScope()
+    uploadingChatFileScopeKey.value = null
+    stopChatFilePolling()
+    scopeDocuments.value = []
+    clearRetrievalScope()
+    await loadChats()
+  },
+)
 
-watch(messages, async () => {
-  await nextTick()
-  updateMessageScrollbar()
-}, {deep: true})
+watch(
+  messages,
+  async () => {
+    await nextTick()
+    updateMessageScrollbar()
+  },
+  { deep: true },
+)
 
 watch(showRagContextScope, async (visible) => {
   if (!visible) {
@@ -978,7 +1031,9 @@ async function sendMessageContent(content: string) {
   workspace.persist()
   stopStreaming()
   const selectedFiles = selectedReadyChatFiles()
-  messages.value.push(createMessage('user', content, undefined, undefined, undefined, selectedFiles))
+  messages.value.push(
+    createMessage('user', content, undefined, undefined, undefined, selectedFiles),
+  )
   const assistantMessage = reactive(createMessage('assistant', ''))
   assistantMessage.typing = true
   messages.value.push(assistantMessage)
@@ -1015,7 +1070,11 @@ async function sendMessageContent(content: string) {
       if (streamStoppedByUser) return
       typingRenderer.enqueue(payload.content || '')
     },
-    onDone: (payload: { answer?: string, references?: RetrievalDocumentReference[], files?: MetaContextFile[] }) => {
+    onDone: (payload: {
+      answer?: string
+      references?: RetrievalDocumentReference[]
+      files?: MetaContextFile[]
+    }) => {
       if (streamStoppedByUser) return
       assistantMessage.references = payload.references
       typingRenderer.complete(payload.answer)
@@ -1035,7 +1094,13 @@ async function sendMessageContent(content: string) {
   if (streamEnabled.value) {
     sendStreamingMessage(options, selectedFileIds, handlers)
   } else {
-    await sendNonStreamingMessage(options, selectedFileIds, assistantMessage, typingRenderer, failSend)
+    await sendNonStreamingMessage(
+      options,
+      selectedFileIds,
+      assistantMessage,
+      typingRenderer,
+      failSend,
+    )
   }
   selectedChatFileIds.value = []
   resetRagContextScope()
@@ -1062,7 +1127,11 @@ async function toggleVoiceInput() {
  * 浏览器端使用 16 kHz、16 bit、单声道 PCM 分片对接 FunASR WebSocket 2pass 协议
  */
 async function startVoiceInput() {
-  if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+  if (
+    !window.isSecureContext &&
+    location.hostname !== 'localhost' &&
+    location.hostname !== '127.0.0.1'
+  ) {
     message.error('当前页面不是安全上下文，浏览器不会开放麦克风权限')
     return
   }
@@ -1163,16 +1232,18 @@ function openVoiceSocket(runId: number) {
         return
       }
       opened = true
-      socket.send(JSON.stringify({
-        mode: '2pass',
-        wav_name: `meta-ai-console-${Date.now()}`,
-        is_speaking: true,
-        wav_format: 'pcm',
-        chunk_size: [5, 10, 5],
-        chunk_interval: 10,
-        audio_fs: FUNASR_TARGET_SAMPLE_RATE,
-        itn: true,
-      }))
+      socket.send(
+        JSON.stringify({
+          mode: '2pass',
+          wav_name: `meta-ai-console-${Date.now()}`,
+          is_speaking: true,
+          wav_format: 'pcm',
+          chunk_size: [5, 10, 5],
+          chunk_interval: 10,
+          audio_fs: FUNASR_TARGET_SAMPLE_RATE,
+          itn: true,
+        }),
+      )
       safeResolve()
     }
     socket.onmessage = (event) => handleVoiceSocketMessage(event, runId, socket)
@@ -1189,7 +1260,9 @@ function openVoiceSocket(runId: number) {
     }
     socket.onclose = () => {
       if (!opened) {
-        safeReject(new Error(isCurrentVoiceRun(runId) ? '语音服务连接失败，请稍后重试' : '语音连接已取消'))
+        safeReject(
+          new Error(isCurrentVoiceRun(runId) ? '语音服务连接失败，请稍后重试' : '语音连接已取消'),
+        )
         return
       }
       if (isCurrentVoiceRun(runId) && (voiceRecording.value || voiceConnecting.value)) {
@@ -1263,7 +1336,8 @@ function updateVoiceActivity(input: Float32Array) {
     voiceUiState.value = 'recognizing'
     return
   }
-  if (voiceUiState.value === 'recognizing' && Date.now() - voiceLastActiveAt < VOICE_ACTIVE_HOLD_MS) return
+  if (voiceUiState.value === 'recognizing' && Date.now() - voiceLastActiveAt < VOICE_ACTIVE_HOLD_MS)
+    return
   if (voiceUiState.value === 'voiceReady' || voiceUiState.value === 'recognizing') {
     voiceUiState.value = 'listening'
   }
@@ -1328,7 +1402,7 @@ function handleVoiceSocketMessage(event: MessageEvent<string>, runId: number, so
   if (!isCurrentVoiceRun(runId) || voiceSocket !== socket) return
   if (typeof event.data !== 'string') return
   try {
-    const payload = JSON.parse(event.data) as { mode?: string, text?: string }
+    const payload = JSON.parse(event.data) as { mode?: string; text?: string }
     if (!payload.text) return
     voiceUiState.value = 'recognizing'
     if (payload.mode === '2pass-offline' || payload.mode === 'offline') {
@@ -1366,9 +1440,11 @@ function stopVoiceInput(sendEnd = true) {
   flushVoiceSamples()
   const socket = voiceSocket
   if (sendEnd && socket?.readyState === WebSocket.OPEN) {
-    socket.send(JSON.stringify({
-      is_speaking: false,
-    }))
+    socket.send(
+      JSON.stringify({
+        is_speaking: false,
+      }),
+    )
   }
   cleanupVoiceAudio()
   if (socket?.readyState === WebSocket.OPEN || socket?.readyState === WebSocket.CONNECTING) {
@@ -1420,7 +1496,7 @@ async function syncVoiceComposerViewport() {
     if (!textarea) return
     const top = textarea.scrollHeight
     textarea.scrollTop = top
-    composerInputRef.value?.scrollTo({top})
+    composerInputRef.value?.scrollTo({ top })
   } finally {
     voiceComposerSyncPending = false
   }
@@ -1504,11 +1580,16 @@ async function restartVoiceSocketForActiveSession() {
   voicePendingSamples = new Int16Array()
   try {
     if (previousSocket?.readyState === WebSocket.OPEN) {
-      previousSocket.send(JSON.stringify({
-        is_speaking: false,
-      }))
+      previousSocket.send(
+        JSON.stringify({
+          is_speaking: false,
+        }),
+      )
     }
-    if (previousSocket?.readyState === WebSocket.OPEN || previousSocket?.readyState === WebSocket.CONNECTING) {
+    if (
+      previousSocket?.readyState === WebSocket.OPEN ||
+      previousSocket?.readyState === WebSocket.CONNECTING
+    ) {
       previousSocket.close()
     }
     if (voiceSocket === previousSocket) {
@@ -1609,7 +1690,11 @@ function cleanupVoiceAudio() {
  * @param selectedFileIds 本轮显式选择的会话文件 ID
  * @param handlers SSE 事件处理器
  */
-function sendStreamingMessage(options: ChatOptions, selectedFileIds: string[], handlers: Parameters<typeof streamPlainChatJson>[2]) {
+function sendStreamingMessage(
+  options: ChatOptions,
+  selectedFileIds: string[],
+  handlers: Parameters<typeof streamPlainChatJson>[2],
+) {
   if (chatMode.value === 'plain') {
     activeStream = streamPlainChatJson(options, selectedFileIds, handlers)
   } else {
@@ -1629,13 +1714,16 @@ function sendStreamingMessage(options: ChatOptions, selectedFileIds: string[], h
  * @param typingRenderer 打字渲染器
  * @param failSend 失败处理函数
  */
-async function sendNonStreamingMessage(options: ChatOptions,
-                                       selectedFileIds: string[],
-                                       assistantMessage: ChatMessage,
-                                       typingRenderer: TypingRenderer,
-                                       failSend: (errorMessage: string) => void) {
+async function sendNonStreamingMessage(
+  options: ChatOptions,
+  selectedFileIds: string[],
+  assistantMessage: ChatMessage,
+  typingRenderer: TypingRenderer,
+  failSend: (errorMessage: string) => void,
+) {
   try {
-    const response = chatMode.value === 'plain'
+    const response =
+      chatMode.value === 'plain'
         ? await sendPlainNonStreamingMessage(options, selectedFileIds, assistantMessage)
         : await sendRagNonStreamingMessage(options, selectedFileIds, assistantMessage)
     if (streamStoppedByUser) return
@@ -1657,9 +1745,11 @@ async function sendNonStreamingMessage(options: ChatOptions,
  * @param assistantMessage 助手消息对象
  * @return 普通聊天响应
  */
-async function sendPlainNonStreamingMessage(options: ChatOptions,
-                                            selectedFileIds: string[],
-                                            assistantMessage: ChatMessage) {
+async function sendPlainNonStreamingMessage(
+  options: ChatOptions,
+  selectedFileIds: string[],
+  assistantMessage: ChatMessage,
+) {
   const response = await sendPlainChatJson(options, selectedFileIds)
   assistantMessage.files = response.files
   return response
@@ -1673,9 +1763,11 @@ async function sendPlainNonStreamingMessage(options: ChatOptions,
  * @param assistantMessage 助手消息对象
  * @return 知识问答响应
  */
-async function sendRagNonStreamingMessage(options: ChatOptions,
-                                          selectedFileIds: string[],
-                                          assistantMessage: ChatMessage) {
+async function sendRagNonStreamingMessage(
+  options: ChatOptions,
+  selectedFileIds: string[],
+  assistantMessage: ChatMessage,
+) {
   const response = await sendRagChatJson(options, selectedFileIds)
   assistantMessage.references = response.references
   assistantMessage.files = response.files
@@ -1735,7 +1827,10 @@ function selectRagContextScope(value: ChatContextScope) {
  * @param element 按钮元素或组件卸载时的 null
  * @param index 选项下标
  */
-function setContextScopeButtonRef(element: Element | ComponentPublicInstance | null, index: number) {
+function setContextScopeButtonRef(
+  element: Element | ComponentPublicInstance | null,
+  index: number,
+) {
   contextScopeButtonRefs.value[index] = element instanceof HTMLButtonElement ? element : null
 }
 
@@ -1790,8 +1885,12 @@ function resetRagContextScope() {
  * <p>
  * 上传和轮询都是异步返回，必须用 tenantId、userId 和 chatId 防止切换会话后串位
  */
-function isCurrentFileScope(scope: { chatId: string, tenantId: string, userId: string }) {
-  return scope.chatId === workspace.chatId && scope.tenantId === workspace.tenantId && scope.userId === workspace.userId
+function isCurrentFileScope(scope: { chatId: string; tenantId: string; userId: string }) {
+  return (
+    scope.chatId === workspace.chatId &&
+    scope.tenantId === workspace.tenantId &&
+    scope.userId === workspace.userId
+  )
 }
 
 /**
@@ -1800,7 +1899,7 @@ function isCurrentFileScope(scope: { chatId: string, tenantId: string, userId: s
  * <p>
  * 上传中状态按租户、用户和会话隔离，避免长耗时上传影响切换后的其他会话
  */
-function fileScopeKey(scope: { chatId: string, tenantId: string, userId: string }) {
+function fileScopeKey(scope: { chatId: string; tenantId: string; userId: string }) {
   return `${scope.tenantId}:${scope.userId}:${scope.chatId}`
 }
 
@@ -1813,12 +1912,12 @@ function fileScopeKey(scope: { chatId: string, tenantId: string, userId: string 
 function selectedReadyChatFiles() {
   const selected = new Set(selectedChatFileIds.value)
   return chatFiles.value
-      .filter((file) => file.parseStatus === 'READY' && selected.has(file.fileId))
-      .map((file) => ({
-        fileId: file.fileId,
-        fileName: file.fileName,
-        documentType: file.documentType || '',
-      }))
+    .filter((file) => file.parseStatus === 'READY' && selected.has(file.fileId))
+    .map((file) => ({
+      fileId: file.fileId,
+      fileName: file.fileName,
+      documentType: file.documentType || '',
+    }))
 }
 
 /**
@@ -1855,7 +1954,9 @@ function mergeChatFiles(currentFiles: MetaChatFileItem[], nextFiles: MetaChatFil
   const merged = new Map<string, MetaChatFileItem>()
   currentFiles.forEach((file) => merged.set(file.fileId, file))
   nextFiles.forEach((file) => merged.set(file.fileId, file))
-  return Array.from(merged.values()).sort((left, right) => toTime(right.createdAt) - toTime(left.createdAt))
+  return Array.from(merged.values()).sort(
+    (left, right) => toTime(right.createdAt) - toTime(left.createdAt),
+  )
 }
 
 /**
@@ -1924,7 +2025,9 @@ function stopChatFilePolling() {
  * 判断当前会话是否仍有处理中附件
  */
 function hasProcessingChatFiles() {
-  return chatFiles.value.some((file) => file.parseStatus === 'UPLOADED' || file.parseStatus === 'PARSING')
+  return chatFiles.value.some(
+    (file) => file.parseStatus === 'UPLOADED' || file.parseStatus === 'PARSING',
+  )
 }
 
 function openChatFilePicker() {
@@ -1952,10 +2055,18 @@ async function handleChatFileChange(event: Event) {
     status: 'uploading',
   }))
   try {
-    const uploadedFiles = await uploadChatFiles(uploadScope.chatId, uploadScope.tenantId, uploadScope.userId, files)
+    const uploadedFiles = await uploadChatFiles(
+      uploadScope.chatId,
+      uploadScope.tenantId,
+      uploadScope.userId,
+      files,
+    )
     if (isCurrentFileScope(uploadScope)) {
       chatFiles.value = mergeChatFiles(chatFiles.value, uploadedFiles)
-      selectedChatFileIds.value = mergeSelectedFileIds(selectedChatFileIds.value, uploadedFiles.map((file) => file.fileId))
+      selectedChatFileIds.value = mergeSelectedFileIds(
+        selectedChatFileIds.value,
+        uploadedFiles.map((file) => file.fileId),
+      )
       resetRagContextScope()
       pendingChatFilePlaceholders.value = []
       startChatFilePolling()
@@ -1978,11 +2089,13 @@ async function handleChatFileChange(event: Event) {
  * <p>
  * 未传 scope 时读取当前工作区，上传完成回刷时传入上传开始时的 scope，避免切换会话后串位
  */
-async function loadChatFiles(scope = {
-  chatId: workspace.chatId,
-  tenantId: workspace.tenantId,
-  userId: workspace.userId,
-}) {
+async function loadChatFiles(
+  scope = {
+    chatId: workspace.chatId,
+    tenantId: workspace.tenantId,
+    userId: workspace.userId,
+  },
+) {
   try {
     const files = await fetchChatFiles(scope.chatId, scope.tenantId, scope.userId)
     if (isCurrentFileScope(scope)) {
@@ -2022,7 +2135,10 @@ async function loadScopeDocuments() {
       size: 100,
     })
     scopeDocuments.value = page.records
-    if (ragForm.documentId && !page.records.some((item) => item.documentId === ragForm.documentId)) {
+    if (
+      ragForm.documentId &&
+      !page.records.some((item) => item.documentId === ragForm.documentId)
+    ) {
       ragForm.documentId = null
     }
   } catch (error) {
@@ -2034,8 +2150,8 @@ async function loadScopeDocuments() {
 
 function scopeDocumentLabel(document: StorageDocument) {
   const type = shouldAppendDocumentType(document.originalFilename, document.documentType)
-      ? ` · ${formatDocumentType(document.documentType || '')}`
-      : ''
+    ? ` · ${formatDocumentType(document.documentType || '')}`
+    : ''
   return `${document.originalFilename}${type}`
 }
 
@@ -2077,14 +2193,14 @@ async function loadHistory(chat: MetaChat | null = activeChat.value) {
     await waitForMessageTransition()
     const page = await fetchChatHistoryByChatId(chat.chatId)
     messages.value = page.records.map((item) =>
-        createMessage(
-            item.role.toLowerCase() === 'user' ? 'user' : 'assistant',
-            item.content,
-            parseReferences(item.reference),
-            undefined,
-            item.createdAt,
-            parseFiles(item.files),
-        ),
+      createMessage(
+        item.role.toLowerCase() === 'user' ? 'user' : 'assistant',
+        item.content,
+        parseReferences(item.reference),
+        undefined,
+        item.createdAt,
+        parseFiles(item.files),
+      ),
     )
     await nextTick()
     await scrollToLatest()
@@ -2152,7 +2268,7 @@ async function selectChat(chat: MetaChat) {
 async function togglePinned(chat: MetaChat) {
   const nextPinned = !chat.pinned
   try {
-    const updatedChat = await updateChatFlags(chat.id, {pinned: nextPinned})
+    const updatedChat = await updateChatFlags(chat.id, { pinned: nextPinned })
     patchChatInList(updatedChat)
     sortChats()
   } catch (error) {
@@ -2163,7 +2279,7 @@ async function togglePinned(chat: MetaChat) {
 async function toggleFavorite(chat: MetaChat) {
   const nextFavorite = !chat.favorite
   try {
-    const updatedChat = await updateChatFlags(chat.id, {favorite: nextFavorite})
+    const updatedChat = await updateChatFlags(chat.id, { favorite: nextFavorite })
     patchChatInList(updatedChat)
   } catch (error) {
     message.error(error instanceof Error ? error.message : '更新收藏失败')
@@ -2182,7 +2298,10 @@ function sortChats() {
     if (left.pinned !== right.pinned) {
       return left.pinned ? -1 : 1
     }
-    return toTime(right.lastMessageAt || right.updatedAt || right.createdAt) - toTime(left.lastMessageAt || left.updatedAt || left.createdAt)
+    return (
+      toTime(right.lastMessageAt || right.updatedAt || right.createdAt) -
+      toTime(left.lastMessageAt || left.updatedAt || left.createdAt)
+    )
   })
 }
 
@@ -2274,7 +2393,9 @@ async function writeClipboardText(text: string) {
     try {
       await Promise.race([
         navigator.clipboard.writeText(text),
-        new Promise((_, reject) => window.setTimeout(() => reject(new Error('clipboard timeout')), 1200)),
+        new Promise((_, reject) =>
+          window.setTimeout(() => reject(new Error('clipboard timeout')), 1200),
+        ),
       ])
       return
     } catch {
@@ -2394,7 +2515,9 @@ function chatFileStatus(status: MetaChatFileParseStatus): ChatFileItemStatus {
  * @return 鼠标悬停提示
  */
 function fileDisplayTitle(file: ChatFileItem) {
-  const type = shouldAppendDocumentType(file.fileName, file.documentType) ? ` · ${file.documentType}` : ''
+  const type = shouldAppendDocumentType(file.fileName, file.documentType)
+    ? ` · ${file.documentType}`
+    : ''
   return `${file.fileName}${type} · ${fileStatusText(file)}`
 }
 
@@ -2422,12 +2545,12 @@ function shouldAppendDocumentType(filename: string, documentType?: string | null
  * createMessage('user', '请总结知识库')
  */
 function createMessage(
-    role: ChatMessage['role'],
-    content: string,
-    references?: RetrievalDocumentReference[],
-    trace?: RetrievalTrace,
-    createdAt?: string,
-    files?: MetaContextFile[],
+  role: ChatMessage['role'],
+  content: string,
+  references?: RetrievalDocumentReference[],
+  trace?: RetrievalTrace,
+  createdAt?: string,
+  files?: MetaContextFile[],
 ): ChatMessage {
   return {
     id: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
@@ -2477,7 +2600,8 @@ function handleMessageScroll() {
 function updateFollowLatestState() {
   const viewport = messageViewport.value
   if (!viewport) return
-  shouldFollowLatest.value = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <= MESSAGE_BOTTOM_THRESHOLD
+  shouldFollowLatest.value =
+    viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <= MESSAGE_BOTTOM_THRESHOLD
 }
 
 function updateMessageScrollbar() {
@@ -2497,8 +2621,8 @@ function updateMessageScrollbar() {
 
   const trackHeight = track?.clientHeight || Math.max(viewport.clientHeight - 60, 1)
   const thumbHeight = Math.max(
-      MESSAGE_SCROLLBAR_MIN_THUMB_HEIGHT,
-      Math.round((viewport.clientHeight / viewport.scrollHeight) * trackHeight),
+    MESSAGE_SCROLLBAR_MIN_THUMB_HEIGHT,
+    Math.round((viewport.clientHeight / viewport.scrollHeight) * trackHeight),
   )
   const maxThumbTop = Math.max(trackHeight - thumbHeight, 0)
   const maxScrollTop = Math.max(viewport.scrollHeight - viewport.clientHeight, 1)
@@ -2528,7 +2652,7 @@ function clearMessageScrollbarHideTimer() {
 function scrollMessageBy(delta: number, behavior: ScrollBehavior = 'smooth') {
   const viewport = messageViewport.value
   if (!viewport) return
-  viewport.scrollBy({top: delta, behavior})
+  viewport.scrollBy({ top: delta, behavior })
 }
 
 function startArrowScroll(direction: -1 | 1) {
@@ -2624,7 +2748,10 @@ function waitForMessageTransition() {
   return new Promise((resolve) => window.setTimeout(resolve, 160))
 }
 
-function createTypingRenderer(assistantMessage: ChatMessage, onComplete: () => Promise<void>): TypingRenderer {
+function createTypingRenderer(
+  assistantMessage: ChatMessage,
+  onComplete: () => Promise<void>,
+): TypingRenderer {
   let pendingText = ''
   let finalAnswer: string | undefined
   let done = false
@@ -2766,8 +2893,10 @@ function resolveTypingBatchSize(pendingLength: number, done: boolean, streamDone
 
 function shouldFlushTyping(pendingLength: number, done: boolean, streamDoneAt: number) {
   if (!done) return false
-  return pendingLength > TYPE_FLUSH_BACKLOG_THRESHOLD ||
-      window.performance.now() - streamDoneAt > TYPE_DONE_MAX_ANIMATION_MS
+  return (
+    pendingLength > TYPE_FLUSH_BACKLOG_THRESHOLD ||
+    window.performance.now() - streamDoneAt > TYPE_DONE_MAX_ANIMATION_MS
+  )
 }
 
 function renderMarkdown(content: string, typing?: boolean) {
@@ -2779,7 +2908,16 @@ function renderMarkdown(content: string, typing?: boolean) {
 
 function appendTypingCaret(html: string) {
   const caret = '<span class="typing-caret"></span>'
-  const blockEndings = ['</p>', '</li>', '</code>', '</h1>', '</h2>', '</h3>', '</h4>', '</blockquote>']
+  const blockEndings = [
+    '</p>',
+    '</li>',
+    '</code>',
+    '</h1>',
+    '</h2>',
+    '</h3>',
+    '</h4>',
+    '</blockquote>',
+  ]
   for (const ending of blockEndings) {
     const index = html.lastIndexOf(ending)
     if (index >= 0) {
@@ -2859,7 +2997,9 @@ function modeClass(value?: string) {
 
 async function downloadReference(reference: RetrievalDocumentReference) {
   try {
-    const response = await fetch(apiUrl(`/v1/storage/documents/download/${encodeURIComponent(reference.documentId)}`))
+    const response = await fetch(
+      apiUrl(`/v1/storage/documents/download/${encodeURIComponent(reference.documentId)}`),
+    )
     if (!response.ok) {
       throw new Error(`下载失败：${response.status}`)
     }
@@ -2916,7 +3056,7 @@ async function downloadReference(reference: RetrievalDocumentReference) {
   height: 14px;
   border-radius: 999px;
   background: linear-gradient(180deg, rgba(65, 214, 183, 0.95), rgba(65, 214, 183, 0.38));
-  content: "";
+  content: '';
 }
 
 .history-controls {
@@ -2943,7 +3083,9 @@ async function downloadReference(reference: RetrievalDocumentReference) {
   --n-text-color-hover: #e7fff8 !important;
   --n-text-color-pressed: #d8fff6 !important;
   --n-text-color-focus: #e7fff8 !important;
-  box-shadow: 0 0 0 1px rgba(65, 214, 183, 0.05), 0 10px 24px rgba(65, 214, 183, 0.08);
+  box-shadow:
+    0 0 0 1px rgba(65, 214, 183, 0.05),
+    0 10px 24px rgba(65, 214, 183, 0.08);
 }
 
 .history-refresh-button {
@@ -3411,16 +3553,18 @@ async function downloadReference(reference: RetrievalDocumentReference) {
 .message-avatar.assistant {
   border: 1px solid rgba(65, 214, 183, 0.28);
   color: #76ead2;
-  background: radial-gradient(circle at 35% 30%, rgba(65, 214, 183, 0.22), transparent 56%),
-  rgba(12, 19, 25, 0.92);
+  background:
+    radial-gradient(circle at 35% 30%, rgba(65, 214, 183, 0.22), transparent 56%),
+    rgba(12, 19, 25, 0.92);
   box-shadow: 0 0 22px rgba(65, 214, 183, 0.08);
 }
 
 .message-avatar.user {
   border: 1px solid rgba(126, 168, 255, 0.24);
   color: #c2d2ff;
-  background: radial-gradient(circle at 35% 30%, rgba(126, 168, 255, 0.18), transparent 58%),
-  rgba(15, 22, 32, 0.92);
+  background:
+    radial-gradient(circle at 35% 30%, rgba(126, 168, 255, 0.18), transparent 58%),
+    rgba(15, 22, 32, 0.92);
 }
 
 .message-bubble {
@@ -3457,7 +3601,9 @@ async function downloadReference(reference: RetrievalDocumentReference) {
   opacity: 0;
   pointer-events: none;
   transform: translateY(-2px);
-  transition: opacity 140ms ease, transform 140ms ease;
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease;
 }
 
 .message-row.user .message-actions {
@@ -3858,8 +4004,9 @@ async function downloadReference(reference: RetrievalDocumentReference) {
   padding-top: 28px;
   padding-right: 16px;
   padding-bottom: 28px;
-  background: radial-gradient(circle at 75% 50%, rgba(0, 209, 255, 0.12), transparent 22%),
-  linear-gradient(180deg, rgba(0, 209, 255, 0.04), transparent);
+  background:
+    radial-gradient(circle at 75% 50%, rgba(0, 209, 255, 0.12), transparent 22%),
+    linear-gradient(180deg, rgba(0, 209, 255, 0.04), transparent);
 }
 
 .composer.voice-active > .composer-button {
@@ -3936,15 +4083,15 @@ async function downloadReference(reference: RetrievalDocumentReference) {
 .chat-file-chip.is-parsing::after {
   position: absolute;
   inset: 0;
-  content: "";
+  content: '';
   pointer-events: none;
   background: linear-gradient(
-      90deg,
-      transparent 0%,
-      rgba(255, 226, 163, 0.08) 42%,
-      rgba(255, 226, 163, 0.22) 50%,
-      rgba(255, 226, 163, 0.08) 58%,
-      transparent 100%
+    90deg,
+    transparent 0%,
+    rgba(255, 226, 163, 0.08) 42%,
+    rgba(255, 226, 163, 0.22) 50%,
+    rgba(255, 226, 163, 0.08) 58%,
+    transparent 100%
   );
   transform: translateX(-110%);
   animation: chat-file-parsing-scan 1.65s ease-in-out infinite;
@@ -4063,10 +4210,12 @@ async function downloadReference(reference: RetrievalDocumentReference) {
 .composer.voice-active .composer-input :deep(.n-input-wrapper) {
   min-height: 86px;
   border-color: rgba(0, 209, 255, 0.58) !important;
-  background: linear-gradient(90deg, rgba(0, 209, 255, 0.08), rgba(255, 255, 255, 0.035)),
-  rgba(8, 18, 31, 0.86) !important;
-  box-shadow: inset 0 0 0 1px rgba(0, 209, 255, 0.16),
-  0 0 26px rgba(0, 209, 255, 0.12);
+  background:
+    linear-gradient(90deg, rgba(0, 209, 255, 0.08), rgba(255, 255, 255, 0.035)),
+    rgba(8, 18, 31, 0.86) !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 209, 255, 0.16),
+    0 0 26px rgba(0, 209, 255, 0.12);
 }
 
 .composer.voice-active .composer-input :deep(.n-input__textarea-el) {
@@ -4097,7 +4246,9 @@ async function downloadReference(reference: RetrievalDocumentReference) {
   font-size: 13px;
   font-weight: 800;
   background: rgba(5, 27, 39, 0.78);
-  box-shadow: inset 0 0 18px rgba(0, 209, 255, 0.08), 0 0 18px rgba(0, 209, 255, 0.08);
+  box-shadow:
+    inset 0 0 18px rgba(0, 209, 255, 0.08),
+    0 0 18px rgba(0, 209, 255, 0.08);
   pointer-events: none;
   transform: translateY(-50%);
 }
@@ -4165,13 +4316,17 @@ async function downloadReference(reference: RetrievalDocumentReference) {
   border: 1px solid rgba(0, 209, 255, 0.26);
   border-radius: 9px;
   background: rgba(8, 18, 31, 0.72);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.035), 0 0 18px rgba(0, 209, 255, 0.06);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.035),
+    0 0 18px rgba(0, 209, 255, 0.06);
 }
 
 .voice-button:not(.recording):hover:not(:disabled) {
   border-color: rgba(0, 229, 255, 0.46);
   background: rgba(10, 32, 48, 0.86);
-  box-shadow: inset 0 0 0 1px rgba(0, 209, 255, 0.08), 0 0 22px rgba(0, 209, 255, 0.12);
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 209, 255, 0.08),
+    0 0 22px rgba(0, 209, 255, 0.12);
 }
 
 .voice-button:not(.recording):active:not(:disabled) {
@@ -4200,8 +4355,9 @@ async function downloadReference(reference: RetrievalDocumentReference) {
   height: 32px;
   border-radius: 999px;
   background: radial-gradient(circle at 50% 50%, rgba(0, 209, 255, 0.18), rgba(2, 9, 16, 0.94) 62%);
-  box-shadow: inset 0 0 12px rgba(0, 209, 255, 0.16),
-  0 0 12px rgba(0, 209, 255, 0.1);
+  box-shadow:
+    inset 0 0 12px rgba(0, 209, 255, 0.16),
+    0 0 12px rgba(0, 209, 255, 0.1);
 }
 
 .voice-idle-mark i {
@@ -4255,10 +4411,16 @@ async function downloadReference(reference: RetrievalDocumentReference) {
   aspect-ratio: 1;
   border: 1px solid rgba(94, 234, 212, 0.18);
   color: #edfefe;
-  background: radial-gradient(circle at 50% 50%, rgba(37, 122, 140, 0.48), rgba(10, 38, 54, 0.94) 58%, rgba(8, 18, 31, 0.98) 100%);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04),
-  inset 0 0 26px rgba(94, 234, 212, 0.08),
-  0 0 var(--voice-level-glow, 28px) rgba(45, 212, 191, var(--voice-level-opacity, 0.16));
+  background: radial-gradient(
+    circle at 50% 50%,
+    rgba(37, 122, 140, 0.48),
+    rgba(10, 38, 54, 0.94) 58%,
+    rgba(8, 18, 31, 0.98) 100%
+  );
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+    inset 0 0 26px rgba(94, 234, 212, 0.08),
+    0 0 var(--voice-level-glow, 28px) rgba(45, 212, 191, var(--voice-level-opacity, 0.16));
   animation: none;
   overflow: visible;
   z-index: 1;
@@ -4273,14 +4435,19 @@ async function downloadReference(reference: RetrievalDocumentReference) {
   position: absolute;
   border: 1px solid rgba(94, 234, 212, var(--voice-level-ring-opacity, 0.14));
   border-radius: 999px;
-  content: "";
+  content: '';
   pointer-events: none;
   transform-origin: 50% 50%;
 }
 
 .voice-button.recording::before {
   inset: -13px;
-  background: radial-gradient(circle at 50% 50%, transparent 68%, rgba(45, 212, 191, 0.07) 70%, transparent 73%);
+  background: radial-gradient(
+    circle at 50% 50%,
+    transparent 68%,
+    rgba(45, 212, 191, 0.07) 70%,
+    transparent 73%
+  );
   box-shadow: 0 0 30px rgba(45, 212, 191, 0.16);
   opacity: 0.68;
   animation: voice-listening-halo 1.7s ease-in-out infinite;
@@ -4314,7 +4481,8 @@ async function downloadReference(reference: RetrievalDocumentReference) {
   height: 34px;
   stroke-width: 2.2;
   color: #f7ffff;
-  filter: drop-shadow(0 0 7px rgba(255, 255, 255, 0.24)) drop-shadow(0 0 12px rgba(45, 212, 191, 0.18));
+  filter: drop-shadow(0 0 7px rgba(255, 255, 255, 0.24))
+    drop-shadow(0 0 12px rgba(45, 212, 191, 0.18));
   transform: translateY(-1px);
 }
 
@@ -4331,7 +4499,9 @@ async function downloadReference(reference: RetrievalDocumentReference) {
   --n-text-color: #ffe3a3 !important;
   --n-text-color-hover: #fff0c7 !important;
   --n-text-color-pressed: #ffe7ad !important;
-  box-shadow: 0 0 0 1px rgba(255, 203, 104, 0.08), 0 10px 22px rgba(255, 173, 52, 0.08);
+  box-shadow:
+    0 0 0 1px rgba(255, 203, 104, 0.08),
+    0 10px 22px rgba(255, 173, 52, 0.08);
   animation: stop-button-pulse var(--stop-pulse-duration) ease-in-out infinite;
 }
 
@@ -4375,7 +4545,9 @@ async function downloadReference(reference: RetrievalDocumentReference) {
   height: 12px;
   border-radius: 3px;
   background: #ffd985;
-  box-shadow: 0 0 0 1px rgba(255, 236, 187, 0.28), 0 0 8px rgba(255, 189, 76, 0.18);
+  box-shadow:
+    0 0 0 1px rgba(255, 236, 187, 0.28),
+    0 0 8px rgba(255, 189, 76, 0.18);
   content: '';
   animation: stop-square-pulse var(--stop-pulse-duration) ease-in-out infinite;
 }
@@ -4383,11 +4555,15 @@ async function downloadReference(reference: RetrievalDocumentReference) {
 @keyframes stop-button-pulse {
   0%,
   100% {
-    box-shadow: 0 0 0 1px rgba(255, 203, 104, 0.08), 0 10px 22px rgba(255, 173, 52, 0.08);
+    box-shadow:
+      0 0 0 1px rgba(255, 203, 104, 0.08),
+      0 10px 22px rgba(255, 173, 52, 0.08);
   }
 
   50% {
-    box-shadow: 0 0 0 1px rgba(255, 203, 104, 0.18), 0 10px 26px rgba(255, 173, 52, 0.2);
+    box-shadow:
+      0 0 0 1px rgba(255, 203, 104, 0.18),
+      0 10px 26px rgba(255, 173, 52, 0.2);
   }
 }
 
@@ -4405,12 +4581,16 @@ async function downloadReference(reference: RetrievalDocumentReference) {
   0%,
   100% {
     background: #ffd177;
-    box-shadow: 0 0 0 1px rgba(255, 236, 187, 0.22), 0 0 5px rgba(255, 189, 76, 0.12);
+    box-shadow:
+      0 0 0 1px rgba(255, 236, 187, 0.22),
+      0 0 5px rgba(255, 189, 76, 0.12);
   }
 
   50% {
     background: #ffe8aa;
-    box-shadow: 0 0 0 1px rgba(255, 244, 211, 0.44), 0 0 12px rgba(255, 196, 85, 0.32);
+    box-shadow:
+      0 0 0 1px rgba(255, 244, 211, 0.44),
+      0 0 12px rgba(255, 196, 85, 0.32);
   }
 }
 

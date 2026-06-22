@@ -30,10 +30,10 @@ const DEFAULT_ASR_WS_PATH = '/asr/ws'
  * 空值或 / 表示前端与后端同源根路径部署，尾部 / 会被移除，避免拼接出双斜杠
  */
 function normalizeApiBaseUrl(value?: string) {
-    if (!value || value === '/') {
-        return ''
-    }
-    return value.endsWith('/') ? value.slice(0, -1) : value
+  if (!value || value === '/') {
+    return ''
+  }
+  return value.endsWith('/') ? value.slice(0, -1) : value
 }
 
 /**
@@ -42,7 +42,9 @@ function normalizeApiBaseUrl(value?: string) {
  * <p>
  * VITE_API_BASE_URL 是 Vite 构建时变量，修改后必须重新构建前端才会生效
  */
-export const API_BASE_URL = normalizeApiBaseUrl(import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE_URL)
+export const API_BASE_URL = normalizeApiBaseUrl(
+  import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE_URL,
+)
 
 /**
  * 拼接 API URL
@@ -55,8 +57,8 @@ export const API_BASE_URL = normalizeApiBaseUrl(import.meta.env.VITE_API_BASE_UR
  * @return 带网关前缀的请求 URL
  */
 export function apiUrl(path: string) {
-    const normalizedPath = path.startsWith('/') ? path : `/${path}`
-    return `${API_BASE_URL}${normalizedPath}`
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`
+  return `${API_BASE_URL}${normalizedPath}`
 }
 
 /**
@@ -69,13 +71,13 @@ export function apiUrl(path: string) {
  * @return 可直接传给 WebSocket 构造器的地址
  */
 export function resolveAsrWebSocketUrl() {
-    const configuredUrl = import.meta.env.VITE_ASR_WS_URL?.trim()
-    if (configuredUrl?.startsWith('ws://') || configuredUrl?.startsWith('wss://')) {
-        return configuredUrl
-    }
+  const configuredUrl = import.meta.env.VITE_ASR_WS_URL?.trim()
+  if (configuredUrl?.startsWith('ws://') || configuredUrl?.startsWith('wss://')) {
+    return configuredUrl
+  }
 
-    const configuredPath = configuredUrl || DEFAULT_ASR_WS_PATH
-    const normalizedPath = configuredPath.startsWith('/') ? configuredPath : `/${configuredPath}`
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    return `${protocol}//${window.location.host}${normalizedPath}`
+  const configuredPath = configuredUrl || DEFAULT_ASR_WS_PATH
+  const normalizedPath = configuredPath.startsWith('/') ? configuredPath : `/${configuredPath}`
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  return `${protocol}//${window.location.host}${normalizedPath}`
 }
