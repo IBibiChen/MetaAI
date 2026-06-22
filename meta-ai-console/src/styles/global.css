@@ -23,6 +23,12 @@ body {
   background: #0d1117;
 }
 
+html.embedded-entry,
+html.embedded-entry body,
+html.embedded-entry #app {
+  background: linear-gradient(105deg, #eaf3ff 0%, #f8fbff 50%, #e0f6ff 100%);
+}
+
 .app-shell {
   min-height: 100vh;
   background:

@@ -4819,10 +4819,6 @@ async function downloadReference(reference: RetrievalDocumentReference) {
   }
 }
 
-:global(body) {
-  background: linear-gradient(105deg, #eaf3ff 0%, #f8fbff 50%, #e0f6ff 100%);
-}
-
 .chat-page {
   grid-template-columns: 292px minmax(0, 1fr);
   gap: 8px;

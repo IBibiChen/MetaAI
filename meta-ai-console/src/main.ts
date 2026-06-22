@@ -6,6 +6,9 @@ import App from './App.vue'
 import router from './router'
 import './styles/global.css'
 
+const embeddedEntry = window.location.pathname.includes('/embed/')
+document.documentElement.classList.toggle('embedded-entry', embeddedEntry)
+
 const app = createApp(App)
 
 app.use(createPinia())
