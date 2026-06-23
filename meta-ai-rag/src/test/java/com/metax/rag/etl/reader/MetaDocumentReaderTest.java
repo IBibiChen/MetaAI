@@ -82,6 +82,17 @@ class MetaDocumentReaderTest {
     }
 
     /**
+     * doc 文档应委托专用 Doc Reader 解析
+     */
+    @Test
+    void shouldReadDocByDocReader() {
+        MetaDocumentReaderFactory factory = factory();
+        DocumentReader reader = factory.create(resource("not-a-real-doc", "demo.doc", "doc"));
+
+        assertThat(reader).isInstanceOf(MetaDocumentReader.class);
+    }
+
+    /**
      * Excel 文档应委托专用 Excel Reader 解析
      */
     @Test
@@ -142,6 +153,7 @@ class MetaDocumentReaderTest {
                 new JsonDocumentReaderStrategy(),
                 new TextDocumentReaderStrategy(),
                 new MarkdownDocumentReaderStrategy(),
+                new DocDocumentReaderStrategy(),
                 new ExcelDocumentReaderStrategy(),
                 tika
         ), tika);

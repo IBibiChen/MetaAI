@@ -41,6 +41,20 @@ FROM registry.cn-hangzhou.aliyuncs.com/xother/eclipse-temurin:17-jre
 
 WORKDIR /app
 
+# .doc 旧版二进制 Word 由 LibreOffice headless 转换为临时 docx 后再解析
+# libreoffice-core-nogui / libreoffice-writer-nogui 是服务端无界面核心和 Writer 组件，避免安装完整 LibreOffice 套件
+# fonts-noto-cjk 负责中文字体回退，Carlito / Caladea 负责常见 Office 字体版式兼容
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        fontconfig \
+        fonts-noto-cjk \
+        fonts-crosextra-carlito \
+        fonts-crosextra-caladea \
+        libreoffice-core-nogui \
+        libreoffice-writer-nogui \
+    && rm -rf /var/lib/apt/lists/*
+
 # 从构建阶段复制 Spring Boot 可执行 jar
 # 普通 jar 不包含 Boot Loader，不能直接 java -jar 运行
 COPY --from=build /build/meta-ai-agent/target/meta-ai-agent-*.jar /app/app.jar
