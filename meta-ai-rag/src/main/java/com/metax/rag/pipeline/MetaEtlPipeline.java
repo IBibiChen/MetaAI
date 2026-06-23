@@ -78,14 +78,59 @@ public class MetaEtlPipeline {
                     "RAG document indexing succeeded"));
             log.info("RAG 文档索引完成：runId = {}，documentId = {}，chunkCount = {}，durationMs = {}",
                     run.runId(), run.documentId(), result.chunkCount(), timer.intervalMs());
-        } catch (Exception ex) {
-            saveAndNotify(run.withStatus(DocumentIndexingStatus.FAILED, 0, ex.getMessage()));
-            log.warn("RAG 文档索引失败：runId = {}，documentId = {}，durationMs = {}，exception = {}: {}",
-                    run.runId(), run.documentId(), timer.intervalMs(), ex.getClass().getSimpleName(),
-                    ex.getMessage(), ex);
+        } catch (Throwable ex) {
+            handleIndexingFailure(run, timer, ex);
         }
     }
 
+    /**
+     * 处理文档索引失败
+     *
+     * <p>
+     * 异步线程中 StackOverflowError 等 Error 不属于 Exception
+     * 如果不兜底写入 FAILED，外部同步 Worker 会一直等待对象存储文档从 INDEXING 进入终态
+     *
+     * @param run   文档索引 run
+     * @param timer 本次执行计时器
+     * @param ex    索引异常或错误
+     */
+    private void handleIndexingFailure(DocumentIndexingRun run, TimeInterval timer, Throwable ex) {
+        // 所有 Throwable 都先落失败状态
+        saveAndNotify(run.withStatus(DocumentIndexingStatus.FAILED, 0, failureMessage(ex)));
+        log.warn("RAG 文档索引失败：runId = {}，documentId = {}，durationMs = {}，exception = {}: {}",
+                run.runId(), run.documentId(), timer.intervalMs(), ex.getClass().getSimpleName(),
+                ex.getMessage(), ex);
+
+        // JVM 级严重错误再继续抛出
+        if (ex instanceof VirtualMachineError error) {
+            throw error;
+        }
+        if (ex instanceof ThreadDeath error) {
+            throw error;
+        }
+    }
+
+    /**
+     * 生成失败状态说明
+     *
+     * <p>
+     * 部分 Error 的 message 为空，状态说明至少保留异常类型，避免排查时只看到空错误
+     *
+     * @param ex 索引异常或错误
+     * @return 失败状态说明
+     */
+    private String failureMessage(Throwable ex) {
+        if (ex.getMessage() == null || ex.getMessage().isBlank()) {
+            return ex.getClass().getSimpleName();
+        }
+        return ex.getClass().getSimpleName() + ": " + ex.getMessage();
+    }
+
+    /**
+     * 保存 run 并通知观察者
+     *
+     * @param run 文档索引 run
+     */
     private void saveAndNotify(DocumentIndexingRun run) {
         runRepository.save(run);
         runObservers.forEach(observer -> observer.onRunChanged(run));
