@@ -9,11 +9,13 @@ import com.metax.rag.etl.resource.MetaDocumentTypeResolver;
 import com.metax.rag.indexing.DocumentIndexingRequest;
 import com.metax.rag.indexing.DocumentIndexingRun;
 import com.metax.rag.indexing.DocumentIndexingService;
+import com.metax.rag.indexing.DocumentIndexingSubmission;
 import com.metax.rag.model.DocumentVisibility;
 import com.metax.rag.model.MetadataKeys;
 import com.metax.rag.pipeline.MetaVectorStoreWriter;
 import com.metax.rag.storage.ObjectStorageClient;
 import com.metax.rag.storage.StoredObject;
+import com.metax.storage.event.StorageDocumentIndexingEvent;
 import com.metax.storage.request.StorageDocumentPageRequest;
 import com.metax.storage.request.StorageDocumentUploadRequest;
 import com.metax.storage.response.StorageDocumentDownloadResponse;
@@ -21,6 +23,7 @@ import com.metax.storage.response.StorageDocumentUploadResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.vectorstore.filter.Filter;
 import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.Assert;
@@ -119,16 +122,26 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
      */
     private final MetaDocumentTypeResolver documentTypeResolver;
 
+    /**
+     * Spring 应用事件发布器
+     *
+     * <p>
+     * 对象存储文档索引必须在 storage 事务提交后启动，避免异步索引状态回写看不到 latestIndexingRunId
+     */
+    private final ApplicationEventPublisher eventPublisher;
+
     public StorageDocumentServiceImpl(ObjectStorageClient objectStorageClient,
                                       DocumentIndexingService documentIndexingService,
                                       MetaVectorStoreWriter vectorStoreWriter,
                                       MetaRetrievalProperties retrievalProperties,
-                                      MetaDocumentTypeResolver documentTypeResolver) {
+                                      MetaDocumentTypeResolver documentTypeResolver,
+                                      ApplicationEventPublisher eventPublisher) {
         this.objectStorageClient = objectStorageClient;
         this.documentIndexingService = documentIndexingService;
         this.vectorStoreWriter = vectorStoreWriter;
         this.retrievalProperties = retrievalProperties;
         this.documentTypeResolver = documentTypeResolver;
+        this.eventPublisher = eventPublisher;
     }
 
     /**
@@ -338,7 +351,7 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
         updateById(entity);
         try {
             // DocumentIndexingRequest 只表达知识库文档索引，scope 由 RAG metadata Transformer 固定写入 knowledge
-            documentIndexingService.submit(DocumentIndexingRequest.builder()
+            DocumentIndexingSubmission submission = documentIndexingService.submit(DocumentIndexingRequest.builder()
                     .tenantId(entity.getTenantId())
                     .kbId(entity.getKbId())
                     .documentId(entity.getDocumentId())
@@ -359,6 +372,8 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
                         entity.getTenantId(), entity.getKbId(), entity.getDocumentId(), run.runId(),
                         entity.getDocumentType(), entity.getSource());
             });
+            // 事务提交后再启动 RAG ETL，确保 observer 回写终态时能看到 latestIndexingRunId
+            eventPublisher.publishEvent(new StorageDocumentIndexingEvent(submission));
         } catch (RuntimeException ex) {
             // 提交失败说明本轮索引没有进入 RUNNING，立即回写失败状态
             entity.setIndexStatus(StorageDocumentIndexStatus.INDEX_FAILED.name());

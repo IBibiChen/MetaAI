@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.metax.rag.indexing.DocumentIndexingRun;
 import com.metax.rag.indexing.DocumentIndexingRunObserver;
 import com.metax.rag.indexing.DocumentIndexingStatus;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
@@ -18,6 +19,7 @@ import java.time.Instant;
  * @version v1.0
  * @since 2026/6/3
  */
+@Slf4j
 @Component
 public class StorageDocumentIndexingRunObserver implements DocumentIndexingRunObserver {
 
@@ -39,15 +41,20 @@ public class StorageDocumentIndexingRunObserver implements DocumentIndexingRunOb
             case SUCCEEDED -> StorageDocumentIndexStatus.INDEXED;
             case FAILED -> StorageDocumentIndexStatus.INDEX_FAILED;
         };
-        storageDocumentMapper.update(null, new LambdaUpdateWrapper<StorageDocumentDO>()
+        int updated = storageDocumentMapper.update(null, new LambdaUpdateWrapper<StorageDocumentDO>()
                 .eq(StorageDocumentDO::getTenantId, run.tenantId())
                 .eq(StorageDocumentDO::getKbId, run.kbId())
                 .eq(StorageDocumentDO::getDocumentId, run.documentId())
+                // latestIndexingRunId 用于防止旧 run 的迟到回调覆盖新一轮索引状态
                 .eq(StorageDocumentDO::getLatestIndexingRunId, run.runId())
                 .eq(StorageDocumentDO::getDeleted, Boolean.FALSE)
                 .set(StorageDocumentDO::getIndexStatus, indexStatus.name())
                 .set(run.status() == DocumentIndexingStatus.SUCCEEDED, StorageDocumentDO::getChunkCount,
                         run.chunkCount())
                 .set(StorageDocumentDO::getUpdatedAt, Instant.now()));
+        if (updated == 0) {
+            log.warn("对象存储文档索引状态回写未命中文档：tenantId = {}，kbId = {}，documentId = {}，runId = {}，runStatus = {}，targetIndexStatus = {}",
+                    run.tenantId(), run.kbId(), run.documentId(), run.runId(), run.status(), indexStatus);
+        }
     }
 }

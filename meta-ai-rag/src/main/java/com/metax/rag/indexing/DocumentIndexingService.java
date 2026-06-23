@@ -54,17 +54,18 @@ public class DocumentIndexingService {
     }
 
     /**
-     * 从已归档对象存储文档创建 RAG 文档索引执行
+     * 提交已归档对象存储文档的 RAG 文档索引执行
      *
      * <p>
-     * beforeRun 在异步 Worker 启动前执行，用于调用方持久化 runId 等业务关联关系
+     * beforeRun 在后台索引启动前执行，用于调用方持久化 runId 等业务关联关系
      * 当前 storage 文档索引链路必须在该回调中绑定 latestIndexingRunId，便于后续同步索引状态
+     * 本方法只提交 run，不启动 ETL，有事务边界的调用方应在事务提交后调用 start
      *
      * @param request   文档索引请求
-     * @param beforeRun 异步启动前回调
-     * @return 文档索引执行
+     * @param beforeRun 后台索引启动前业务绑定回调
+     * @return 索引提交结果
      */
-    public DocumentIndexingRun submit(DocumentIndexingRequest request, Consumer<DocumentIndexingRun> beforeRun) {
+    public DocumentIndexingSubmission submit(DocumentIndexingRequest request, Consumer<DocumentIndexingRun> beforeRun) {
         // 阶段 1：解析对象存储文件资源，把 objectKey 对应的文件流统一转换为 Spring Resource
         MetaDocumentResource documentResource = documentResourceFactory.create(request);
 
@@ -78,18 +79,31 @@ public class DocumentIndexingService {
         // 阶段 4：创建 PENDING 执行快照，调用方可以用 runId 查询异步索引状态
         DocumentIndexingRun run = DocumentIndexingRun.pending(resolvedRequest);
 
-        // 阶段 5：先保存执行，再触发异步 Worker，避免异步执行过快导致查询不到 run
+        // 阶段 5：先保存执行，后续启动 ETL 时可以通过 runId 查询状态
         runRepository.save(run);
 
         // 阶段 6：异步启动前允许调用方保存 runId，避免后台执行状态回写时找不到业务记录
         beforeRun.accept(run);
 
-        // 阶段 7：触发后台索引，内部执行 read -> transform -> snapshot -> VectorStore upsert
-        etlPipeline.runIndexing(run, context);
-        log.info("RAG 文档索引 run 已创建：runId = {}，tenantId = {}，kbId = {}，documentId = {}，documentType = {}",
+        log.info("RAG 文档索引 run 已提交：runId = {}，tenantId = {}，kbId = {}，documentId = {}，documentType = {}",
                 run.runId(), run.tenantId(), run.kbId(), run.documentId(), run.documentType());
+        return new DocumentIndexingSubmission(run, context);
+    }
 
-        return run;
+    /**
+     * 启动已提交的后台索引执行
+     *
+     * <p>
+     * storage 等有事务边界的调用方必须在事务提交后调用本方法
+     *
+     * @param submission 索引提交结果
+     */
+    public void start(DocumentIndexingSubmission submission) {
+        // 阶段 7：触发后台索引，内部执行 read -> transform -> snapshot -> VectorStore upsert
+        etlPipeline.runIndexing(submission.run(), submission.context());
+        log.info("RAG 文档索引后台启动已提交：runId = {}，tenantId = {}，kbId = {}，documentId = {}，documentType = {}",
+                submission.run().runId(), submission.run().tenantId(), submission.run().kbId(),
+                submission.run().documentId(), submission.run().documentType());
     }
 
     /**

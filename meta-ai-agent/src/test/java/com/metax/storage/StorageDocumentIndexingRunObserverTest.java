@@ -16,7 +16,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
 
 /**
@@ -47,6 +49,7 @@ class StorageDocumentIndexingRunObserverTest {
      */
     @Test
     void shouldUpdateChunkCountWhenIndexSucceeded() {
+        when(storageDocumentMapper.update(isNull(), any())).thenReturn(1);
         StorageDocumentIndexingRunObserver observer = new StorageDocumentIndexingRunObserver(storageDocumentMapper);
 
         observer.onRunChanged(run(DocumentIndexingStatus.SUCCEEDED, 31));
@@ -64,6 +67,7 @@ class StorageDocumentIndexingRunObserverTest {
      */
     @Test
     void shouldKeepChunkCountWhenIndexFailed() {
+        when(storageDocumentMapper.update(isNull(), any())).thenReturn(1);
         StorageDocumentIndexingRunObserver observer = new StorageDocumentIndexingRunObserver(storageDocumentMapper);
 
         observer.onRunChanged(run(DocumentIndexingStatus.FAILED, 0));
@@ -75,6 +79,20 @@ class StorageDocumentIndexingRunObserverTest {
         assertThat(paramNameValuePairs(wrapper).values())
                 .contains(StorageDocumentIndexStatus.INDEX_FAILED.name())
                 .doesNotContain(0);
+    }
+
+    /**
+     * 索引状态回写未命中文档时不应影响异步索引线程
+     */
+    @Test
+    void shouldNotThrowWhenUpdateMatchedNoRows() {
+        when(storageDocumentMapper.update(isNull(), any())).thenReturn(0);
+        StorageDocumentIndexingRunObserver observer = new StorageDocumentIndexingRunObserver(storageDocumentMapper);
+
+        observer.onRunChanged(run(DocumentIndexingStatus.FAILED, 0));
+
+        Wrapper<StorageDocumentDO> wrapper = updatedWrapper();
+        assertThat(wrapper.getSqlSet()).contains("index_status=");
     }
 
     @SuppressWarnings("unchecked")

@@ -2,13 +2,17 @@ package com.metax.storage;
 
 import com.metax.rag.config.MetaRetrievalProperties;
 import com.metax.rag.etl.resource.MetaDocumentTypeResolver;
+import com.metax.rag.etl.resource.MetaDocumentResource;
+import com.metax.rag.indexing.DocumentIndexingContext;
 import com.metax.rag.indexing.DocumentIndexingRequest;
 import com.metax.rag.indexing.DocumentIndexingRun;
 import com.metax.rag.indexing.DocumentIndexingService;
+import com.metax.rag.indexing.DocumentIndexingSubmission;
 import com.metax.rag.pipeline.MetaVectorStoreWriter;
 import com.metax.rag.storage.ObjectStorageClient;
 import com.metax.rag.storage.StoredObject;
 import com.metax.storage.request.StorageDocumentUploadRequest;
+import com.metax.storage.event.StorageDocumentIndexingEvent;
 import com.metax.storage.response.StorageDocumentDownloadResponse;
 import com.metax.storage.response.StorageDocumentUploadResponse;
 import org.junit.jupiter.api.BeforeEach;
@@ -17,6 +21,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.mock.web.MockMultipartFile;
 
 import java.io.ByteArrayInputStream;
@@ -53,13 +59,16 @@ class StorageDocumentServiceTest {
     @Mock
     private MetaVectorStoreWriter vectorStoreWriter;
 
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+
     private FakeStorageDocumentService service;
 
     @BeforeEach
     void setUp() {
         MetaRetrievalProperties properties = new MetaRetrievalProperties();
         service = new FakeStorageDocumentService(objectStorageClient, documentIndexingService, vectorStoreWriter,
-                properties, new MetaDocumentTypeResolver());
+                properties, new MetaDocumentTypeResolver(), eventPublisher);
     }
 
     @Test
@@ -99,7 +108,8 @@ class StorageDocumentServiceTest {
             DocumentIndexingRun run = DocumentIndexingRun.pending(request);
             Consumer<DocumentIndexingRun> beforeRun = invocation.getArgument(1);
             beforeRun.accept(run);
-            return run;
+            return new DocumentIndexingSubmission(run, new DocumentIndexingContext(request,
+                    new MetaDocumentResource(new ByteArrayResource("demo".getBytes()), "txt", "demo.txt")));
         });
 
         StorageDocumentUploadResponse response = service.upload(uploadRequest("t1", "kb1", "DEPT",
@@ -116,6 +126,7 @@ class StorageDocumentServiceTest {
         assertThat(response.indexStatus()).isEqualTo(StorageDocumentIndexStatus.INDEXING.name());
         assertThat(response.chunkCount()).isZero();
         assertThat(response.latestIndexingRunId()).isNotBlank();
+        verify(eventPublisher).publishEvent(any(StorageDocumentIndexingEvent.class));
     }
 
     @Test
@@ -212,9 +223,10 @@ class StorageDocumentServiceTest {
                                            DocumentIndexingService documentIndexingService,
                                            MetaVectorStoreWriter vectorStoreWriter,
                                            MetaRetrievalProperties retrievalProperties,
-                                           MetaDocumentTypeResolver documentTypeResolver) {
+                                           MetaDocumentTypeResolver documentTypeResolver,
+                                           ApplicationEventPublisher eventPublisher) {
             super(objectStorageClient, documentIndexingService, vectorStoreWriter, retrievalProperties,
-                    documentTypeResolver);
+                    documentTypeResolver, eventPublisher);
         }
 
         @Override
