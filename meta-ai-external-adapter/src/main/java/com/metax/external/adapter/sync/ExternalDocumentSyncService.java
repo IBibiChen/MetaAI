@@ -218,8 +218,8 @@ public class ExternalDocumentSyncService extends ServiceImpl<ExternalDocumentSyn
             // 既有记录要先判断文件内容或状态是否需要重新学习，不能所有重复通知都重置队列
             boolean requeue = shouldRequeue(existing, file);
             if (requeue) {
-                // 文件首次失败、等待重试或 hash 变化时，重置任务状态并重新放回待处理队列
-                return resetForRequeue(existing, file, now);
+                // 文件内容变化时必须重新下载上传，普通失败重试则复用既有 documentId 只重提索引
+                return resetForRequeue(existing, file, now, isExternalFileChanged(existing, file));
             }
             // 不需要重新学习时，只刷新第三方源文件快照，保持当前同步状态和 documentId 不变
             return refreshSourceSnapshot(existing, file, now);
@@ -247,29 +247,41 @@ public class ExternalDocumentSyncService extends ServiceImpl<ExternalDocumentSyn
      *
      * <p>
      * MyBatis Plus updateById 默认可能跳过 null 字段
-     * 这里必须使用 LambdaUpdateWrapper 显式 set null，确保旧 documentId、锁信息和完成时间真正被清空
+     * 这里必须使用 LambdaUpdateWrapper 显式 set null，确保锁信息和完成时间真正被清空
+     * documentId 只有在老系统文件 hash 明确变化时才清空，避免失败补偿重试重复写入对象存储
      *
-     * @param existing 既有同步记录
-     * @param file     第三方系统文件快照
-     * @param now      当前时间
+     * @param existing    既有同步记录
+     * @param file        第三方系统文件快照
+     * @param now         当前时间
+     * @param fileChanged 文件内容是否已变化
      * @return 重置后的同步记录
      */
-    private ExternalDocumentSyncDO resetForRequeue(ExternalDocumentSyncDO existing, ExternalSourceFileDO file, Instant now) {
-        update(new LambdaUpdateWrapper<ExternalDocumentSyncDO>()
+    private ExternalDocumentSyncDO resetForRequeue(ExternalDocumentSyncDO existing,
+                                                   ExternalSourceFileDO file,
+                                                   Instant now,
+                                                   boolean fileChanged) {
+        LambdaUpdateWrapper<ExternalDocumentSyncDO> updateWrapper = new LambdaUpdateWrapper<ExternalDocumentSyncDO>()
                 .eq(ExternalDocumentSyncDO::getId, existing.getId())
                 .set(ExternalDocumentSyncDO::getExternalFilePath, file.getFilePath())
                 .set(ExternalDocumentSyncDO::getExternalHashCode, file.getHashCode())
                 .set(ExternalDocumentSyncDO::getTenantId, properties.getTenantId())
                 .set(ExternalDocumentSyncDO::getKbId, properties.getKbId())
                 .set(ExternalDocumentSyncDO::getSyncStatus, ExternalDocumentSyncStatus.PENDING.name())
-                .set(ExternalDocumentSyncDO::getDocumentId, null)
                 .set(ExternalDocumentSyncDO::getAttemptCount, 0)
                 .set(ExternalDocumentSyncDO::getLastError, null)
                 .set(ExternalDocumentSyncDO::getFinishedAt, null)
                 .set(ExternalDocumentSyncDO::getNextAttemptAt, null)
                 .set(ExternalDocumentSyncDO::getLockedBy, null)
                 .set(ExternalDocumentSyncDO::getLockedAt, null)
-                .set(ExternalDocumentSyncDO::getUpdatedAt, now));
+                .set(ExternalDocumentSyncDO::getUpdatedAt, now);
+        if (fileChanged) {
+            // 文件内容已经变化，旧 documentId 对应的是旧对象，必须清空后重新下载上传
+            updateWrapper.set(ExternalDocumentSyncDO::getDocumentId, null);
+        }
+        update(updateWrapper);
+        log.info("第三方系统文档重新入队：externalFileId = {}，documentId = {}，fileChanged = {}，reuseDocument = {}",
+                existing.getExternalFileId(), existing.getDocumentId(), fileChanged,
+                StringUtils.hasText(existing.getDocumentId()) && !fileChanged);
         return requireSync(file.getId());
     }
 
@@ -317,10 +329,27 @@ public class ExternalDocumentSyncService extends ServiceImpl<ExternalDocumentSyn
             return false;
         }
         if (ExternalDocumentSyncStatus.INDEXED.name().equals(existing.getSyncStatus())) {
-            return !StringUtils.hasText(existing.getExternalHashCode())
-                    || !existing.getExternalHashCode().equals(file.getHashCode());
+            // 已完成记录只有在 hash 明确变化时才重建索引，旧 hash 缺失不能证明文件内容发生变化
+            return isExternalFileChanged(existing, file);
         }
         return true;
+    }
+
+    /**
+     * 判断第三方文件内容是否已经变化
+     *
+     * <p>
+     * 只有新旧 hash 都有值且不一致时，才认为文件内容明确变化
+     * hash 缺失不能证明内容变化，存在 documentId 时优先复用对象存储文档并重新提交索引
+     *
+     * @param existing 既有同步记录
+     * @param file     第三方系统文件快照
+     * @return true 表示第三方文件内容已变化
+     */
+    private boolean isExternalFileChanged(ExternalDocumentSyncDO existing, ExternalSourceFileDO file) {
+        return StringUtils.hasText(existing.getExternalHashCode())
+                && StringUtils.hasText(file.getHashCode())
+                && !existing.getExternalHashCode().equals(file.getHashCode());
     }
 
     /**
