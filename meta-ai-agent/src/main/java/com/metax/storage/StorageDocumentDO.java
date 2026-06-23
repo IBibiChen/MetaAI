@@ -118,7 +118,7 @@ public class StorageDocumentDO {
      */
     @Column(name = "object_key", length = 512, nullable = false)
     @Comment("对象存储 object key")
-    @Schema(description = "对象存储 object key", example = "t1/kb1/1938200000000000001/demo.pdf")
+    @Schema(description = "对象存储 object key", example = "storage/t1/kb1/2026/06/1938200000000000001/demo.pdf")
     private String objectKey;
 
     /**
@@ -158,7 +158,7 @@ public class StorageDocumentDO {
      */
     @Column(name = "source", length = 512)
     @Comment("来源标识")
-    @Schema(description = "来源标识", example = "docs/demo.pdf")
+    @Schema(description = "来源标识", example = "storage/t1/kb1/2026/06/1938200000000000001/demo.pdf")
     private String source;
 
     /**

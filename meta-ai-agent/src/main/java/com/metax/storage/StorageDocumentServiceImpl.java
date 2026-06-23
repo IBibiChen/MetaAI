@@ -33,6 +33,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -81,6 +82,21 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
      */
     private static final DateTimeFormatter OBJECT_DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy/MM")
             .withZone(ZoneId.systemDefault());
+
+    /**
+     * meta_storage_document.object_key 和 source 当前数据库长度
+     */
+    private static final int MAX_OBJECT_KEY_CHARS = 512;
+
+    /**
+     * S3 object key 最大 UTF-8 字节数
+     */
+    private static final int MAX_OBJECT_KEY_BYTES = 1024;
+
+    /**
+     * 空文件名兜底名称
+     */
+    private static final String DEFAULT_OBJECT_FILENAME = "upload.bin";
 
     /**
      * 对象存储客户端
@@ -176,7 +192,7 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
         String resolvedDocumentType = documentTypeResolver.resolve(request.getDocumentType(), originalFilename);
         String documentId = newDocumentId();
         String fileSha256 = fileSha256(file);
-        String objectKey = objectKey(tenantId, kbId, documentId, fileSha256, originalFilename);
+        String objectKey = objectKey(tenantId, kbId, documentId, originalFilename);
         String bucket = objectStorageClient.defaultBucket();
         String contentType = resolveContentType(file);
         // 原始文件先进入对象存储，后续下载和索引 Reader 都从对象存储读取
@@ -556,7 +572,7 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
      * 计算上传文件 SHA-256
      *
      * <p>
-     * hash 用于对象路径、重复排查和审计，不作为业务 documentId
+     * hash 只用于重复排查和审计，不再参与对象路径生成
      *
      * @param file 上传文件
      * @return SHA-256 十六进制字符串
@@ -580,38 +596,131 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
      * 构造对象存储路径
      *
      * <p>
-     * 路径包含 tenantId、kbId、月份、documentId 和文件 hash，便于人工定位和排查
+     * 路径包含 tenantId、kbId、月份、documentId 和可读文件名，便于在 RustFS Console 中按时间和文档定位原文件
+     * documentId 已经保证对象唯一，文件 hash 保存在 fileSha256 字段中用于审计和排查
      *
      * @param tenantId         租户 ID
      * @param kbId             知识库 ID
      * @param documentId       文档 ID
-     * @param fileSha256       文件 SHA-256
      * @param originalFilename 原始文件名
      * @return 对象存储 object key
      */
     private String objectKey(String tenantId,
                              String kbId,
                              String documentId,
-                             String fileSha256,
                              String originalFilename) {
         String datePath = OBJECT_DATE_FORMATTER.format(Instant.now());
-        String extension = fileExtension(originalFilename);
-        return "storage/%s/%s/%s/%s/%s%s".formatted(tenantId, kbId, datePath, documentId, fileSha256,
-                extension);
+        String prefix = "storage/%s/%s/%s/%s/".formatted(tenantId, kbId, datePath, documentId);
+        String filename = fitObjectFilename(prefix, safeObjectFilename(originalFilename));
+        return prefix + filename;
     }
 
     /**
-     * 提取文件扩展名
+     * 清理对象存储文件名
      *
-     * @param filename 文件名
-     * @return 小写扩展名
+     * <p>
+     * S3 object key 支持 UTF-8 中文，但这里仍清理路径分隔符、控制字符和常见 URL / Windows 风险字符
+     * 这样既保留 RustFS Console 可读性，也避免后续日志、下载和人工排查时出现路径歧义
+     *
+     * @param filename 原始文件名
+     * @return 可进入 objectKey 的文件名
      */
-    private String fileExtension(String filename) {
-        int index = filename.lastIndexOf('.');
-        if (index < 0 || index == filename.length() - 1) {
-            return "";
+    private String safeObjectFilename(String filename) {
+        String resolved = StringUtils.hasText(filename) ? filename.trim() : DEFAULT_OBJECT_FILENAME;
+        StringBuilder builder = new StringBuilder(resolved.length());
+        resolved.codePoints().forEach(codePoint -> {
+            if (isUnsafeObjectFilenameChar(codePoint)) {
+                builder.append('_');
+            } else {
+                builder.appendCodePoint(codePoint);
+            }
+        });
+        String safeFilename = builder.toString().trim();
+        if (!StringUtils.hasText(safeFilename) || ".".equals(safeFilename) || "..".equals(safeFilename)) {
+            return DEFAULT_OBJECT_FILENAME;
         }
-        return filename.substring(index).toLowerCase();
+        return safeFilename;
+    }
+
+    /**
+     * 判断 objectKey 文件名中的风险字符
+     *
+     * @param codePoint Unicode code point
+     * @return true 表示需要替换为下划线
+     */
+    private boolean isUnsafeObjectFilenameChar(int codePoint) {
+        return codePoint == '/'
+                || codePoint == '\\'
+                || codePoint == '?'
+                || codePoint == '#'
+                || codePoint == '%'
+                || codePoint == ':'
+                || codePoint == '*'
+                || codePoint == '"'
+                || codePoint == '<'
+                || codePoint == '>'
+                || codePoint == '|'
+                || Character.isISOControl(codePoint);
+    }
+
+    /**
+     * 按数据库和 S3 key 限制截断文件名
+     *
+     * <p>
+     * 截断只作用于文件名主体，尽量保留扩展名，避免 documentType 和人工排查信息丢失
+     *
+     * @param prefix   objectKey 前缀
+     * @param filename 清理后的文件名
+     * @return 适配长度限制的文件名
+     */
+    private String fitObjectFilename(String prefix, String filename) {
+        Assert.isTrue(prefix.length() < MAX_OBJECT_KEY_CHARS, "object key prefix is too long");
+        Assert.isTrue(prefix.getBytes(StandardCharsets.UTF_8).length < MAX_OBJECT_KEY_BYTES,
+                "object key prefix is too long");
+        String fitted = filename;
+        while (!fitsObjectKey(prefix, fitted)) {
+            fitted = truncateFilenameOnce(fitted);
+            if (!StringUtils.hasText(fitted)) {
+                fitted = DEFAULT_OBJECT_FILENAME;
+            }
+            if (DEFAULT_OBJECT_FILENAME.equals(fitted) && !fitsObjectKey(prefix, fitted)) {
+                throw new IllegalArgumentException("object key prefix is too long");
+            }
+        }
+        return fitted;
+    }
+
+    /**
+     * 判断 objectKey 是否满足数据库和 S3 key 长度限制
+     *
+     * @param prefix   objectKey 前缀
+     * @param filename 文件名
+     * @return true 表示满足限制
+     */
+    private boolean fitsObjectKey(String prefix, String filename) {
+        String objectKey = prefix + filename;
+        return objectKey.length() <= MAX_OBJECT_KEY_CHARS
+                && objectKey.getBytes(StandardCharsets.UTF_8).length <= MAX_OBJECT_KEY_BYTES;
+    }
+
+    /**
+     * 单步截断文件名
+     *
+     * <p>
+     * 保留扩展名，主体每次按 code point 移除末尾字符，避免截断中文或 emoji 的代理对
+     *
+     * @param filename 当前文件名
+     * @return 截断后的文件名
+     */
+    private String truncateFilenameOnce(String filename) {
+        int extensionIndex = filename.lastIndexOf('.');
+        String baseName = extensionIndex <= 0 ? filename : filename.substring(0, extensionIndex);
+        String extension = extensionIndex <= 0 ? "" : filename.substring(extensionIndex);
+        if (baseName.isEmpty()) {
+            return extension.isEmpty() ? "" : DEFAULT_OBJECT_FILENAME;
+        }
+        int previous = baseName.offsetByCodePoints(baseName.length(), -1);
+        return baseName.substring(0, previous) + extension;
     }
 
     /**
@@ -626,7 +735,7 @@ public class StorageDocumentServiceImpl extends ServiceImpl<StorageDocumentMappe
     private String resolveOriginalFilename(MultipartFile file) {
         String filename = file.getOriginalFilename();
         if (!StringUtils.hasText(filename)) {
-            return "upload.bin";
+            return DEFAULT_OBJECT_FILENAME;
         }
         return filename.replace("\\", "/").substring(filename.replace("\\", "/").lastIndexOf('/') + 1);
     }

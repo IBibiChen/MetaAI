@@ -84,7 +84,8 @@ class StorageDocumentServiceTest {
         assertThat(response.documentId()).isNotBlank();
         assertThat(response.originalFilename()).isEqualTo("demo.txt");
         assertThat(response.bucket()).isEqualTo("meta-ai-knowledge");
-        assertThat(response.objectKey()).startsWith("storage/t1/kb1/");
+        assertThat(response.objectKey()).matches("storage/t1/kb1/\\d{4}/\\d{2}/%s/demo\\.txt"
+                .formatted(response.documentId()));
         assertThat(response.fileSha256()).hasSize(64);
         assertThat(response.indexStatus()).isEqualTo(StorageDocumentIndexStatus.UPLOADED.name());
         assertThat(response.chunkCount()).isZero();
@@ -95,6 +96,60 @@ class StorageDocumentServiceTest {
         assertThat(service.savedEntity.getChunkCount()).isZero();
         assertThat(response.visibility()).isEqualTo("PUBLIC");
         assertThat(response.documentType()).isEqualTo("txt");
+        verify(objectStorageClient).putObject(eq("meta-ai-knowledge"), eq(response.objectKey()),
+                any(InputStream.class), eq(11L), eq("text/plain"));
+    }
+
+    @Test
+    void uploadShouldKeepChineseFilenameInObjectKey() {
+        when(objectStorageClient.defaultBucket()).thenReturn("meta-ai-knowledge");
+        when(objectStorageClient.putObject(eq("meta-ai-knowledge"), any(), any(InputStream.class), eq(11L),
+                eq("application/msword"))).thenReturn(new StoredObject("meta-ai-knowledge", "key", "etag", null, 11L,
+                "application/msword"));
+
+        StorageDocumentUploadResponse response = service.upload(uploadRequest("t1", "kb1", null, null,
+                null, null, false, "自然环境问题清单整改报告.doc", "application/msword"));
+
+        assertThat(response.objectKey())
+                .matches("storage/t1/kb1/\\d{4}/\\d{2}/%s/自然环境问题清单整改报告\\.doc"
+                        .formatted(response.documentId()));
+        assertThat(service.savedEntity.getSource()).isEqualTo(response.objectKey());
+        verify(objectStorageClient).putObject(eq("meta-ai-knowledge"), eq(response.objectKey()),
+                any(InputStream.class), eq(11L), eq("application/msword"));
+    }
+
+    @Test
+    void uploadShouldReplaceUnsafeFilenameCharactersInObjectKey() {
+        when(objectStorageClient.defaultBucket()).thenReturn("meta-ai-knowledge");
+        when(objectStorageClient.putObject(eq("meta-ai-knowledge"), any(), any(InputStream.class), eq(11L),
+                eq("application/msword"))).thenReturn(new StoredObject("meta-ai-knowledge", "key", "etag", null, 11L,
+                "application/msword"));
+
+        StorageDocumentUploadResponse response = service.upload(uploadRequest("t1", "kb1", null, null,
+                null, null, false, "问题?清单#100%.doc", "application/msword"));
+
+        assertThat(response.objectKey())
+                .matches("storage/t1/kb1/\\d{4}/\\d{2}/%s/问题_清单_100_\\.doc"
+                        .formatted(response.documentId()));
+    }
+
+    @Test
+    void uploadShouldTrimLongFilenameInObjectKeyAndKeepExtension() {
+        when(objectStorageClient.defaultBucket()).thenReturn("meta-ai-knowledge");
+        when(objectStorageClient.putObject(eq("meta-ai-knowledge"), any(), any(InputStream.class), eq(11L),
+                eq("application/msword"))).thenReturn(new StoredObject("meta-ai-knowledge", "key", "etag", null, 11L,
+                "application/msword"));
+        String filename = "超".repeat(300) + ".doc";
+
+        StorageDocumentUploadResponse response = service.upload(uploadRequest("t1", "kb1", null, null,
+                null, null, false, filename, "application/msword"));
+
+        assertThat(response.objectKey()).matches("storage/t1/kb1/\\d{4}/\\d{2}/%s/.+\\.doc"
+                .formatted(response.documentId()));
+        assertThat(response.objectKey()).endsWith(".doc");
+        assertThat(response.objectKey()).hasSizeLessThanOrEqualTo(512);
+        assertThat(response.objectKey().getBytes(java.nio.charset.StandardCharsets.UTF_8).length)
+                .isLessThanOrEqualTo(1024);
     }
 
     @Test
@@ -133,7 +188,7 @@ class StorageDocumentServiceTest {
     void downloadShouldFindDocumentByGlobalDocumentId() {
         StorageDocumentDO entity = document("doc-1");
         service.savedEntity = entity;
-        when(objectStorageClient.getObject("meta-ai-knowledge", "storage/t1/kb1/demo.txt"))
+        when(objectStorageClient.getObject("meta-ai-knowledge", "storage/t1/kb1/doc-1/demo.txt"))
                 .thenReturn(new ByteArrayInputStream("hello".getBytes()));
 
         StorageDocumentDownloadResponse download = service.download("doc-1");
@@ -142,7 +197,7 @@ class StorageDocumentServiceTest {
         assertThat(download.contentType()).isEqualTo("text/plain");
         assertThat(download.fileSize()).isEqualTo(5L);
         assertThat(download.inputStream()).isNotNull();
-        verify(objectStorageClient).getObject("meta-ai-knowledge", "storage/t1/kb1/demo.txt");
+        verify(objectStorageClient).getObject("meta-ai-knowledge", "storage/t1/kb1/doc-1/demo.txt");
     }
 
     @Test
@@ -163,7 +218,7 @@ class StorageDocumentServiceTest {
         service.delete("t1", "kb1", "doc-1");
 
         verify(vectorStoreWriter).delete(any());
-        verify(objectStorageClient).deleteObject("meta-ai-knowledge", "storage/t1/kb1/demo.txt");
+        verify(objectStorageClient).deleteObject("meta-ai-knowledge", "storage/t1/kb1/doc-1/demo.txt");
         assertThat(service.savedEntity.getDeleted()).isTrue();
         assertThat(service.savedEntity.getEnabled()).isFalse();
     }
@@ -188,7 +243,7 @@ class StorageDocumentServiceTest {
         entity.setDocumentId(documentId);
         entity.setOriginalFilename("demo.txt");
         entity.setBucket("meta-ai-knowledge");
-        entity.setObjectKey("storage/t1/kb1/demo.txt");
+        entity.setObjectKey("storage/t1/kb1/%s/demo.txt".formatted(documentId));
         entity.setContentType("text/plain");
         entity.setFileSize(5L);
         entity.setEnabled(Boolean.TRUE);
@@ -212,6 +267,21 @@ class StorageDocumentServiceTest {
         request.setDocumentType(documentType);
         request.setAutoIndex(autoIndex);
         request.setFile(new MockMultipartFile("file", "demo.txt", "text/plain", "hello world".getBytes()));
+        return request;
+    }
+
+    private StorageDocumentUploadRequest uploadRequest(String tenantId,
+                                                       String kbId,
+                                                       String visibility,
+                                                       String deptId,
+                                                       String userId,
+                                                       String documentType,
+                                                       Boolean autoIndex,
+                                                       String filename,
+                                                       String contentType) {
+        StorageDocumentUploadRequest request = uploadRequest(tenantId, kbId, visibility, deptId, userId, documentType,
+                autoIndex);
+        request.setFile(new MockMultipartFile("file", filename, contentType, "hello world".getBytes()));
         return request;
     }
 

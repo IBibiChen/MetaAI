@@ -16,6 +16,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Stream;
 
 /**
  * DocDocumentReader .
@@ -66,8 +67,8 @@ public class DocDocumentReader implements DocumentReader {
             Path output = workDir.resolve("input.docx");
             Path processOutput = workDir.resolve("soffice-output.log");
             copySource(input);
-            convertToDocx(workDir, input, output, processOutput);
-            List<Document> documents = new TikaDocumentReader(new FileSystemResource(output)).read();
+            Path converted = convertToDocx(workDir, input, output, processOutput);
+            List<Document> documents = new TikaDocumentReader(new FileSystemResource(converted)).read();
             log.info("Doc 文档读取完成：source = {}，documents = {}",
                     documentResource.source(), documents.size());
             return documents;
@@ -116,8 +117,9 @@ public class DocDocumentReader implements DocumentReader {
      * @param input         临时输入文件
      * @param output        预期输出文件
      * @param processOutput LibreOffice 标准输出和错误输出日志
+     * @return 实际转换产物
      */
-    private void convertToDocx(Path workDir, Path input, Path output, Path processOutput) {
+    private Path convertToDocx(Path workDir, Path input, Path output, Path processOutput) {
         List<String> command = command(workDir, input);
         Process process;
         try {
@@ -129,7 +131,7 @@ public class DocDocumentReader implements DocumentReader {
             throw new IllegalStateException("Doc 文档转换命令启动失败：" + documentResource.source(), ex);
         }
         waitForConversion(process, processOutput);
-        assertConverted(output);
+        return resolveConverted(workDir, output, processOutput);
     }
 
     /**
@@ -240,17 +242,64 @@ public class DocDocumentReader implements DocumentReader {
     }
 
     /**
-     * 校验 LibreOffice 输出文件
+     * 解析 LibreOffice 转换产物
      *
-     * @param output 预期输出文件
+     * <p>
+     * 正常情况下 LibreOffice 会按输入 basename 生成 input.docx
+     * 这里只接受该预期产物，避免在异常临时目录里误读其他 docx 文件
+     *
+     * @param workDir       本次转换临时目录
+     * @param output        预期输出文件
+     * @param processOutput LibreOffice 标准输出和错误输出日志
+     * @return 实际转换产物
      */
-    private void assertConverted(Path output) {
+    private Path resolveConverted(Path workDir, Path output, Path processOutput) {
         try {
-            if (!Files.isRegularFile(output) || Files.size(output) == 0) {
-                throw new IllegalStateException("Doc 文档转换产物不存在或为空：" + documentResource.source());
+            if (Files.isRegularFile(output) && Files.size(output) > 0) {
+                return output;
             }
+            log.warn("Doc 文档转换产物不存在或为空：source = {}，workDir = {}，expected = {}，output = {}，files = {}",
+                    documentResource.source(), workDir, output.getFileName(), readConversionOutput(processOutput),
+                    listWorkDir(workDir));
+            throw new IllegalStateException("Doc 文档转换产物不存在或为空：" + documentResource.source());
         } catch (IOException ex) {
             throw new IllegalStateException("Doc 文档转换产物校验失败：" + documentResource.source(), ex);
+        }
+    }
+
+    /**
+     * 列出临时目录内容
+     *
+     * <p>
+     * 仅记录文件名和大小，便于诊断 LibreOffice 是否生成了非预期文件
+     *
+     * @param workDir 本次转换临时目录
+     * @return 目录内容摘要
+     */
+    private String listWorkDir(Path workDir) {
+        try (Stream<Path> paths = Files.list(workDir)) {
+            return paths
+                    .map(this::fileSummary)
+                    .toList()
+                    .toString();
+        } catch (IOException ex) {
+            return "读取临时目录失败：" + ex.getMessage();
+        }
+    }
+
+    /**
+     * 构造临时目录单个文件摘要
+     *
+     * @param path 文件路径
+     * @return 文件名和大小摘要
+     */
+    private String fileSummary(Path path) {
+        try {
+            String type = Files.isDirectory(path) ? "dir" : "file";
+            long size = Files.isRegularFile(path) ? Files.size(path) : 0;
+            return "%s(%s,%d)".formatted(path.getFileName(), type, size);
+        } catch (IOException ex) {
+            return "%s(error)".formatted(path.getFileName());
         }
     }
 

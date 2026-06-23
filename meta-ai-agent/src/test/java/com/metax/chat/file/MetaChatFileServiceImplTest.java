@@ -10,11 +10,13 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.mock.web.MockMultipartFile;
 
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.matches;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -43,18 +45,90 @@ class MetaChatFileServiceImplTest {
         MetaChatFileServiceImpl service = new TestMetaChatFileServiceImpl(objectStorageClient,
                 new MetaDocumentTypeResolver(), vectorStore, eventPublisher);
         MockMultipartFile file = new MockMultipartFile("files", "demo.pdf", "application/pdf",
-                "test".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                "test".getBytes(StandardCharsets.UTF_8));
 
         List<MetaChatFileItemResponse> responses = service.uploadAndSubmitIndex("t1", "u1", "t1-u1-s1",
                 new MockMultipartFile[]{file});
 
         assertThat(responses).hasSize(1);
         assertThat(responses.get(0).parseStatus()).isEqualTo(MetaChatFileStatus.UPLOADED.name());
+        verify(objectStorageClient).putObject(eq("meta-ai"),
+                matches("chat-files/t1/u1/\\d{4}/\\d{2}/t1-u1-s1/%s/demo\\.pdf"
+                        .formatted(responses.get(0).fileId())),
+                any(InputStream.class), eq(4L), eq("application/pdf"));
         verify(vectorStore, never()).write(any());
         verify(vectorStore, never()).delete(org.mockito.ArgumentMatchers.any(Filter.Expression.class));
         verify(eventPublisher).publishEvent(org.mockito.ArgumentMatchers.argThat(event ->
                 event instanceof MetaChatFileIndexingEvent indexingEvent
                         && indexingEvent.getFileId().equals(responses.get(0).fileId())));
+    }
+
+    @Test
+    void uploadAndSubmitIndexShouldKeepChineseFilenameInObjectKey() {
+        ObjectStorageClient objectStorageClient = mock(ObjectStorageClient.class);
+        VectorStore vectorStore = mock(VectorStore.class);
+        ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
+        when(objectStorageClient.defaultBucket()).thenReturn("meta-ai");
+        when(objectStorageClient.putObject(eq("meta-ai"), any(), any(InputStream.class), eq(4L),
+                eq("application/pdf"))).thenReturn(null);
+        MetaChatFileServiceImpl service = new TestMetaChatFileServiceImpl(objectStorageClient,
+                new MetaDocumentTypeResolver(), vectorStore, eventPublisher);
+        MockMultipartFile file = new MockMultipartFile("files", "自然环境问题清单整改报告.pdf",
+                "application/pdf", "test".getBytes(StandardCharsets.UTF_8));
+
+        List<MetaChatFileItemResponse> responses = service.uploadAndSubmitIndex("t1", "u1", "t1-u1-s1",
+                new MockMultipartFile[]{file});
+
+        verify(objectStorageClient).putObject(eq("meta-ai"),
+                matches("chat-files/t1/u1/\\d{4}/\\d{2}/t1-u1-s1/%s/自然环境问题清单整改报告\\.pdf"
+                        .formatted(responses.get(0).fileId())),
+                any(InputStream.class), eq(4L), eq("application/pdf"));
+    }
+
+    @Test
+    void uploadAndSubmitIndexShouldReplaceUnsafeFilenameCharactersInObjectKey() {
+        ObjectStorageClient objectStorageClient = mock(ObjectStorageClient.class);
+        VectorStore vectorStore = mock(VectorStore.class);
+        ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
+        when(objectStorageClient.defaultBucket()).thenReturn("meta-ai");
+        when(objectStorageClient.putObject(eq("meta-ai"), any(), any(InputStream.class), eq(4L),
+                eq("application/pdf"))).thenReturn(null);
+        MetaChatFileServiceImpl service = new TestMetaChatFileServiceImpl(objectStorageClient,
+                new MetaDocumentTypeResolver(), vectorStore, eventPublisher);
+        MockMultipartFile file = new MockMultipartFile("files", "问题?清单#100%.pdf",
+                "application/pdf", "test".getBytes(StandardCharsets.UTF_8));
+
+        List<MetaChatFileItemResponse> responses = service.uploadAndSubmitIndex("t1", "u1", "t1-u1-s1",
+                new MockMultipartFile[]{file});
+
+        verify(objectStorageClient).putObject(eq("meta-ai"),
+                matches("chat-files/t1/u1/\\d{4}/\\d{2}/t1-u1-s1/%s/问题_清单_100_\\.pdf"
+                        .formatted(responses.get(0).fileId())),
+                any(InputStream.class), eq(4L), eq("application/pdf"));
+    }
+
+    @Test
+    void uploadAndSubmitIndexShouldTrimLongFilenameInObjectKeyAndKeepExtension() {
+        ObjectStorageClient objectStorageClient = mock(ObjectStorageClient.class);
+        VectorStore vectorStore = mock(VectorStore.class);
+        ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
+        when(objectStorageClient.defaultBucket()).thenReturn("meta-ai");
+        when(objectStorageClient.putObject(eq("meta-ai"), any(), any(InputStream.class), eq(4L),
+                eq("application/pdf"))).thenReturn(null);
+        MetaChatFileServiceImpl service = new TestMetaChatFileServiceImpl(objectStorageClient,
+                new MetaDocumentTypeResolver(), vectorStore, eventPublisher);
+        MockMultipartFile file = new MockMultipartFile("files", "超".repeat(300) + ".pdf",
+                "application/pdf", "test".getBytes(StandardCharsets.UTF_8));
+
+        service.uploadAndSubmitIndex("t1", "u1", "t1-u1-s1", new MockMultipartFile[]{file});
+
+        org.mockito.ArgumentCaptor<String> objectKeyCaptor = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(objectStorageClient).putObject(eq("meta-ai"), objectKeyCaptor.capture(), any(InputStream.class),
+                eq(4L), eq("application/pdf"));
+        assertThat(objectKeyCaptor.getValue()).matches("chat-files/t1/u1/\\d{4}/\\d{2}/t1-u1-s1/.+/.+\\.pdf");
+        assertThat(objectKeyCaptor.getValue()).endsWith(".pdf");
+        assertThat(objectKeyCaptor.getValue()).hasSizeLessThanOrEqualTo(512);
+        assertThat(objectKeyCaptor.getValue().getBytes(StandardCharsets.UTF_8)).hasSizeLessThanOrEqualTo(1024);
     }
 
     private static final class TestMetaChatFileServiceImpl extends MetaChatFileServiceImpl {

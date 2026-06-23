@@ -60,7 +60,7 @@ public record StorageDocumentUploadResponse(
         /**
          * 对象存储 object key
          */
-        @Schema(description = "对象存储 object key", example = "t1/kb1/1938200000000000001/demo.pdf")
+        @Schema(description = "对象存储 object key", example = "storage/t1/kb1/2026/06/1938200000000000001/demo.pdf")
         String objectKey,
         /**
          * 文件大小

@@ -88,6 +88,69 @@ class DocDocumentReaderTest {
     }
 
     /**
+     * 无转换产物时异常 message 保持短，LibreOffice 输出只进入日志
+     */
+    @Test
+    void resolveConvertedShouldKeepMissingOutputExceptionMessageShort() throws Exception {
+        DocDocumentReader reader = new DocDocumentReader(brokenResource());
+        Path workDir = Files.createTempDirectory("doc-reader-test-");
+        Path expected = workDir.resolve("input.docx");
+        Path processOutput = workDir.resolve("soffice-output.log");
+        Files.writeString(processOutput, "Error: source file could not be loaded", StandardCharsets.UTF_8);
+
+        try {
+            assertThatThrownBy(() -> resolveConverted(reader, workDir, expected, processOutput))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("Doc 文档转换产物不存在或为空")
+                    .satisfies(ex -> assertThat(ex.getMessage())
+                            .doesNotContain("source file could not be loaded")
+                            .doesNotContain("output ="));
+        } finally {
+            org.springframework.util.FileSystemUtils.deleteRecursively(workDir);
+        }
+    }
+
+    /**
+     * 预期转换产物存在且非空时返回该产物
+     */
+    @Test
+    void resolveConvertedShouldReturnExpectedOutputWhenItExists() throws Exception {
+        DocDocumentReader reader = new DocDocumentReader(brokenResource());
+        Path workDir = Files.createTempDirectory("doc-reader-test-");
+        Path expected = workDir.resolve("input.docx");
+        Path processOutput = workDir.resolve("soffice-output.log");
+        Files.writeString(expected, "docx", StandardCharsets.UTF_8);
+        Files.writeString(processOutput, "convert output", StandardCharsets.UTF_8);
+
+        try {
+            assertThat(resolveConverted(reader, workDir, expected, processOutput)).isEqualTo(expected);
+        } finally {
+            org.springframework.util.FileSystemUtils.deleteRecursively(workDir);
+        }
+    }
+
+    /**
+     * 非预期 docx 产物不应被猜测使用，避免读取错误文件
+     */
+    @Test
+    void resolveConvertedShouldFailWhenOnlyUnexpectedDocxCandidateExists() throws Exception {
+        DocDocumentReader reader = new DocDocumentReader(brokenResource());
+        Path workDir = Files.createTempDirectory("doc-reader-test-");
+        Path expected = workDir.resolve("input.docx");
+        Path processOutput = workDir.resolve("soffice-output.log");
+        Files.writeString(workDir.resolve("renamed.docx"), "docx", StandardCharsets.UTF_8);
+        Files.writeString(processOutput, "convert output", StandardCharsets.UTF_8);
+
+        try {
+            assertThatThrownBy(() -> resolveConverted(reader, workDir, expected, processOutput))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("Doc 文档转换产物不存在或为空");
+        } finally {
+            org.springframework.util.FileSystemUtils.deleteRecursively(workDir);
+        }
+    }
+
+    /**
      * 通过反射读取私有转换命令
      *
      * <p>
@@ -120,6 +183,38 @@ class DocDocumentReaderTest {
         method.setAccessible(true);
         try {
             method.invoke(reader, process, processOutput);
+        } catch (InvocationTargetException ex) {
+            if (ex.getCause() instanceof Exception cause) {
+                throw cause;
+            }
+            if (ex.getCause() instanceof Error cause) {
+                throw cause;
+            }
+            throw ex;
+        }
+    }
+
+    /**
+     * 通过反射执行私有产物解析逻辑
+     *
+     * <p>
+     * 这里验证 LibreOffice 输出产物边界，不为了测试把生产私有方法放宽可见性
+     *
+     * @param reader        Doc Reader
+     * @param workDir       本次转换临时目录
+     * @param output        预期输出文件
+     * @param processOutput LibreOffice 输出日志
+     * @return 实际转换产物
+     */
+    private Path resolveConverted(DocDocumentReader reader,
+                                  Path workDir,
+                                  Path output,
+                                  Path processOutput) throws Exception {
+        Method method = DocDocumentReader.class.getDeclaredMethod("resolveConverted", Path.class, Path.class,
+                Path.class);
+        method.setAccessible(true);
+        try {
+            return (Path) method.invoke(reader, workDir, output, processOutput);
         } catch (InvocationTargetException ex) {
             if (ex.getCause() instanceof Exception cause) {
                 throw cause;
