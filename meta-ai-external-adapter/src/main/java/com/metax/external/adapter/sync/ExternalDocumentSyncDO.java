@@ -58,8 +58,11 @@ public class ExternalDocumentSyncDO {
 
     /**
      * 第三方系统文件路径
+     *
+     * <p>
+     * 老系统文件名会经过 URL 编码，中文长文件名会显著膨胀，不能使用固定长度字段保存
      */
-    @Column(name = "external_file_path", length = 512)
+    @Column(name = "external_file_path", columnDefinition = "text")
     @Comment("第三方系统文件路径")
     private String externalFilePath;
 

@@ -1,12 +1,15 @@
 package com.metax.external.adapter.sync;
 
 import com.metax.external.adapter.config.ExternalAdapterProperties;
+import com.metax.external.adapter.source.ExternalSourceFileDO;
 import com.metax.external.adapter.source.ExternalSourceFileService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+
+import java.util.List;
 
 /**
  * ExternalDocumentReconciler .
@@ -66,15 +69,25 @@ public class ExternalDocumentReconciler {
             return;
         }
         int batchSize = properties.getReconcile().getBatchSize();
-        sourceFileService.findLearnableForReconcile(batchSize, properties.getMaxAttempts()).forEach(file -> {
+        log.info("第三方系统文件补偿扫描开始：batchSize = {}，maxAttempts = {}",
+                batchSize, properties.getMaxAttempts());
+        List<ExternalSourceFileDO> files = sourceFileService.findLearnableForReconcile(batchSize,
+                properties.getMaxAttempts());
+        int successCount = 0;
+        int skippedCount = 0;
+        for (ExternalSourceFileDO file : files) {
             try {
                 // requestSync 只负责创建或刷新持久队列记录，真正重活交给单线程 Worker 串行处理
                 syncService.requestSync(file.getId());
+                successCount++;
             } catch (RuntimeException ex) {
-                // 单个文件补偿失败不能影响本轮其他文件，失败原因保留到 debug，避免定时任务刷屏
-                log.debug("第三方系统文件补偿同步跳过：externalFileId = {}，error = {}", file.getId(), ex.getMessage());
+                // 单个文件补偿失败不能影响本轮其他文件，warn 日志用于现场确认具体跳过原因
+                skippedCount++;
+                log.warn("第三方系统文件补偿同步跳过：externalFileId = {}，error = {}", file.getId(), ex.getMessage());
             }
-        });
+        }
+        log.info("第三方系统文件补偿扫描完成：candidateCount = {}，enqueuedCount = {}，skippedCount = {}",
+                files.size(), successCount, skippedCount);
     }
 
     /**
@@ -87,6 +100,9 @@ public class ExternalDocumentReconciler {
             return;
         }
         // Worker 正常会等待索引终态，这里用于兜底修复应用重启或中断后遗留的 INDEXING 记录
-        syncService.reconcileIndexStatus(properties.getReconcile().getBatchSize());
+        int batchSize = properties.getReconcile().getBatchSize();
+        log.info("第三方系统索引状态补偿扫描开始：batchSize = {}", batchSize);
+        syncService.reconcileIndexStatus(batchSize);
+        log.info("第三方系统索引状态补偿扫描完成：batchSize = {}", batchSize);
     }
 }
