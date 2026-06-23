@@ -82,6 +82,17 @@ class MetaDocumentReaderTest {
     }
 
     /**
+     * Excel 文档应委托专用 Excel Reader 解析
+     */
+    @Test
+    void shouldReadExcelByExcelReader() {
+        MetaDocumentReaderFactory factory = factory();
+        DocumentReader reader = factory.create(resource("not-a-real-excel", "demo.xlsx", "xlsx"));
+
+        assertThat(reader).isInstanceOf(MetaDocumentReader.class);
+    }
+
+    /**
      * pdf 文档应优先委托 PaddleOCR Reader 解析扫描件
      *
      * <p>
@@ -131,6 +142,7 @@ class MetaDocumentReaderTest {
                 new JsonDocumentReaderStrategy(),
                 new TextDocumentReaderStrategy(),
                 new MarkdownDocumentReaderStrategy(),
+                new ExcelDocumentReaderStrategy(),
                 tika
         ), tika);
     }

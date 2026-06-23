@@ -30,6 +30,8 @@ class MetaDocumentTypeResolverTest {
         assertThat(resolver.resolve(null, "demo.bmp")).isEqualTo("bmp");
         assertThat(resolver.resolve(null, "demo.tif")).isEqualTo("tif");
         assertThat(resolver.resolve(null, "demo.tiff")).isEqualTo("tiff");
+        assertThat(resolver.resolve(null, "demo.xls")).isEqualTo("xls");
+        assertThat(resolver.resolve(null, "demo.xlsx")).isEqualTo("xlsx");
         assertThat(resolver.resolve(null, "demo.unknown")).isEqualTo("tika");
     }
 
